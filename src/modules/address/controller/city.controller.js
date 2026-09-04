@@ -605,6 +605,260 @@ export const deleteCity = async (req, res) => {
 // IMPORT CITY FROM EXCEL
 // =====================================================
 
+// export const importCities = async (req, res) => {
+//   try {
+//     if (!req.file) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Excel file is required",
+//       });
+//     }
+
+//     const workbook = XLSX.read(req.file.buffer, {
+//       type: "buffer",
+//     });
+
+//     const firstSheetName = workbook.SheetNames[0];
+
+//     if (!firstSheetName) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Excel file does not contain any sheet",
+//       });
+//     }
+
+//     const worksheet = workbook.Sheets[firstSheetName];
+
+//     const rows = XLSX.utils.sheet_to_json(worksheet, {
+//       defval: "",
+//     });
+
+//     if (!rows.length) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Excel file does not contain any data",
+//       });
+//     }
+
+//     const imported = [];
+//     const failed = [];
+
+//     for (let index = 0; index < rows.length; index++) {
+//       const row = rows[index];
+
+//       try {
+//         let cityId = row.city_id ?? row["City ID"] ?? row["city id"] ?? "";
+
+//         let cityName =
+//           row.city_name ?? row["City Name"] ?? row["city name"] ?? "";
+
+//         let districtId =
+//           row.district_id ?? row["District ID"] ?? row["district id"] ?? "";
+
+//         let stateId = row.state_id ?? row["State ID"] ?? row["state id"] ?? "";
+
+//         cityName = String(cityName).trim();
+
+//         if (!cityName) {
+//           failed.push({
+//             row: index + 2,
+//             data: row,
+//             message: "City name is required",
+//           });
+
+//           continue;
+//         }
+
+//         if (
+//           districtId === "" ||
+//           districtId === null ||
+//           districtId === undefined
+//         ) {
+//           failed.push({
+//             row: index + 2,
+//             data: row,
+//             message: "District ID is required",
+//           });
+
+//           continue;
+//         }
+
+//         districtId = Number(districtId);
+
+//         if (!Number.isInteger(districtId) || districtId <= 0) {
+//           failed.push({
+//             row: index + 2,
+//             data: row,
+//             message: "Invalid district ID",
+//           });
+
+//           continue;
+//         }
+
+//         if (stateId === "" || stateId === null || stateId === undefined) {
+//           failed.push({
+//             row: index + 2,
+//             data: row,
+//             message: "State ID is required",
+//           });
+
+//           continue;
+//         }
+
+//         stateId = Number(stateId);
+
+//         if (!Number.isInteger(stateId) || stateId <= 0) {
+//           failed.push({
+//             row: index + 2,
+//             data: row,
+//             message: "Invalid state ID",
+//           });
+
+//           continue;
+//         }
+
+//         // State validation
+//         const stateExists = await State.findOne({
+//           state_id: stateId,
+//         });
+
+//         if (!stateExists) {
+//           failed.push({
+//             row: index + 2,
+//             data: row,
+//             message: `State ID ${stateId} does not exist`,
+//           });
+
+//           continue;
+//         }
+
+//         // District validation
+//         const districtExists = await District.findOne({
+//           district_id: districtId,
+//         });
+
+//         if (!districtExists) {
+//           failed.push({
+//             row: index + 2,
+//             data: row,
+//             message: `District ID ${districtId} does not exist`,
+//           });
+
+//           continue;
+//         }
+
+//         // Relation validation
+//         if (districtExists.state_id !== stateId) {
+//           failed.push({
+//             row: index + 2,
+//             data: row,
+//             message: `District ${districtId} does not belong to State ${stateId}`,
+//           });
+
+//           continue;
+//         }
+
+//         // Duplicate city
+//         const duplicateCity = await City.findOne({
+//           district_id: districtId,
+//           state_id: stateId,
+
+//           city_name: {
+//             $regex: `^${escapeRegex(cityName)}$`,
+//             $options: "i",
+//           },
+//         });
+
+//         if (duplicateCity) {
+//           failed.push({
+//             row: index + 2,
+//             data: row,
+//             message: `City "${cityName}" already exists in District ${districtId}`,
+//           });
+
+//           continue;
+//         }
+
+//         // Manual city ID
+//         if (cityId !== "" && cityId !== null && cityId !== undefined) {
+//           cityId = Number(cityId);
+
+//           if (!Number.isInteger(cityId) || cityId <= 0) {
+//             failed.push({
+//               row: index + 2,
+//               data: row,
+//               message: "Invalid city ID",
+//             });
+
+//             continue;
+//           }
+
+//           const duplicateId = await City.findOne({
+//             city_id: cityId,
+//           });
+
+//           if (duplicateId) {
+//             failed.push({
+//               row: index + 2,
+//               data: row,
+//               message: `City ID ${cityId} already exists`,
+//             });
+
+//             continue;
+//           }
+
+//           await syncCityCounter(cityId);
+//         } else {
+//           cityId = await getNextAvailableCityId();
+//         }
+
+//         const city = await City.create({
+//           city_id: cityId,
+//           city_name: cityName,
+//           district_id: districtId,
+//           state_id: stateId,
+//         });
+
+//         imported.push({
+//           row: index + 2,
+//           city_id: city.city_id,
+//           city_name: city.city_name,
+//           district_id: city.district_id,
+//           state_id: city.state_id,
+//         });
+//       } catch (rowError) {
+//         failed.push({
+//           row: index + 2,
+//           data: row,
+//           message: rowError.message,
+//         });
+//       }
+//     }
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "City import completed",
+
+//       summary: {
+//         totalRows: rows.length,
+//         imported: imported.length,
+//         failed: failed.length,
+//       },
+
+//       imported,
+//       failed,
+//     });
+//   } catch (error) {
+//     console.error("Import cities error:", error);
+
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to import cities",
+//       error: error.message,
+//     });
+//   }
+// };
+
 export const importCities = async (req, res) => {
   try {
     if (!req.file) {
@@ -614,6 +868,9 @@ export const importCities = async (req, res) => {
       });
     }
 
+    // ==========================================
+    // READ EXCEL
+    // ==========================================
     const workbook = XLSX.read(req.file.buffer, {
       type: "buffer",
     });
@@ -640,200 +897,478 @@ export const importCities = async (req, res) => {
       });
     }
 
-    const imported = [];
-    const failed = [];
+    // Optional safety limit
+    if (rows.length > 10000) {
+      return res.status(400).json({
+        success: false,
+        message: "Maximum 10,000 rows allowed per import",
+      });
+    }
 
+    const failed = [];
+    const validRows = [];
+
+    // ==========================================
+    // COLLECT STATE + DISTRICT IDS FROM EXCEL
+    // ==========================================
+    const excelStateIds = new Set();
+    const excelDistrictIds = new Set();
+
+    for (const row of rows) {
+      const stateId =
+        row.state_id ??
+        row["State ID"] ??
+        row["state id"] ??
+        "";
+
+      const districtId =
+        row.district_id ??
+        row["District ID"] ??
+        row["district id"] ??
+        "";
+
+      if (
+        stateId !== "" &&
+        stateId !== null &&
+        stateId !== undefined
+      ) {
+        const numericStateId = Number(stateId);
+
+        if (Number.isInteger(numericStateId)) {
+          excelStateIds.add(numericStateId);
+        }
+      }
+
+      if (
+        districtId !== "" &&
+        districtId !== null &&
+        districtId !== undefined
+      ) {
+        const numericDistrictId = Number(districtId);
+
+        if (Number.isInteger(numericDistrictId)) {
+          excelDistrictIds.add(numericDistrictId);
+        }
+      }
+    }
+
+    // ==========================================
+    // LOAD ONLY REQUIRED STATES
+    // ==========================================
+    const states = await State.find(
+      {
+        state_id: {
+          $in: [...excelStateIds],
+        },
+      },
+      {
+        state_id: 1,
+      }
+    ).lean();
+
+    const validStateIds = new Set(
+      states.map((state) => Number(state.state_id))
+    );
+
+    // ==========================================
+    // LOAD ONLY REQUIRED DISTRICTS
+    // ==========================================
+    const districts = await District.find(
+      {
+        district_id: {
+          $in: [...excelDistrictIds],
+        },
+      },
+      {
+        district_id: 1,
+        state_id: 1,
+      }
+    ).lean();
+
+    // districtId -> stateId
+    const districtStateMap = new Map();
+
+    districts.forEach((district) => {
+      districtStateMap.set(
+        Number(district.district_id),
+        Number(district.state_id)
+      );
+    });
+
+    // ==========================================
+    // LOAD EXISTING CITIES
+    // ==========================================
+    const existingCities = await City.find(
+      {},
+      {
+        city_id: 1,
+        city_name: 1,
+        district_id: 1,
+        state_id: 1,
+      }
+    ).lean();
+
+    const existingCityIds = new Set(
+      existingCities.map((city) =>
+        Number(city.city_id)
+      )
+    );
+
+    // state + district + city name
+    const existingCityKeys = new Set(
+      existingCities.map((city) => {
+        const normalizedName =
+          String(city.city_name)
+            .trim()
+            .toLowerCase();
+
+        return `${city.state_id}::${city.district_id}::${normalizedName}`;
+      })
+    );
+
+    // ==========================================
+    // TRACK DUPLICATES INSIDE EXCEL
+    // ==========================================
+    const excelCityIds = new Set();
+    const excelCityKeys = new Set();
+
+    // ==========================================
+    // FIND MAX CITY ID
+    // ==========================================
+    let maxCityId =
+      existingCities.length > 0
+        ? Math.max(
+            ...existingCities.map(
+              (city) =>
+                Number(city.city_id) || 0
+            )
+          )
+        : 0;
+
+    // ==========================================
+    // VALIDATE ROWS IN MEMORY
+    // ==========================================
     for (let index = 0; index < rows.length; index++) {
       const row = rows[index];
 
-      try {
-        let cityId = row.city_id ?? row["City ID"] ?? row["city id"] ?? "";
+      let cityId =
+        row.city_id ??
+        row["City ID"] ??
+        row["city id"] ??
+        "";
 
-        let cityName =
-          row.city_name ?? row["City Name"] ?? row["city name"] ?? "";
+      let cityName =
+        row.city_name ??
+        row["City Name"] ??
+        row["city name"] ??
+        "";
 
-        let districtId =
-          row.district_id ?? row["District ID"] ?? row["district id"] ?? "";
+      let districtId =
+        row.district_id ??
+        row["District ID"] ??
+        row["district id"] ??
+        "";
 
-        let stateId = row.state_id ?? row["State ID"] ?? row["state id"] ?? "";
+      let stateId =
+        row.state_id ??
+        row["State ID"] ??
+        row["state id"] ??
+        "";
 
-        cityName = String(cityName).trim();
+      cityName = String(cityName).trim();
 
-        if (!cityName) {
-          failed.push({
-            row: index + 2,
-            data: row,
-            message: "City name is required",
-          });
+      // ==========================================
+      // CITY NAME REQUIRED
+      // ==========================================
+      if (!cityName) {
+        failed.push({
+          row: index + 2,
+          data: row,
+          message: "City name is required",
+        });
 
-          continue;
-        }
+        continue;
+      }
+
+      // ==========================================
+      // DISTRICT ID REQUIRED
+      // ==========================================
+      if (
+        districtId === "" ||
+        districtId === null ||
+        districtId === undefined
+      ) {
+        failed.push({
+          row: index + 2,
+          data: row,
+          message: "District ID is required",
+        });
+
+        continue;
+      }
+
+      districtId = Number(districtId);
+
+      if (
+        !Number.isInteger(districtId) ||
+        districtId <= 0
+      ) {
+        failed.push({
+          row: index + 2,
+          data: row,
+          message: "Invalid district ID",
+        });
+
+        continue;
+      }
+
+      // ==========================================
+      // STATE ID REQUIRED
+      // ==========================================
+      if (
+        stateId === "" ||
+        stateId === null ||
+        stateId === undefined
+      ) {
+        failed.push({
+          row: index + 2,
+          data: row,
+          message: "State ID is required",
+        });
+
+        continue;
+      }
+
+      stateId = Number(stateId);
+
+      if (
+        !Number.isInteger(stateId) ||
+        stateId <= 0
+      ) {
+        failed.push({
+          row: index + 2,
+          data: row,
+          message: "Invalid state ID",
+        });
+
+        continue;
+      }
+
+      // ==========================================
+      // STATE EXISTS
+      // ==========================================
+      if (!validStateIds.has(stateId)) {
+        failed.push({
+          row: index + 2,
+          data: row,
+          message: `State ID ${stateId} does not exist`,
+        });
+
+        continue;
+      }
+
+      // ==========================================
+      // DISTRICT EXISTS
+      // ==========================================
+      const districtStateId =
+        districtStateMap.get(districtId);
+
+      if (districtStateId === undefined) {
+        failed.push({
+          row: index + 2,
+          data: row,
+          message: `District ID ${districtId} does not exist`,
+        });
+
+        continue;
+      }
+
+      // ==========================================
+      // DISTRICT → STATE RELATION
+      // ==========================================
+      if (districtStateId !== stateId) {
+        failed.push({
+          row: index + 2,
+          data: row,
+          message: `District ${districtId} does not belong to State ${stateId}`,
+        });
+
+        continue;
+      }
+
+      const normalizedCityName =
+        cityName.toLowerCase();
+
+      const cityKey =
+        `${stateId}::${districtId}::${normalizedCityName}`;
+
+      // ==========================================
+      // DUPLICATE CITY IN DATABASE
+      // ==========================================
+      if (existingCityKeys.has(cityKey)) {
+        failed.push({
+          row: index + 2,
+          data: row,
+          message:
+            `City "${cityName}" already exists in District ${districtId}`,
+        });
+
+        continue;
+      }
+
+      // ==========================================
+      // DUPLICATE CITY INSIDE EXCEL
+      // ==========================================
+      if (excelCityKeys.has(cityKey)) {
+        failed.push({
+          row: index + 2,
+          data: row,
+          message:
+            `Duplicate city "${cityName}" found in Excel for District ${districtId}`,
+        });
+
+        continue;
+      }
+
+      // ==========================================
+      // MANUAL CITY ID
+      // ==========================================
+      if (
+        cityId !== "" &&
+        cityId !== null &&
+        cityId !== undefined
+      ) {
+        cityId = Number(cityId);
 
         if (
-          districtId === "" ||
-          districtId === null ||
-          districtId === undefined
+          !Number.isInteger(cityId) ||
+          cityId <= 0
         ) {
           failed.push({
             row: index + 2,
             data: row,
-            message: "District ID is required",
+            message: "Invalid city ID",
           });
 
           continue;
         }
 
-        districtId = Number(districtId);
-
-        if (!Number.isInteger(districtId) || districtId <= 0) {
+        // Duplicate ID in database
+        if (existingCityIds.has(cityId)) {
           failed.push({
             row: index + 2,
             data: row,
-            message: "Invalid district ID",
+            message:
+              `City ID ${cityId} already exists`,
           });
 
           continue;
         }
 
-        if (stateId === "" || stateId === null || stateId === undefined) {
+        // Duplicate ID inside Excel
+        if (excelCityIds.has(cityId)) {
           failed.push({
             row: index + 2,
             data: row,
-            message: "State ID is required",
+            message:
+              `Duplicate City ID ${cityId} found in Excel`,
           });
 
           continue;
         }
 
-        stateId = Number(stateId);
-
-        if (!Number.isInteger(stateId) || stateId <= 0) {
-          failed.push({
-            row: index + 2,
-            data: row,
-            message: "Invalid state ID",
-          });
-
-          continue;
+        if (cityId > maxCityId) {
+          maxCityId = cityId;
         }
+      }
 
-        // State validation
-        const stateExists = await State.findOne({
-          state_id: stateId,
-        });
+      // ==========================================
+      // AUTO CITY ID
+      // ==========================================
+      else {
+        do {
+          maxCityId++;
+        } while (
+          existingCityIds.has(maxCityId) ||
+          excelCityIds.has(maxCityId)
+        );
 
-        if (!stateExists) {
-          failed.push({
-            row: index + 2,
-            data: row,
-            message: `State ID ${stateId} does not exist`,
-          });
+        cityId = maxCityId;
+      }
 
-          continue;
-        }
+      // ==========================================
+      // TRACK CURRENT EXCEL ROW
+      // ==========================================
+      excelCityIds.add(cityId);
+      excelCityKeys.add(cityKey);
 
-        // District validation
-        const districtExists = await District.findOne({
-          district_id: districtId,
-        });
+      validRows.push({
+        row: index + 2,
 
-        if (!districtExists) {
-          failed.push({
-            row: index + 2,
-            data: row,
-            message: `District ID ${districtId} does not exist`,
-          });
-
-          continue;
-        }
-
-        // Relation validation
-        if (districtExists.state_id !== stateId) {
-          failed.push({
-            row: index + 2,
-            data: row,
-            message: `District ${districtId} does not belong to State ${stateId}`,
-          });
-
-          continue;
-        }
-
-        // Duplicate city
-        const duplicateCity = await City.findOne({
-          district_id: districtId,
-          state_id: stateId,
-
-          city_name: {
-            $regex: `^${escapeRegex(cityName)}$`,
-            $options: "i",
-          },
-        });
-
-        if (duplicateCity) {
-          failed.push({
-            row: index + 2,
-            data: row,
-            message: `City "${cityName}" already exists in District ${districtId}`,
-          });
-
-          continue;
-        }
-
-        // Manual city ID
-        if (cityId !== "" && cityId !== null && cityId !== undefined) {
-          cityId = Number(cityId);
-
-          if (!Number.isInteger(cityId) || cityId <= 0) {
-            failed.push({
-              row: index + 2,
-              data: row,
-              message: "Invalid city ID",
-            });
-
-            continue;
-          }
-
-          const duplicateId = await City.findOne({
-            city_id: cityId,
-          });
-
-          if (duplicateId) {
-            failed.push({
-              row: index + 2,
-              data: row,
-              message: `City ID ${cityId} already exists`,
-            });
-
-            continue;
-          }
-
-          await syncCityCounter(cityId);
-        } else {
-          cityId = await getNextAvailableCityId();
-        }
-
-        const city = await City.create({
+        document: {
           city_id: cityId,
           city_name: cityName,
           district_id: districtId,
           state_id: stateId,
-        });
-
-        imported.push({
-          row: index + 2,
-          city_id: city.city_id,
-          city_name: city.city_name,
-          district_id: city.district_id,
-          state_id: city.state_id,
-        });
-      } catch (rowError) {
-        failed.push({
-          row: index + 2,
-          data: row,
-          message: rowError.message,
-        });
-      }
+        },
+      });
     }
+
+    // ==========================================
+    // BULK INSERT
+    // ==========================================
+    const documents = validRows.map(
+      (item) => item.document
+    );
+
+    let insertedDocs = [];
+
+    if (documents.length > 0) {
+      insertedDocs = await City.insertMany(
+        documents,
+        {
+          ordered: false,
+        }
+      );
+    }
+
+    // ==========================================
+    // SYNC COUNTER ONLY ONCE
+    // ==========================================
+    if (insertedDocs.length > 0) {
+      const highestInsertedCityId =
+        Math.max(
+          ...insertedDocs.map(
+            (city) =>
+              Number(city.city_id)
+          )
+        );
+
+      await syncCityCounter(
+        highestInsertedCityId
+      );
+    }
+
+    // ==========================================
+    // PREPARE IMPORTED RESPONSE
+    // ==========================================
+    const imported = insertedDocs.map(
+      (city, index) => ({
+        row: validRows[index]?.row,
+
+        city_id:
+          city.city_id,
+
+        city_name:
+          city.city_name,
+
+        district_id:
+          city.district_id,
+
+        state_id:
+          city.state_id,
+      })
+    );
 
     return res.status(200).json({
       success: true,
@@ -849,7 +1384,10 @@ export const importCities = async (req, res) => {
       failed,
     });
   } catch (error) {
-    console.error("Import cities error:", error);
+    console.error(
+      "Import cities error:",
+      error
+    );
 
     return res.status(500).json({
       success: false,

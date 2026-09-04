@@ -12,7 +12,7 @@ import districtRoutes from "./modules/address/routes/district.routes.js";
 import cityRoutes from "./modules/address/routes/city.routes.js";
 import pincodeRoutes from "./modules/address/routes/pincode.routes.js";
 import areaRoutes from "./modules/address/routes/area.routes.js";
-
+import brandRoutes from "./modules/brand/routes/brand.routes.js";
 
 const app = express();
 
@@ -28,7 +28,7 @@ app.use(
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
-  })
+  }),
 );
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -51,6 +51,6 @@ app.use("/api/v1/districts", districtRoutes);
 app.use("/api/v1/cities", cityRoutes);
 app.use("/api/v1/pincodes", pincodeRoutes);
 app.use("/api/v1/areas", areaRoutes);
+app.use("/api/v1/brands", brandRoutes);
 
 export default app;
-

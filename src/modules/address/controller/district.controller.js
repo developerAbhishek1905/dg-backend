@@ -660,323 +660,710 @@ export const deleteDistrict = async (
 // IMPORT DISTRICTS FROM EXCEL
 // =====================================================
 
-export const importDistricts = async (
-  req,
-  res
-) => {
+// export const importDistricts = async (
+//   req,
+//   res
+// ) => {
+//   try {
+//     if (!req.file) {
+//       return res.status(400).json({
+//         success: false,
+//         message:
+//           "Excel file is required",
+//       });
+//     }
+
+
+//     const workbook = XLSX.read(
+//       req.file.buffer,
+//       {
+//         type: "buffer",
+//       }
+//     );
+
+//     const firstSheetName =
+//       workbook.SheetNames[0];
+
+//     if (!firstSheetName) {
+//       return res.status(400).json({
+//         success: false,
+//         message:
+//           "Excel file does not contain any sheet",
+//       });
+//     }
+
+
+//     const worksheet =
+//       workbook.Sheets[
+//         firstSheetName
+//       ];
+
+//     const rows =
+//       XLSX.utils.sheet_to_json(
+//         worksheet,
+//         {
+//           defval: "",
+//         }
+//       );
+
+
+//     if (!rows.length) {
+//       return res.status(400).json({
+//         success: false,
+//         message:
+//           "Excel file does not contain any data",
+//       });
+//     }
+
+
+//     const imported = [];
+//     const failed = [];
+
+
+//     for (
+//       let index = 0;
+//       index < rows.length;
+//       index++
+//     ) {
+//       const row = rows[index];
+
+//       try {
+//         let districtId =
+//           row.district_id ??
+//           row["District ID"] ??
+//           row["district id"] ??
+//           "";
+
+//         let districtName =
+//           row.district_name ??
+//           row["District Name"] ??
+//           row["district name"] ??
+//           "";
+
+//         let stateId =
+//           row.state_id ??
+//           row["State ID"] ??
+//           row["state id"] ??
+//           "";
+
+
+//         // ==============================
+//         // District name required
+//         // ==============================
+
+//         districtName =
+//           String(
+//             districtName
+//           ).trim();
+
+//         if (!districtName) {
+//           failed.push({
+//             row: index + 2,
+//             data: row,
+//             message:
+//               "District name is required",
+//           });
+
+//           continue;
+//         }
+
+
+//         // ==============================
+//         // State ID required
+//         // ==============================
+
+//         if (
+//           stateId === "" ||
+//           stateId === null ||
+//           stateId === undefined
+//         ) {
+//           failed.push({
+//             row: index + 2,
+//             data: row,
+//             message:
+//               "State ID is required",
+//           });
+
+//           continue;
+//         }
+
+
+//         stateId = Number(stateId);
+
+//         if (
+//           !Number.isInteger(
+//             stateId
+//           ) ||
+//           stateId <= 0
+//         ) {
+//           failed.push({
+//             row: index + 2,
+//             data: row,
+//             message:
+//               "State ID must be a positive integer",
+//           });
+
+//           continue;
+//         }
+
+
+//         // ==============================
+//         // Check state exists
+//         // ==============================
+
+//         const stateExists =
+//           await State.findOne({
+//             state_id: stateId,
+//           });
+
+//         if (!stateExists) {
+//           failed.push({
+//             row: index + 2,
+//             data: row,
+//             message:
+//               `State ID ${stateId} does not exist`,
+//           });
+
+//           continue;
+//         }
+
+
+//         // ==============================
+//         // Duplicate district name
+//         // in same state
+//         // ==============================
+
+//         const duplicateDistrict =
+//           await District.findOne({
+//             state_id: stateId,
+
+//             district_name: {
+//               $regex:
+//                 `^${escapeRegex(
+//                   districtName
+//                 )}$`,
+//               $options: "i",
+//             },
+//           });
+
+//         if (duplicateDistrict) {
+//           failed.push({
+//             row: index + 2,
+//             data: row,
+//             message:
+//               `District "${districtName}" already exists in state ${stateId}`,
+//           });
+
+//           continue;
+//         }
+
+
+//         // ==============================
+//         // Manual district ID
+//         // ==============================
+
+//         if (
+//           districtId !== "" &&
+//           districtId !== null &&
+//           districtId !== undefined
+//         ) {
+//           districtId =
+//             Number(districtId);
+
+//           if (
+//             !Number.isInteger(
+//               districtId
+//             ) ||
+//             districtId <= 0
+//           ) {
+//             failed.push({
+//               row: index + 2,
+//               data: row,
+//               message:
+//                 "District ID must be a positive integer",
+//             });
+
+//             continue;
+//           }
+
+
+//           const duplicateId =
+//             await District.findOne({
+//               district_id:
+//                 districtId,
+//             });
+
+//           if (duplicateId) {
+//             failed.push({
+//               row: index + 2,
+//               data: row,
+//               message:
+//                 `District ID ${districtId} already exists`,
+//             });
+
+//             continue;
+//           }
+
+//           await syncDistrictCounter(
+//             districtId
+//           );
+//         }
+
+//         // ==============================
+//         // Auto ID
+//         // ==============================
+
+//         else {
+//           districtId =
+//             await getNextAvailableDistrictId();
+//         }
+
+
+//         // ==============================
+//         // Save
+//         // ==============================
+
+//         const district =
+//           await District.create({
+//             district_id:
+//               districtId,
+
+//             district_name:
+//               districtName,
+
+//             state_id:
+//               stateId,
+//           });
+
+
+//         imported.push({
+//           row: index + 2,
+
+//           district_id:
+//             district.district_id,
+
+//           district_name:
+//             district.district_name,
+
+//           state_id:
+//             district.state_id,
+//         });
+
+//       } catch (rowError) {
+//         failed.push({
+//           row: index + 2,
+//           data: row,
+//           message:
+//             rowError.message,
+//         });
+//       }
+//     }
+
+
+//     return res.status(200).json({
+//       success: true,
+//       message:
+//         "District import completed",
+
+//       summary: {
+//         totalRows: rows.length,
+//         imported:
+//           imported.length,
+//         failed:
+//           failed.length,
+//       },
+
+//       imported,
+//       failed,
+//     });
+
+//   } catch (error) {
+//     console.error(
+//       "Import districts error:",
+//       error
+//     );
+
+//     return res.status(500).json({
+//       success: false,
+//       message:
+//         "Failed to import districts",
+//       error: error.message,
+//     });
+//   }
+// };
+export const importDistricts = async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({
         success: false,
-        message:
-          "Excel file is required",
+        message: "Excel file is required",
       });
     }
 
+    // ==========================================
+    // READ EXCEL
+    // ==========================================
+    const workbook = XLSX.read(req.file.buffer, {
+      type: "buffer",
+    });
 
-    const workbook = XLSX.read(
-      req.file.buffer,
-      {
-        type: "buffer",
-      }
-    );
-
-    const firstSheetName =
-      workbook.SheetNames[0];
+    const firstSheetName = workbook.SheetNames[0];
 
     if (!firstSheetName) {
       return res.status(400).json({
         success: false,
-        message:
-          "Excel file does not contain any sheet",
+        message: "Excel file does not contain any sheet",
       });
     }
 
+    const worksheet = workbook.Sheets[firstSheetName];
 
-    const worksheet =
-      workbook.Sheets[
-        firstSheetName
-      ];
-
-    const rows =
-      XLSX.utils.sheet_to_json(
-        worksheet,
-        {
-          defval: "",
-        }
-      );
-
+    const rows = XLSX.utils.sheet_to_json(worksheet, {
+      defval: "",
+    });
 
     if (!rows.length) {
       return res.status(400).json({
         success: false,
-        message:
-          "Excel file does not contain any data",
+        message: "Excel file does not contain any data",
       });
     }
 
+    // Optional safety limit
+    if (rows.length > 10000) {
+      return res.status(400).json({
+        success: false,
+        message: "Maximum 10,000 rows allowed per import",
+      });
+    }
 
-    const imported = [];
     const failed = [];
+    const validRows = [];
 
+    // ==========================================
+    // LOAD ALL STATES ONCE
+    // ==========================================
+    const states = await State.find(
+      {},
+      {
+        state_id: 1,
+      }
+    ).lean();
 
-    for (
-      let index = 0;
-      index < rows.length;
-      index++
-    ) {
+    const validStateIds = new Set(
+      states.map((state) => Number(state.state_id))
+    );
+
+    // ==========================================
+    // LOAD EXISTING DISTRICTS ONCE
+    // ==========================================
+    const existingDistricts = await District.find(
+      {},
+      {
+        district_id: 1,
+        district_name: 1,
+        state_id: 1,
+      }
+    ).lean();
+
+    // Existing district IDs
+    const existingDistrictIds = new Set(
+      existingDistricts.map((district) =>
+        Number(district.district_id)
+      )
+    );
+
+    // Existing district name + state combination
+    const existingDistrictKeys = new Set(
+      existingDistricts.map((district) => {
+        const name = String(district.district_name)
+          .trim()
+          .toLowerCase();
+
+        return `${district.state_id}::${name}`;
+      })
+    );
+
+    // ==========================================
+    // TRACK DUPLICATES INSIDE EXCEL
+    // ==========================================
+    const excelDistrictIds = new Set();
+    const excelDistrictKeys = new Set();
+
+    // ==========================================
+    // FIND CURRENT MAX DISTRICT ID
+    // ==========================================
+    let maxDistrictId =
+      existingDistricts.length > 0
+        ? Math.max(
+            ...existingDistricts.map(
+              (district) =>
+                Number(district.district_id) || 0
+            )
+          )
+        : 0;
+
+    // ==========================================
+    // VALIDATE ROWS IN MEMORY
+    // ==========================================
+    for (let index = 0; index < rows.length; index++) {
       const row = rows[index];
 
-      try {
-        let districtId =
-          row.district_id ??
-          row["District ID"] ??
-          row["district id"] ??
-          "";
+      let districtId =
+        row.district_id ??
+        row["District ID"] ??
+        row["district id"] ??
+        "";
 
-        let districtName =
-          row.district_name ??
-          row["District Name"] ??
-          row["district name"] ??
-          "";
+      let districtName =
+        row.district_name ??
+        row["District Name"] ??
+        row["district name"] ??
+        "";
 
-        let stateId =
-          row.state_id ??
-          row["State ID"] ??
-          row["state id"] ??
-          "";
+      let stateId =
+        row.state_id ??
+        row["State ID"] ??
+        row["state id"] ??
+        "";
 
+      districtName = String(districtName).trim();
 
-        // ==============================
-        // District name required
-        // ==============================
-
-        districtName =
-          String(
-            districtName
-          ).trim();
-
-        if (!districtName) {
-          failed.push({
-            row: index + 2,
-            data: row,
-            message:
-              "District name is required",
-          });
-
-          continue;
-        }
-
-
-        // ==============================
-        // State ID required
-        // ==============================
-
-        if (
-          stateId === "" ||
-          stateId === null ||
-          stateId === undefined
-        ) {
-          failed.push({
-            row: index + 2,
-            data: row,
-            message:
-              "State ID is required",
-          });
-
-          continue;
-        }
-
-
-        stateId = Number(stateId);
-
-        if (
-          !Number.isInteger(
-            stateId
-          ) ||
-          stateId <= 0
-        ) {
-          failed.push({
-            row: index + 2,
-            data: row,
-            message:
-              "State ID must be a positive integer",
-          });
-
-          continue;
-        }
-
-
-        // ==============================
-        // Check state exists
-        // ==============================
-
-        const stateExists =
-          await State.findOne({
-            state_id: stateId,
-          });
-
-        if (!stateExists) {
-          failed.push({
-            row: index + 2,
-            data: row,
-            message:
-              `State ID ${stateId} does not exist`,
-          });
-
-          continue;
-        }
-
-
-        // ==============================
-        // Duplicate district name
-        // in same state
-        // ==============================
-
-        const duplicateDistrict =
-          await District.findOne({
-            state_id: stateId,
-
-            district_name: {
-              $regex:
-                `^${escapeRegex(
-                  districtName
-                )}$`,
-              $options: "i",
-            },
-          });
-
-        if (duplicateDistrict) {
-          failed.push({
-            row: index + 2,
-            data: row,
-            message:
-              `District "${districtName}" already exists in state ${stateId}`,
-          });
-
-          continue;
-        }
-
-
-        // ==============================
-        // Manual district ID
-        // ==============================
-
-        if (
-          districtId !== "" &&
-          districtId !== null &&
-          districtId !== undefined
-        ) {
-          districtId =
-            Number(districtId);
-
-          if (
-            !Number.isInteger(
-              districtId
-            ) ||
-            districtId <= 0
-          ) {
-            failed.push({
-              row: index + 2,
-              data: row,
-              message:
-                "District ID must be a positive integer",
-            });
-
-            continue;
-          }
-
-
-          const duplicateId =
-            await District.findOne({
-              district_id:
-                districtId,
-            });
-
-          if (duplicateId) {
-            failed.push({
-              row: index + 2,
-              data: row,
-              message:
-                `District ID ${districtId} already exists`,
-            });
-
-            continue;
-          }
-
-          await syncDistrictCounter(
-            districtId
-          );
-        }
-
-        // ==============================
-        // Auto ID
-        // ==============================
-
-        else {
-          districtId =
-            await getNextAvailableDistrictId();
-        }
-
-
-        // ==============================
-        // Save
-        // ==============================
-
-        const district =
-          await District.create({
-            district_id:
-              districtId,
-
-            district_name:
-              districtName,
-
-            state_id:
-              stateId,
-          });
-
-
-        imported.push({
-          row: index + 2,
-
-          district_id:
-            district.district_id,
-
-          district_name:
-            district.district_name,
-
-          state_id:
-            district.state_id,
-        });
-
-      } catch (rowError) {
+      // ==========================================
+      // DISTRICT NAME REQUIRED
+      // ==========================================
+      if (!districtName) {
         failed.push({
           row: index + 2,
           data: row,
-          message:
-            rowError.message,
+          message: "District name is required",
         });
+
+        continue;
       }
+
+      // ==========================================
+      // STATE ID REQUIRED
+      // ==========================================
+      if (
+        stateId === "" ||
+        stateId === null ||
+        stateId === undefined
+      ) {
+        failed.push({
+          row: index + 2,
+          data: row,
+          message: "State ID is required",
+        });
+
+        continue;
+      }
+
+      stateId = Number(stateId);
+
+      if (!Number.isInteger(stateId) || stateId <= 0) {
+        failed.push({
+          row: index + 2,
+          data: row,
+          message: "State ID must be a positive integer",
+        });
+
+        continue;
+      }
+
+      // ==========================================
+      // CHECK STATE EXISTS
+      // ==========================================
+      if (!validStateIds.has(stateId)) {
+        failed.push({
+          row: index + 2,
+          data: row,
+          message: `State ID ${stateId} does not exist`,
+        });
+
+        continue;
+      }
+
+      const normalizedDistrictName =
+        districtName.toLowerCase();
+
+      const districtKey =
+        `${stateId}::${normalizedDistrictName}`;
+
+      // ==========================================
+      // DUPLICATE DISTRICT IN DATABASE
+      // ==========================================
+      if (existingDistrictKeys.has(districtKey)) {
+        failed.push({
+          row: index + 2,
+          data: row,
+          message: `District "${districtName}" already exists in state ${stateId}`,
+        });
+
+        continue;
+      }
+
+      // ==========================================
+      // DUPLICATE DISTRICT INSIDE EXCEL
+      // ==========================================
+      if (excelDistrictKeys.has(districtKey)) {
+        failed.push({
+          row: index + 2,
+          data: row,
+          message: `Duplicate district "${districtName}" found in Excel for state ${stateId}`,
+        });
+
+        continue;
+      }
+
+      // ==========================================
+      // MANUAL DISTRICT ID
+      // ==========================================
+      if (
+        districtId !== "" &&
+        districtId !== null &&
+        districtId !== undefined
+      ) {
+        districtId = Number(districtId);
+
+        if (
+          !Number.isInteger(districtId) ||
+          districtId <= 0
+        ) {
+          failed.push({
+            row: index + 2,
+            data: row,
+            message:
+              "District ID must be a positive integer",
+          });
+
+          continue;
+        }
+
+        // Duplicate ID in database
+        if (existingDistrictIds.has(districtId)) {
+          failed.push({
+            row: index + 2,
+            data: row,
+            message: `District ID ${districtId} already exists`,
+          });
+
+          continue;
+        }
+
+        // Duplicate ID inside Excel
+        if (excelDistrictIds.has(districtId)) {
+          failed.push({
+            row: index + 2,
+            data: row,
+            message: `Duplicate District ID ${districtId} found in Excel`,
+          });
+
+          continue;
+        }
+
+        if (districtId > maxDistrictId) {
+          maxDistrictId = districtId;
+        }
+      }
+
+      // ==========================================
+      // AUTO GENERATE DISTRICT ID
+      // ==========================================
+      else {
+        do {
+          maxDistrictId++;
+        } while (
+          existingDistrictIds.has(maxDistrictId) ||
+          excelDistrictIds.has(maxDistrictId)
+        );
+
+        districtId = maxDistrictId;
+      }
+
+      // ==========================================
+      // ADD TO IN-MEMORY TRACKERS
+      // ==========================================
+      excelDistrictIds.add(districtId);
+      excelDistrictKeys.add(districtKey);
+
+      validRows.push({
+        row: index + 2,
+
+        document: {
+          district_id: districtId,
+          district_name: districtName,
+          state_id: stateId,
+        },
+      });
     }
 
+    // ==========================================
+    // BULK INSERT
+    // ==========================================
+    const documents = validRows.map(
+      (item) => item.document
+    );
+
+    let insertedDocs = [];
+
+    if (documents.length > 0) {
+      insertedDocs = await District.insertMany(
+        documents,
+        {
+          ordered: false,
+        }
+      );
+    }
+
+    // ==========================================
+    // SYNC COUNTER ONLY ONCE
+    // ==========================================
+    if (insertedDocs.length > 0) {
+      const highestInsertedDistrictId =
+        Math.max(
+          ...insertedDocs.map(
+            (district) =>
+              Number(district.district_id)
+          )
+        );
+
+      await syncDistrictCounter(
+        highestInsertedDistrictId
+      );
+    }
+
+    // ==========================================
+    // PREPARE RESPONSE
+    // ==========================================
+    const imported = insertedDocs.map(
+      (district, index) => ({
+        row: validRows[index]?.row,
+
+        district_id:
+          district.district_id,
+
+        district_name:
+          district.district_name,
+
+        state_id:
+          district.state_id,
+      })
+    );
 
     return res.status(200).json({
       success: true,
-      message:
-        "District import completed",
+      message: "District import completed",
 
       summary: {
         totalRows: rows.length,
-        imported:
-          imported.length,
-        failed:
-          failed.length,
+        imported: imported.length,
+        failed: failed.length,
       },
 
       imported,
       failed,
     });
-
   } catch (error) {
     console.error(
       "Import districts error:",
@@ -985,8 +1372,7 @@ export const importDistricts = async (
 
     return res.status(500).json({
       success: false,
-      message:
-        "Failed to import districts",
+      message: "Failed to import districts",
       error: error.message,
     });
   }

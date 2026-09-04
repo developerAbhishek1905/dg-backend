@@ -1,31 +1,13 @@
-
-
 import XLSX from "xlsx";
 
 import State from "../model/state.model.js";
 
+import { getNextStateId, syncStateCounter } from "../utils/stateId.util.js";
 
-
-import {
-  getNextStateId,
-  syncStateCounter,
-} from "../utils/stateId.util.js";
-
-
-// =====================================================
 // CREATE STATE
-// =====================================================
-
 export const createState = async (req, res) => {
   try {
-    let {
-      state_id,
-      state_name,
-    } = req.body;
-
-    // ==============================
-    // Validate state name
-    // ==============================
+    let { state_id, state_name } = req.body;
 
     if (!state_name || !String(state_name).trim()) {
       return res.status(400).json({
@@ -35,11 +17,6 @@ export const createState = async (req, res) => {
     }
 
     state_name = String(state_name).trim();
-
-
-    // ==============================
-    // Check duplicate state name
-    // ==============================
 
     const existingStateName = await State.findOne({
       state_name: {
@@ -55,22 +32,10 @@ export const createState = async (req, res) => {
       });
     }
 
-
-    // ==============================
-    // User provided state ID
-    // ==============================
-
-    if (
-      state_id !== undefined &&
-      state_id !== null &&
-      state_id !== ""
-    ) {
+    if (state_id !== undefined && state_id !== null && state_id !== "") {
       state_id = Number(state_id);
 
-      if (
-        !Number.isInteger(state_id) ||
-        state_id <= 0
-      ) {
+      if (!Number.isInteger(state_id) || state_id <= 0) {
         return res.status(400).json({
           success: false,
           message: "State ID must be a positive integer",
@@ -89,20 +54,9 @@ export const createState = async (req, res) => {
       }
 
       await syncStateCounter(state_id);
-    }
-
-    // ==============================
-    // Generate state ID automatically
-    // ==============================
-
-    else {
+    } else {
       state_id = await getNextAvailableStateId();
     }
-
-
-    // ==============================
-    // Create
-    // ==============================
 
     const state = await State.create({
       state_id,
@@ -114,7 +68,6 @@ export const createState = async (req, res) => {
       message: "State created successfully",
       data: state,
     });
-
   } catch (error) {
     console.error("Create state error:", error);
 
@@ -133,25 +86,14 @@ export const createState = async (req, res) => {
   }
 };
 
-
-// =====================================================
 // GET ALL STATES
-// =====================================================
-
 export const getAllStates = async (req, res) => {
   try {
-    const {
-      search = "",
-      page = 1,
-      limit = 20,
-    } = req.query;
+    const { search = "", page = 1, limit = 20 } = req.query;
 
     const pageNumber = Math.max(Number(page) || 1, 1);
 
-    const limitNumber = Math.min(
-      Math.max(Number(limit) || 20, 1),
-      100
-    );
+    const limitNumber = Math.min(Math.max(Number(limit) || 20, 1), 100);
 
     const filter = {};
 
@@ -167,10 +109,7 @@ export const getAllStates = async (req, res) => {
         },
       ];
 
-      if (
-        !Number.isNaN(numericSearch) &&
-        Number.isInteger(numericSearch)
-      ) {
+      if (!Number.isNaN(numericSearch) && Number.isInteger(numericSearch)) {
         filter.$or.push({
           state_id: numericSearch,
         });
@@ -199,7 +138,6 @@ export const getAllStates = async (req, res) => {
         totalPages: Math.ceil(total / limitNumber),
       },
     });
-
   } catch (error) {
     console.error("Get states error:", error);
 
@@ -211,19 +149,12 @@ export const getAllStates = async (req, res) => {
   }
 };
 
-
-// =====================================================
 // GET STATE BY STATE ID
-// =====================================================
-
 export const getStateById = async (req, res) => {
   try {
     const stateId = Number(req.params.id);
 
-    if (
-      !Number.isInteger(stateId) ||
-      stateId <= 0
-    ) {
+    if (!Number.isInteger(stateId) || stateId <= 0) {
       return res.status(400).json({
         success: false,
         message: "Invalid state ID",
@@ -246,7 +177,6 @@ export const getStateById = async (req, res) => {
       message: "State fetched successfully",
       data: state,
     });
-
   } catch (error) {
     console.error("Get state error:", error);
 
@@ -258,19 +188,12 @@ export const getStateById = async (req, res) => {
   }
 };
 
-
-// =====================================================
 // UPDATE STATE
-// =====================================================
-
 export const updateState = async (req, res) => {
   try {
     const currentStateId = Number(req.params.id);
 
-    if (
-      !Number.isInteger(currentStateId) ||
-      currentStateId <= 0
-    ) {
+    if (!Number.isInteger(currentStateId) || currentStateId <= 0) {
       return res.status(400).json({
         success: false,
         message: "Invalid state ID",
@@ -288,15 +211,7 @@ export const updateState = async (req, res) => {
       });
     }
 
-    const {
-      state_id,
-      state_name,
-    } = req.body;
-
-
-    // ==============================
-    // Update state name
-    // ==============================
+    const { state_id, state_name } = req.body;
 
     if (state_name !== undefined) {
       const cleanStateName = String(state_name).trim();
@@ -329,22 +244,10 @@ export const updateState = async (req, res) => {
       state.state_name = cleanStateName;
     }
 
-
-    // ==============================
-    // Update State ID
-    // ==============================
-
-    if (
-      state_id !== undefined &&
-      state_id !== null &&
-      state_id !== ""
-    ) {
+    if (state_id !== undefined && state_id !== null && state_id !== "") {
       const newStateId = Number(state_id);
 
-      if (
-        !Number.isInteger(newStateId) ||
-        newStateId <= 0
-      ) {
+      if (!Number.isInteger(newStateId) || newStateId <= 0) {
         return res.status(400).json({
           success: false,
           message: "State ID must be a positive integer",
@@ -376,7 +279,6 @@ export const updateState = async (req, res) => {
       message: "State updated successfully",
       data: state,
     });
-
   } catch (error) {
     console.error("Update state error:", error);
 
@@ -395,19 +297,12 @@ export const updateState = async (req, res) => {
   }
 };
 
-
-// =====================================================
 // DELETE STATE
-// =====================================================
-
 export const deleteState = async (req, res) => {
   try {
     const stateId = Number(req.params.id);
 
-    if (
-      !Number.isInteger(stateId) ||
-      stateId <= 0
-    ) {
+    if (!Number.isInteger(stateId) || stateId <= 0) {
       return res.status(400).json({
         success: false,
         message: "Invalid state ID",
@@ -430,7 +325,6 @@ export const deleteState = async (req, res) => {
       message: "State deleted successfully",
       data: state,
     });
-
   } catch (error) {
     console.error("Delete state error:", error);
 
@@ -442,10 +336,156 @@ export const deleteState = async (req, res) => {
   }
 };
 
-
-// =====================================================
 // IMPORT STATES FROM EXCEL
-// =====================================================
+// export const importStates = async (req, res) => {
+//   try {
+//     if (!req.file) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Excel file is required",
+//       });
+//     }
+
+//     const workbook = XLSX.read(req.file.buffer, {
+//       type: "buffer",
+//     });
+
+//     const firstSheetName = workbook.SheetNames[0];
+
+//     if (!firstSheetName) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Excel file does not contain any sheet",
+//       });
+//     }
+
+//     const worksheet = workbook.Sheets[firstSheetName];
+
+//     const rows = XLSX.utils.sheet_to_json(worksheet, {
+//       defval: "",
+//     });
+
+//     if (!rows.length) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Excel file does not contain any data",
+//       });
+//     }
+
+//     const imported = [];
+//     const failed = [];
+
+//     for (let index = 0; index < rows.length; index++) {
+//       const row = rows[index];
+
+//       try {
+//         let stateId = row.state_id ?? row["State ID"] ?? row["state id"] ?? "";
+
+//         let stateName =
+//           row.state_name ?? row["State Name"] ?? row["state name"] ?? "";
+//         stateName = String(stateName).trim();
+
+//         if (!stateName) {
+//           failed.push({
+//             row: index + 2,
+//             data: row,
+//             message: "State name is required",
+//           });
+
+//           continue;
+//         }
+//         const duplicateName = await State.findOne({
+//           state_name: {
+//             $regex: `^${escapeRegex(stateName)}$`,
+//             $options: "i",
+//           },
+//         });
+
+//         if (duplicateName) {
+//           failed.push({
+//             row: index + 2,
+//             data: row,
+//             message: `State "${stateName}" already exists`,
+//           });
+
+//           continue;
+//         }
+
+//         if (stateId !== undefined && stateId !== null && stateId !== "") {
+//           stateId = Number(stateId);
+
+//           if (!Number.isInteger(stateId) || stateId <= 0) {
+//             failed.push({
+//               row: index + 2,
+//               data: row,
+//               message: "State ID must be a positive integer",
+//             });
+
+//             continue;
+//           }
+
+//           const duplicateId = await State.findOne({
+//             state_id: stateId,
+//           });
+
+//           if (duplicateId) {
+//             failed.push({
+//               row: index + 2,
+//               data: row,
+//               message: `State ID ${stateId} already exists`,
+//             });
+
+//             continue;
+//           }
+
+//           await syncStateCounter(stateId);
+//         } else {
+//           stateId = await getNextAvailableStateId();
+//         }
+
+//         const state = await State.create({
+//           state_id: stateId,
+//           state_name: stateName,
+//         });
+
+//         imported.push({
+//           row: index + 2,
+//           state_id: state.state_id,
+//           state_name: state.state_name,
+//         });
+//       } catch (rowError) {
+//         failed.push({
+//           row: index + 2,
+//           data: row,
+//           message: rowError.message,
+//         });
+//       }
+//     }
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "State import completed",
+
+//       summary: {
+//         totalRows: rows.length,
+//         imported: imported.length,
+//         failed: failed.length,
+//       },
+
+//       imported,
+
+//       failed,
+//     });
+//   } catch (error) {
+//     console.error("Import states error:", error);
+
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to import states",
+//       error: error.message,
+//     });
+//   }
+// };
 
 export const importStates = async (req, res) => {
   try {
@@ -456,11 +496,9 @@ export const importStates = async (req, res) => {
       });
     }
 
-
-    // ==============================
-    // Read Excel
-    // ==============================
-
+    // ==========================================
+    // READ EXCEL
+    // ==========================================
     const workbook = XLSX.read(req.file.buffer, {
       type: "buffer",
     });
@@ -474,16 +512,11 @@ export const importStates = async (req, res) => {
       });
     }
 
-    const worksheet =
-      workbook.Sheets[firstSheetName];
+    const worksheet = workbook.Sheets[firstSheetName];
 
-    const rows = XLSX.utils.sheet_to_json(
-      worksheet,
-      {
-        defval: "",
-      }
-    );
-
+    const rows = XLSX.utils.sheet_to_json(worksheet, {
+      defval: "",
+    });
 
     if (!rows.length) {
       return res.status(400).json({
@@ -492,166 +525,204 @@ export const importStates = async (req, res) => {
       });
     }
 
+    // Optional safety limit
+    if (rows.length > 10000) {
+      return res.status(400).json({
+        success: false,
+        message: "Maximum 10,000 rows allowed per import",
+      });
+    }
 
-    // ==============================
-    // Result tracking
-    // ==============================
-
-    const imported = [];
     const failed = [];
+    const validRows = [];
 
+    // ==========================================
+    // GET EXISTING STATES ONLY ONCE
+    // ==========================================
+    const existingStates = await State.find(
+      {},
+      {
+        state_id: 1,
+        state_name: 1,
+      },
+    ).lean();
 
-    // ==============================
-    // Process Excel rows
-    // ==============================
+    const existingIds = new Set(
+      existingStates.map((state) => Number(state.state_id)),
+    );
 
+    const existingNames = new Set(
+      existingStates.map((state) =>
+        String(state.state_name).trim().toLowerCase(),
+      ),
+    );
+
+    // Track duplicates inside Excel also
+    const excelIds = new Set();
+    const excelNames = new Set();
+
+    // ==========================================
+    // FIND CURRENT MAX STATE ID
+    // ==========================================
+    let maxStateId =
+      existingStates.length > 0
+        ? Math.max(
+            ...existingStates.map((state) => Number(state.state_id) || 0),
+          )
+        : 0;
+
+    // ==========================================
+    // VALIDATE EXCEL IN MEMORY
+    // ==========================================
     for (let index = 0; index < rows.length; index++) {
       const row = rows[index];
 
-      try {
-        /**
-         * Supports headers:
-         *
-         * state_id
-         * state_name
-         *
-         * OR
-         *
-         * State ID
-         * State Name
-         */
+      let stateId = row.state_id ?? row["State ID"] ?? row["state id"] ?? "";
 
-        let stateId =
-          row.state_id ??
-          row["State ID"] ??
-          row["state id"] ??
-          "";
+      let stateName =
+        row.state_name ?? row["State Name"] ?? row["state name"] ?? "";
 
-        let stateName =
-          row.state_name ??
-          row["State Name"] ??
-          row["state name"] ??
-          "";
+      stateName = String(stateName).trim();
 
-
-        // ==============================
-        // State name required
-        // ==============================
-
-        stateName = String(stateName).trim();
-
-        if (!stateName) {
-          failed.push({
-            row: index + 2,
-            data: row,
-            message: "State name is required",
-          });
-
-          continue;
-        }
-
-
-        // ==============================
-        // Duplicate state name
-        // ==============================
-
-        const duplicateName = await State.findOne({
-          state_name: {
-            $regex: `^${escapeRegex(stateName)}$`,
-            $options: "i",
-          },
-        });
-
-        if (duplicateName) {
-          failed.push({
-            row: index + 2,
-            data: row,
-            message: `State "${stateName}" already exists`,
-          });
-
-          continue;
-        }
-
-
-        // ==============================
-        // State ID provided
-        // ==============================
-
-        if (
-          stateId !== undefined &&
-          stateId !== null &&
-          stateId !== ""
-        ) {
-          stateId = Number(stateId);
-
-          if (
-            !Number.isInteger(stateId) ||
-            stateId <= 0
-          ) {
-            failed.push({
-              row: index + 2,
-              data: row,
-              message:
-                "State ID must be a positive integer",
-            });
-
-            continue;
-          }
-
-
-          const duplicateId = await State.findOne({
-            state_id: stateId,
-          });
-
-          if (duplicateId) {
-            failed.push({
-              row: index + 2,
-              data: row,
-              message:
-                `State ID ${stateId} already exists`,
-            });
-
-            continue;
-          }
-
-          await syncStateCounter(stateId);
-        }
-
-
-        // ==============================
-        // Generate state ID
-        // ==============================
-
-        else {
-          stateId =
-            await getNextAvailableStateId();
-        }
-
-
-        // ==============================
-        // Save
-        // ==============================
-
-        const state = await State.create({
-          state_id: stateId,
-          state_name: stateName,
-        });
-
-        imported.push({
-          row: index + 2,
-          state_id: state.state_id,
-          state_name: state.state_name,
-        });
-
-      } catch (rowError) {
+      // ==========================================
+      // STATE NAME REQUIRED
+      // ==========================================
+      if (!stateName) {
         failed.push({
           row: index + 2,
           data: row,
-          message: rowError.message,
+          message: "State name is required",
         });
+
+        continue;
       }
+
+      const normalizedName = stateName.toLowerCase();
+
+      // ==========================================
+      // DUPLICATE NAME IN DATABASE
+      // ==========================================
+      if (existingNames.has(normalizedName)) {
+        failed.push({
+          row: index + 2,
+          data: row,
+          message: `State "${stateName}" already exists`,
+        });
+
+        continue;
+      }
+
+      // ==========================================
+      // DUPLICATE NAME INSIDE EXCEL
+      // ==========================================
+      if (excelNames.has(normalizedName)) {
+        failed.push({
+          row: index + 2,
+          data: row,
+          message: `Duplicate state "${stateName}" found in Excel`,
+        });
+
+        continue;
+      }
+
+      // ==========================================
+      // STATE ID PROVIDED
+      // ==========================================
+      if (stateId !== undefined && stateId !== null && stateId !== "") {
+        stateId = Number(stateId);
+
+        if (!Number.isInteger(stateId) || stateId <= 0) {
+          failed.push({
+            row: index + 2,
+            data: row,
+            message: "State ID must be a positive integer",
+          });
+
+          continue;
+        }
+
+        // Duplicate ID in DB
+        if (existingIds.has(stateId)) {
+          failed.push({
+            row: index + 2,
+            data: row,
+            message: `State ID ${stateId} already exists`,
+          });
+
+          continue;
+        }
+
+        // Duplicate ID inside Excel
+        if (excelIds.has(stateId)) {
+          failed.push({
+            row: index + 2,
+            data: row,
+            message: `Duplicate State ID ${stateId} found in Excel`,
+          });
+
+          continue;
+        }
+
+        if (stateId > maxStateId) {
+          maxStateId = stateId;
+        }
+      } else {
+        // ==========================================
+        // AUTO GENERATE ID
+        // ==========================================
+
+        do {
+          maxStateId++;
+        } while (existingIds.has(maxStateId) || excelIds.has(maxStateId));
+
+        stateId = maxStateId;
+      }
+
+      excelIds.add(stateId);
+      excelNames.add(normalizedName);
+
+      validRows.push({
+        row: index + 2,
+
+        document: {
+          state_id: stateId,
+          state_name: stateName,
+        },
+      });
     }
 
+    // ==========================================
+    // BULK INSERT
+    // ==========================================
+    const documents = validRows.map((item) => item.document);
+
+    let insertedDocs = [];
+
+    if (documents.length > 0) {
+      insertedDocs = await State.insertMany(documents, {
+        ordered: false,
+      });
+    }
+
+    // ==========================================
+    // SYNC COUNTER ONLY ONCE
+    // ==========================================
+    if (insertedDocs.length > 0) {
+      const highestInsertedId = Math.max(
+        ...insertedDocs.map((state) => state.state_id),
+      );
+
+      await syncStateCounter(highestInsertedId);
+    }
+
+    // ==========================================
+    // PREPARE IMPORTED RESPONSE
+    // ==========================================
+    const imported = insertedDocs.map((state, index) => ({
+      row: validRows[index]?.row,
+      state_id: state.state_id,
+      state_name: state.state_name,
+    }));
 
     return res.status(200).json({
       success: true,
@@ -667,7 +738,6 @@ export const importStates = async (req, res) => {
 
       failed,
     });
-
   } catch (error) {
     console.error("Import states error:", error);
 
@@ -678,7 +748,6 @@ export const importStates = async (req, res) => {
     });
   }
 };
-
 
 // =====================================================
 // EXPORT STATES TO EXCEL
@@ -692,7 +761,6 @@ export const exportStates = async (req, res) => {
       })
       .lean();
 
-
     // ==============================
     // Convert data
     // ==============================
@@ -702,23 +770,15 @@ export const exportStates = async (req, res) => {
       state_name: state.state_name,
     }));
 
-
     // ==============================
     // Create workbook
     // ==============================
 
-    const worksheet =
-      XLSX.utils.json_to_sheet(excelData);
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
 
-    const workbook =
-      XLSX.utils.book_new();
+    const workbook = XLSX.utils.book_new();
 
-    XLSX.utils.book_append_sheet(
-      workbook,
-      worksheet,
-      "States"
-    );
-
+    XLSX.utils.book_append_sheet(workbook, worksheet, "States");
 
     // ==============================
     // Column widths
@@ -733,36 +793,27 @@ export const exportStates = async (req, res) => {
       },
     ];
 
-
     // ==============================
     // Generate Excel buffer
     // ==============================
 
-    const buffer = XLSX.write(
-      workbook,
-      {
-        type: "buffer",
-        bookType: "xlsx",
-      }
-    );
-
+    const buffer = XLSX.write(workbook, {
+      type: "buffer",
+      bookType: "xlsx",
+    });
 
     // ==============================
     // Response
     // ==============================
 
-    res.setHeader(
-      "Content-Disposition",
-      'attachment; filename="states.xlsx"'
-    );
+    res.setHeader("Content-Disposition", 'attachment; filename="states.xlsx"');
 
     res.setHeader(
       "Content-Type",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     );
 
     return res.send(buffer);
-
   } catch (error) {
     console.error("Export states error:", error);
 
@@ -773,7 +824,6 @@ export const exportStates = async (req, res) => {
     });
   }
 };
-
 
 // =====================================================
 // HELPER - FIND AVAILABLE AUTO STATE ID
@@ -801,14 +851,10 @@ const getNextAvailableStateId = async () => {
   return stateId;
 };
 
-
 // =====================================================
 // HELPER - ESCAPE REGEX
 // =====================================================
 
 const escapeRegex = (value) => {
-  return String(value).replace(
-    /[.*+?^${}()|[\]\\]/g,
-    "\\$&"
-  );
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 };
