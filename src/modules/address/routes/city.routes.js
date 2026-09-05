@@ -10,7 +10,9 @@ import {
   deleteCity,
   importCities,
   exportCities,
-  getCitiesByStateOrDistrict
+  getCitiesByStateOrDistrict,
+  getCityDropdown,
+  
 } from "../controller/city.controller.js";
 
 import { uploadExcel } from "../middleware/upload.middleware.js";
@@ -28,6 +30,10 @@ router.post("/import", uploadExcel.single("file"), importCities);
 
 // Excel export
 router.get("/export", exportCities);
+router.get(
+  "/dropdown",
+  getCityDropdown
+);
 // router.get(
 //   "/state/:state_id/district/:district_id",
 //   getCitiesByStateAndDistrict

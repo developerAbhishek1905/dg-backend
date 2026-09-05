@@ -1477,48 +1477,117 @@ export const exportDistricts = async (
   }
 };
 
-export const getDistrictsByStateId = async (req, res) => {
+export const getDistrictsDropdown = async (req, res) => {
   try {
-    const { state_id } = req.params;
+    const {
+      state_id,
+      search = "",
+    } = req.query;
 
-    const stateId = Number(state_id);
+    const filter = {};
 
-    if (!Number.isInteger(stateId) || stateId <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Valid state_id is required",
-      });
+    let selectedState = null;
+
+    // ==========================================
+    // STATE FILTER - OPTIONAL
+    // ==========================================
+
+    if (
+      state_id !== undefined &&
+      state_id !== null &&
+      String(state_id).trim() !== ""
+    ) {
+      const stateId = Number(state_id);
+
+      // Validate state id
+      if (
+        !Number.isInteger(stateId) ||
+        stateId <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Valid state_id is required",
+        });
+      }
+
+      // Check state exists
+      selectedState = await State.findOne({
+        state_id: stateId,
+      })
+        .select("state_id state_name")
+        .lean();
+
+      if (!selectedState) {
+        return res.status(404).json({
+          success: false,
+          message: `State with ID ${stateId} not found`,
+        });
+      }
+
+      // Apply state filter
+      filter.state_id = stateId;
     }
 
     // ==========================================
-    // CHECK STATE EXISTS
+    // SEARCH BY DISTRICT NAME - OPTIONAL
     // ==========================================
 
-    const state = await State.findOne({
-      state_id: stateId,
-    })
-      .select("state_id state_name")
-      .lean();
+    if (String(search).trim()) {
+      const searchValue = String(search).trim();
 
-    if (!state) {
-      return res.status(404).json({
-        success: false,
-        message: `State with ID ${stateId} not found`,
-      });
+      filter.district_name = {
+        $regex: escapeRegex(searchValue),
+        $options: "i",
+      };
     }
 
     // ==========================================
     // GET DISTRICTS
     // ==========================================
 
-    const districts = await District.find({
-      state_id: stateId,
-    })
-      .select("_id district_id district_name state_id")
+    const districts = await District.find(filter)
+      .select(
+        "_id district_id district_name state_id"
+      )
       .sort({
         district_name: 1,
       })
       .lean();
+
+    // ==========================================
+    // GET STATE NAMES
+    // ==========================================
+
+    const stateIds = [
+      ...new Set(
+        districts
+          .map((district) => district.state_id)
+          .filter(
+            (id) =>
+              id !== null &&
+              id !== undefined
+          )
+      ),
+    ];
+
+    const states = await State.find({
+      state_id: {
+        $in: stateIds,
+      },
+    })
+      .select("state_id state_name")
+      .lean();
+
+    // ==========================================
+    // CREATE STATE MAP
+    // ==========================================
+
+    const stateMap = new Map(
+      states.map((state) => [
+        state.state_id,
+        state.state_name,
+      ])
+    );
 
     // ==========================================
     // ADD STATE NAME
@@ -1526,21 +1595,28 @@ export const getDistrictsByStateId = async (req, res) => {
 
     const data = districts.map((district) => ({
       ...district,
-      state_name: state.state_name,
+
+      state_name:
+        stateMap.get(district.state_id) || null,
     }));
+
+    // ==========================================
+    // RESPONSE
+    // ==========================================
 
     return res.status(200).json({
       success: true,
       message: "Districts fetched successfully",
-      state: {
-        state_id: state.state_id,
-        state_name: state.state_name,
-      },
+
       data,
+
       total: data.length,
     });
   } catch (error) {
-    console.error("Get districts by state error:", error);
+    console.error(
+      "Get districts dropdown error:",
+      error
+    );
 
     return res.status(500).json({
       success: false,

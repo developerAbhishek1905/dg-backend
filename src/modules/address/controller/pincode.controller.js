@@ -2,6 +2,9 @@ import XLSX from "xlsx";
 
 import Pincode from "../model/pincode.model.js";
 import City from "../model/city.model.js";
+import District from "../model/district.model.js";
+import State from "../model/state.model.js";
+
 
 import {
   getNextPincodeId,
@@ -194,6 +197,303 @@ export const createPincode = async (req, res) => {
 // GET ALL PINCODES
 // =====================================================
 
+// export const getAllPincodes = async (req, res) => {
+//   try {
+//     const {
+//       search = "",
+//       city_id,
+//       page = 1,
+//       limit = 20,
+//     } = req.query;
+
+//     const pageNumber = Math.max(Number(page) || 1, 1);
+
+//     const limitNumber = Math.min(
+//       Math.max(Number(limit) || 20, 1),
+//       100
+//     );
+
+//     // ==========================================
+//     // AGGREGATION FILTER
+//     // ==========================================
+
+//     const match = {};
+
+//     if (city_id) {
+//       const cityId = Number(city_id);
+
+//       if (!Number.isInteger(cityId) || cityId <= 0) {
+//         return res.status(400).json({
+//           success: false,
+//           message: "Invalid city_id",
+//         });
+//       }
+
+//       match.city_id = cityId;
+//     }
+
+//     const pipeline = [];
+
+//     // ==========================================
+//     // CONVERT PINCODE TO STRING
+//     // This handles String + Number values
+//     // ==========================================
+
+//     pipeline.push({
+//       $addFields: {
+//         pincode_search: {
+//           $toString: "$pincode_name",
+//         },
+//       },
+//     });
+
+//     // ==========================================
+//     // SEARCH
+//     // ==========================================
+
+//     if (String(search).trim()) {
+//       const searchValue = String(search).trim();
+
+//       match.pincode_search = {
+//         $regex: escapeRegex(searchValue),
+//         $options: "i",
+//       };
+//     }
+
+//     if (Object.keys(match).length > 0) {
+//       pipeline.push({
+//         $match: match,
+//       });
+//     }
+
+//     // ==========================================
+//     // SORT
+//     // ==========================================
+
+//     pipeline.push({
+//       $sort: {
+//         pincode_search: 1,
+//       },
+//     });
+
+//     // ==========================================
+//     // GET TOTAL
+//     // ==========================================
+
+//     const countPipeline = [
+//       ...pipeline,
+//       {
+//         $count: "total",
+//       },
+//     ];
+
+//     const countResult =
+//       await Pincode.aggregate(countPipeline);
+
+//     const total =
+//       countResult.length > 0
+//         ? countResult[0].total
+//         : 0;
+
+//     // ==========================================
+//     // PAGINATION
+//     // ==========================================
+
+//     pipeline.push(
+//       {
+//         $skip:
+//           (pageNumber - 1) * limitNumber,
+//       },
+//       {
+//         $limit: limitNumber,
+//       }
+//     );
+
+//     const pincodes =
+//       await Pincode.aggregate(pipeline);
+
+//     // ==========================================
+//     // COLLECT CITY IDS
+//     // ==========================================
+
+//     const cityIds = [
+//       ...new Set(
+//         pincodes
+//           .map((item) => item.city_id)
+//           .filter(Boolean)
+//       ),
+//     ];
+
+//     // ==========================================
+//     // GET CITIES
+//     // ==========================================
+
+//     const cities = await City.find({
+//       city_id: {
+//         $in: cityIds,
+//       },
+//     })
+//       .select(
+//         "city_id city_name district_id state_id"
+//       )
+//       .lean();
+
+//     // ==========================================
+//     // COLLECT DISTRICT IDS
+//     // ==========================================
+
+//     const districtIds = [
+//       ...new Set(
+//         cities
+//           .map((city) => city.district_id)
+//           .filter(Boolean)
+//       ),
+//     ];
+
+//     // ==========================================
+//     // COLLECT STATE IDS
+//     // ==========================================
+
+//     const stateIds = [
+//       ...new Set(
+//         cities
+//           .map((city) => city.state_id)
+//           .filter(Boolean)
+//       ),
+//     ];
+
+//     // ==========================================
+//     // GET DISTRICT + STATE
+//     // ==========================================
+
+//     const [districts, states] =
+//       await Promise.all([
+//         District.find({
+//           district_id: {
+//             $in: districtIds,
+//           },
+//         })
+//           .select(
+//             "district_id district_name state_id"
+//           )
+//           .lean(),
+
+//         State.find({
+//           state_id: {
+//             $in: stateIds,
+//           },
+//         })
+//           .select(
+//             "state_id state_name"
+//           )
+//           .lean(),
+//       ]);
+
+//     // ==========================================
+//     // CREATE MAPS
+//     // ==========================================
+
+//     const cityMap = new Map(
+//       cities.map((city) => [
+//         city.city_id,
+//         city,
+//       ])
+//     );
+
+//     const districtMap = new Map(
+//       districts.map((district) => [
+//         district.district_id,
+//         district,
+//       ])
+//     );
+
+//     const stateMap = new Map(
+//       states.map((state) => [
+//         state.state_id,
+//         state,
+//       ])
+//     );
+
+//     // ==========================================
+//     // FINAL DATA
+//     // ==========================================
+
+//     const data = pincodes.map((pincode) => {
+//       const city = cityMap.get(
+//         pincode.city_id
+//       );
+
+//       const district = city?.district_id
+//         ? districtMap.get(city.district_id)
+//         : null;
+
+//       const state = city?.state_id
+//         ? stateMap.get(city.state_id)
+//         : null;
+
+//       // remove temporary search field
+//       const {
+//         pincode_search,
+//         ...pincodeData
+//       } = pincode;
+
+//       return {
+//         ...pincodeData,
+
+//         // always send pincode as string
+//         pincode_name: String(
+//           pincode.pincode_name
+//         ),
+
+//         city_name:
+//           city?.city_name || null,
+
+//         district_id:
+//           city?.district_id || null,
+
+//         district_name:
+//           district?.district_name || null,
+
+//         state_id:
+//           city?.state_id || null,
+
+//         state_name:
+//           state?.state_name || null,
+//       };
+//     });
+
+//     // ==========================================
+//     // RESPONSE
+//     // ==========================================
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "Pincodes fetched successfully",
+
+//       data,
+
+//       pagination: {
+//         page: pageNumber,
+//         limit: limitNumber,
+//         total,
+//         totalPages:
+//           Math.ceil(total / limitNumber),
+//       },
+//     });
+//   } catch (error) {
+//     console.error(
+//       "Get pincodes error:",
+//       error
+//     );
+
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to fetch pincodes",
+//       error: error.message,
+//     });
+//   }
+// };
+
 export const getAllPincodes = async (req, res) => {
   try {
     const {
@@ -203,53 +503,137 @@ export const getAllPincodes = async (req, res) => {
       limit = 20,
     } = req.query;
 
-    const pageNumber = Math.max(Number(page) || 1, 1);
+    // ==========================================
+    // PAGINATION
+    // ==========================================
+
+    const pageNumber = Math.max(
+      Number(page) || 1,
+      1
+    );
 
     const limitNumber = Math.min(
       Math.max(Number(limit) || 20, 1),
       100
     );
 
-    const filter = {};
-
     // ==========================================
-    // CITY FILTER
+    // PIPELINE
     // ==========================================
 
-    if (city_id) {
-      filter.city_id = Number(city_id);
-    }
+    const pipeline = [];
+
+    const match = {};
 
     // ==========================================
-    // SEARCH
+    // CONVERT PINCODE TO STRING
+    // Handles both Number and String values
+    // ==========================================
+
+    pipeline.push({
+      $addFields: {
+        pincode_search: {
+          $toString: "$pincode_name",
+        },
+      },
+    });
+
+    // ==========================================
+    // SEARCH BY PINCODE
     // ==========================================
 
     if (String(search).trim()) {
       const searchValue = String(search).trim();
 
-      filter.pincode_name = {
+      match.pincode_search = {
         $regex: escapeRegex(searchValue),
         $options: "i",
       };
     }
 
     // ==========================================
-    // TOTAL
+    // FILTER BY CITY ID
     // ==========================================
 
-    const total = await Pincode.countDocuments(filter);
+    if (
+      city_id !== undefined &&
+      city_id !== null &&
+      city_id !== ""
+    ) {
+      const cityId = Number(city_id);
+
+      if (
+        !Number.isInteger(cityId) ||
+        cityId <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Valid city_id is required",
+        });
+      }
+
+      match.city_id = cityId;
+    }
+
+    // ==========================================
+    // APPLY FILTERS
+    // ==========================================
+
+    if (Object.keys(match).length > 0) {
+      pipeline.push({
+        $match: match,
+      });
+    }
+
+    // ==========================================
+    // COUNT PIPELINE
+    // ==========================================
+
+    const countPipeline = [
+      ...pipeline,
+      {
+        $count: "total",
+      },
+    ];
+
+    const countResult =
+      await Pincode.aggregate(countPipeline);
+
+    const total =
+      countResult.length > 0
+        ? countResult[0].total
+        : 0;
+
+    // ==========================================
+    // SORT
+    // ==========================================
+
+    pipeline.push({
+      $sort: {
+        pincode_search: 1,
+      },
+    });
+
+    // ==========================================
+    // PAGINATION
+    // ==========================================
+
+    pipeline.push(
+      {
+        $skip:
+          (pageNumber - 1) * limitNumber,
+      },
+      {
+        $limit: limitNumber,
+      }
+    );
 
     // ==========================================
     // GET PINCODES
     // ==========================================
 
-    const pincodes = await Pincode.find(filter)
-      .sort({
-        pincode_name: 1,
-      })
-      .skip((pageNumber - 1) * limitNumber)
-      .limit(limitNumber)
-      .lean();
+    const pincodes =
+      await Pincode.aggregate(pipeline);
 
     // ==========================================
     // COLLECT CITY IDS
@@ -259,7 +643,11 @@ export const getAllPincodes = async (req, res) => {
       ...new Set(
         pincodes
           .map((pincode) => pincode.city_id)
-          .filter(Boolean)
+          .filter(
+            (value) =>
+              value !== null &&
+              value !== undefined
+          )
       ),
     ];
 
@@ -272,8 +660,69 @@ export const getAllPincodes = async (req, res) => {
         $in: cityIds,
       },
     })
-      .select("city_id city_name")
+      .select(
+        "city_id city_name district_id state_id"
+      )
       .lean();
+
+    // ==========================================
+    // COLLECT DISTRICT IDS
+    // ==========================================
+
+    const districtIds = [
+      ...new Set(
+        cities
+          .map((city) => city.district_id)
+          .filter(
+            (value) =>
+              value !== null &&
+              value !== undefined
+          )
+      ),
+    ];
+
+    // ==========================================
+    // COLLECT STATE IDS
+    // ==========================================
+
+    const stateIds = [
+      ...new Set(
+        cities
+          .map((city) => city.state_id)
+          .filter(
+            (value) =>
+              value !== null &&
+              value !== undefined
+          )
+      ),
+    ];
+
+    // ==========================================
+    // GET DISTRICTS AND STATES
+    // ==========================================
+
+    const [districts, states] =
+      await Promise.all([
+        District.find({
+          district_id: {
+            $in: districtIds,
+          },
+        })
+          .select(
+            "district_id district_name state_id"
+          )
+          .lean(),
+
+        State.find({
+          state_id: {
+            $in: stateIds,
+          },
+        })
+          .select(
+            "state_id state_name"
+          )
+          .lean(),
+      ]);
 
     // ==========================================
     // CREATE CITY MAP
@@ -282,20 +731,102 @@ export const getAllPincodes = async (req, res) => {
     const cityMap = new Map(
       cities.map((city) => [
         city.city_id,
-        city.city_name,
+        city,
       ])
     );
 
     // ==========================================
-    // MERGE CITY NAME
+    // CREATE DISTRICT MAP
     // ==========================================
 
-    const data = pincodes.map((pincode) => ({
-      ...pincode,
+    const districtMap = new Map(
+      districts.map((district) => [
+        district.district_id,
+        district,
+      ])
+    );
 
-      city_name:
-        cityMap.get(pincode.city_id) || null,
-    }));
+    // ==========================================
+    // CREATE STATE MAP
+    // ==========================================
+
+    const stateMap = new Map(
+      states.map((state) => [
+        state.state_id,
+        state,
+      ])
+    );
+
+    // ==========================================
+    // MERGE DATA
+    // ==========================================
+
+    const data = pincodes.map((pincode) => {
+      const city = cityMap.get(
+        pincode.city_id
+      );
+
+      const district =
+        city?.district_id !== undefined &&
+        city?.district_id !== null
+          ? districtMap.get(
+              city.district_id
+            )
+          : null;
+
+      const state =
+        city?.state_id !== undefined &&
+        city?.state_id !== null
+          ? stateMap.get(
+              city.state_id
+            )
+          : null;
+
+      // Remove temporary field
+      const {
+        pincode_search,
+        ...pincodeData
+      } = pincode;
+
+      return {
+        ...pincodeData,
+
+        // Keep response consistent
+        pincode_name:
+          pincode.pincode_name !== null &&
+          pincode.pincode_name !== undefined
+            ? String(
+                pincode.pincode_name
+              )
+            : null,
+
+        city_id:
+          city?.city_id ??
+          pincode.city_id ??
+          null,
+
+        city_name:
+          city?.city_name ?? null,
+
+        district_id:
+          district?.district_id ??
+          city?.district_id ??
+          null,
+
+        district_name:
+          district?.district_name ??
+          null,
+
+        state_id:
+          state?.state_id ??
+          city?.state_id ??
+          null,
+
+        state_name:
+          state?.state_name ??
+          null,
+      };
+    });
 
     // ==========================================
     // RESPONSE
@@ -303,7 +834,9 @@ export const getAllPincodes = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Pincodes fetched successfully",
+
+      message:
+        "Pincodes fetched successfully",
 
       data,
 
@@ -311,22 +844,29 @@ export const getAllPincodes = async (req, res) => {
         page: pageNumber,
         limit: limitNumber,
         total,
-        totalPages: Math.ceil(
-          total / limitNumber
-        ),
+        totalPages:
+          Math.ceil(
+            total / limitNumber
+          ),
       },
     });
 
   } catch (error) {
-    console.error("Get pincodes error:", error);
+    console.error(
+      "Get pincodes error:",
+      error
+    );
 
     return res.status(500).json({
       success: false,
-      message: "Failed to fetch pincodes",
+      message:
+        "Failed to fetch pincodes",
       error: error.message,
     });
   }
 };
+
+
 
 // =====================================================
 // GET PINCODE BY ID
@@ -1157,6 +1697,400 @@ export const getPincodesByCityId = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to fetch pincodes",
+      error: error.message,
+    });
+  }
+};
+
+export const getPincodeDropdown = async (req, res) => {
+  try {
+    const {
+      search = "",
+      city_id,
+    } = req.query;
+
+    const pipeline = [];
+
+    const match = {};
+
+    // ==========================================
+    // CONVERT PINCODE TO STRING
+    // ==========================================
+
+    pipeline.push({
+      $addFields: {
+        pincode_search: {
+          $toString: "$pincode_name",
+        },
+      },
+    });
+
+    // ==========================================
+    // SEARCH
+    // ==========================================
+
+    if (String(search).trim()) {
+      match.pincode_search = {
+        $regex: escapeRegex(
+          String(search).trim()
+        ),
+        $options: "i",
+      };
+    }
+
+    // ==========================================
+    // CITY FILTER
+    // ==========================================
+
+    if (
+      city_id !== undefined &&
+      city_id !== null &&
+      city_id !== ""
+    ) {
+      const cityId = Number(city_id);
+
+      if (
+        !Number.isInteger(cityId) ||
+        cityId <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Valid city_id is required",
+        });
+      }
+
+      match.city_id = cityId;
+    }
+
+    // ==========================================
+    // APPLY FILTER
+    // ==========================================
+
+    if (Object.keys(match).length > 0) {
+      pipeline.push({
+        $match: match,
+      });
+    }
+
+    // ==========================================
+    // SORT
+    // ==========================================
+
+    pipeline.push({
+      $sort: {
+        pincode_search: 1,
+      },
+    });
+
+    // Optional dropdown limit
+    pipeline.push({
+      $limit: 100,
+    });
+
+    // ==========================================
+    // GET PINCODES
+    // ==========================================
+
+    const pincodes =
+      await Pincode.aggregate(pipeline);
+
+    // ==========================================
+    // COLLECT CITY IDS
+    // ==========================================
+
+    const cityIds = [
+      ...new Set(
+        pincodes
+          .map((item) => item.city_id)
+          .filter(
+            (value) =>
+              value !== null &&
+              value !== undefined
+          )
+      ),
+    ];
+
+    // ==========================================
+    // GET CITIES
+    // ==========================================
+
+    const cities = await City.find({
+      city_id: {
+        $in: cityIds,
+      },
+    })
+      .select(
+        "city_id city_name district_id state_id"
+      )
+      .lean();
+
+    // ==========================================
+    // DISTRICT IDS
+    // ==========================================
+
+    const districtIds = [
+      ...new Set(
+        cities
+          .map((city) => city.district_id)
+          .filter(
+            (value) =>
+              value !== null &&
+              value !== undefined
+          )
+      ),
+    ];
+
+    // ==========================================
+    // STATE IDS
+    // ==========================================
+
+    const stateIds = [
+      ...new Set(
+        cities
+          .map((city) => city.state_id)
+          .filter(
+            (value) =>
+              value !== null &&
+              value !== undefined
+          )
+      ),
+    ];
+
+    // ==========================================
+    // GET DISTRICTS + STATES
+    // ==========================================
+
+    const [districts, states] =
+      await Promise.all([
+        District.find({
+          district_id: {
+            $in: districtIds,
+          },
+        })
+          .select(
+            "district_id district_name"
+          )
+          .lean(),
+
+        State.find({
+          state_id: {
+            $in: stateIds,
+          },
+        })
+          .select(
+            "state_id state_name"
+          )
+          .lean(),
+      ]);
+
+    // ==========================================
+    // MAPS
+    // ==========================================
+
+    const cityMap = new Map(
+      cities.map((city) => [
+        city.city_id,
+        city,
+      ])
+    );
+
+    const districtMap = new Map(
+      districts.map((district) => [
+        district.district_id,
+        district,
+      ])
+    );
+
+    const stateMap = new Map(
+      states.map((state) => [
+        state.state_id,
+        state,
+      ])
+    );
+
+    // ==========================================
+    // DROPDOWN RESPONSE
+    // ==========================================
+
+    const data = pincodes.map((pincode) => {
+      const city = cityMap.get(
+        pincode.city_id
+      );
+
+      const district =
+        city?.district_id
+          ? districtMap.get(
+              city.district_id
+            )
+          : null;
+
+      const state =
+        city?.state_id
+          ? stateMap.get(
+              city.state_id
+            )
+          : null;
+
+      return {
+        pincode_id:
+          pincode.pincode_id,
+
+        pincode_name:
+          String(
+            pincode.pincode_name
+          ),
+
+        city_id:
+          city?.city_id ??
+          pincode.city_id ??
+          null,
+
+        city_name:
+          city?.city_name ??
+          null,
+
+        district_id:
+          district?.district_id ??
+          city?.district_id ??
+          null,
+
+        district_name:
+          district?.district_name ??
+          null,
+
+        state_id:
+          state?.state_id ??
+          city?.state_id ??
+          null,
+
+        state_name:
+          state?.state_name ??
+          null,
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      message:
+        "Pincode dropdown fetched successfully",
+      data,
+      total: data.length,
+    });
+
+  } catch (error) {
+    console.error(
+      "Pincode dropdown error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Failed to fetch pincode dropdown",
+      error: error.message,
+    });
+  }
+};
+
+export const searchPincodeDetails = async (req, res) => {
+  try {
+    const { pincode } = req.query;
+
+    console.log(pincode)
+
+    if (!String(pincode || "").trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Pincode is required",
+      });
+    }
+
+    const searchValue = String(pincode).trim();
+
+    // ==========================================
+    // FIND PINCODE
+    // ==========================================
+
+    const pincodeData = await Pincode.findOne({
+      pincode_name: searchValue,
+    }).lean();
+
+    if (!pincodeData) {
+      return res.status(404).json({
+        success: false,
+        message: "Pincode not found",
+      });
+    }
+
+    // ==========================================
+    // FIND CITY
+    // ==========================================
+
+    const city = await City.findOne({
+      city_id: pincodeData.city_id,
+    }).lean();
+
+    if (!city) {
+      return res.status(404).json({
+        success: false,
+        message: "City not found for this pincode",
+      });
+    }
+
+    // ==========================================
+    // FIND DISTRICT
+    // ==========================================
+
+    let district = null;
+
+    if (city.district_id) {
+      district = await District.findOne({
+        district_id: city.district_id,
+      }).lean();
+    }
+
+    // ==========================================
+    // FIND STATE
+    // ==========================================
+
+    const state = await State.findOne({
+      state_id: city.state_id,
+    }).lean();
+
+    // ==========================================
+    // RESPONSE
+    // ==========================================
+
+    return res.status(200).json({
+      success: true,
+      message: "Pincode details fetched successfully",
+
+      data: {
+        pincode_id: pincodeData.pincode_id,
+        pincode_name: pincodeData.pincode_name,
+
+        city_id: city.city_id,
+        city_name: city.city_name,
+
+        district_id:
+          district?.district_id ?? city.district_id ?? null,
+
+        district_name:
+          district?.district_name ?? null,
+
+        state_id:
+          state?.state_id ?? city.state_id ?? null,
+
+        state_name:
+          state?.state_name ?? null,
+      },
+    });
+  } catch (error) {
+    console.error("Pincode search error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to search pincode",
       error: error.message,
     });
   }

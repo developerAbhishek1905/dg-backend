@@ -2,12 +2,18 @@ import mongoose from "mongoose";
 
 const categorySchema = new mongoose.Schema(
   {
-    groupCategoryCode: {
-      type: String,
+    // groupCategoryCode: {
+    //   type: String,
+    //   // required: true,
+    //   trim: true,
+    //   uppercase: true,
+    //   unique: true,
+    //   index: true,
+    // },
+
+    product_id: {
+      type: Number,
       required: true,
-      trim: true,
-      uppercase: true,
-      unique: true,
       index: true,
     },
 

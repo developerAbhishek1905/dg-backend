@@ -13,6 +13,8 @@ import cityRoutes from "./modules/address/routes/city.routes.js";
 import pincodeRoutes from "./modules/address/routes/pincode.routes.js";
 import areaRoutes from "./modules/address/routes/area.routes.js";
 import brandRoutes from "./modules/brand/routes/brand.routes.js";
+import productRoutes from "./modules/product/routes/product.routes.js";
+import productTypeRoutes from "./modules/productType/routes/productType.routes.js";
 
 const app = express();
 
@@ -52,5 +54,7 @@ app.use("/api/v1/cities", cityRoutes);
 app.use("/api/v1/pincodes", pincodeRoutes);
 app.use("/api/v1/areas", areaRoutes);
 app.use("/api/v1/brands", brandRoutes);
+app.use("/api/v1/products", productRoutes);
+app.use("/api/v1/product-types", productTypeRoutes);
 
 export default app;

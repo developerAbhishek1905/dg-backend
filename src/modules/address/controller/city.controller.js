@@ -1598,6 +1598,242 @@ export const getCitiesByStateOrDistrict = async (req, res) => {
   }
 };
 
+export const getCityDropdown = async (req, res) => {
+  try {
+    const {
+      state_id,
+      district_id,
+      search = "",
+    } = req.query;
+
+    const filter = {};
+
+    // ==========================================
+    // STATE FILTER
+    // ==========================================
+
+    if (
+      state_id !== undefined &&
+      state_id !== null &&
+      state_id !== ""
+    ) {
+      const stateId = Number(state_id);
+
+      if (
+        !Number.isInteger(stateId) ||
+        stateId <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Valid state_id is required",
+        });
+      }
+
+      filter.state_id = stateId;
+    }
+
+    // ==========================================
+    // DISTRICT FILTER
+    // ==========================================
+
+    if (
+      district_id !== undefined &&
+      district_id !== null &&
+      district_id !== ""
+    ) {
+      const districtId = Number(district_id);
+
+      if (
+        !Number.isInteger(districtId) ||
+        districtId <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Valid district_id is required",
+        });
+      }
+
+      filter.district_id = districtId;
+    }
+
+    // ==========================================
+    // CITY SEARCH
+    // ==========================================
+
+    if (String(search).trim()) {
+      filter.city_name = {
+        $regex: escapeRegex(
+          String(search).trim()
+        ),
+        $options: "i",
+      };
+    }
+
+    // ==========================================
+    // GET CITIES
+    // ==========================================
+
+    const cities = await City.find(filter)
+      .select(
+        "_id city_id city_name district_id state_id"
+      )
+      .sort({
+        city_name: 1,
+      })
+      .limit(200)
+      .lean();
+
+    // ==========================================
+    // COLLECT DISTRICT IDS
+    // ==========================================
+
+    const districtIds = [
+      ...new Set(
+        cities
+          .map((city) => city.district_id)
+          .filter(
+            (value) =>
+              value !== null &&
+              value !== undefined
+          )
+      ),
+    ];
+
+    // ==========================================
+    // COLLECT STATE IDS
+    // ==========================================
+
+    const stateIds = [
+      ...new Set(
+        cities
+          .map((city) => city.state_id)
+          .filter(
+            (value) =>
+              value !== null &&
+              value !== undefined
+          )
+      ),
+    ];
+
+    // ==========================================
+    // GET DISTRICTS + STATES
+    // ==========================================
+
+    const [districts, states] =
+      await Promise.all([
+        District.find({
+          district_id: {
+            $in: districtIds,
+          },
+        })
+          .select(
+            "district_id district_name state_id"
+          )
+          .lean(),
+
+        State.find({
+          state_id: {
+            $in: stateIds,
+          },
+        })
+          .select(
+            "state_id state_name"
+          )
+          .lean(),
+      ]);
+
+    // ==========================================
+    // CREATE MAPS
+    // ==========================================
+
+    const districtMap = new Map(
+      districts.map((district) => [
+        district.district_id,
+        district,
+      ])
+    );
+
+    const stateMap = new Map(
+      states.map((state) => [
+        state.state_id,
+        state,
+      ])
+    );
+
+    // ==========================================
+    // RESPONSE DATA
+    // ==========================================
+
+    const data = cities.map((city) => {
+      const district =
+        city.district_id !== null &&
+        city.district_id !== undefined
+          ? districtMap.get(
+              city.district_id
+            )
+          : null;
+
+      const state =
+        city.state_id !== null &&
+        city.state_id !== undefined
+          ? stateMap.get(
+              city.state_id
+            )
+          : null;
+
+      return {
+        city_id:
+          city.city_id,
+
+        city_name:
+          city.city_name,
+
+        district_id:
+          district?.district_id ??
+          city.district_id ??
+          null,
+
+        district_name:
+          district?.district_name ??
+          null,
+
+        state_id:
+          state?.state_id ??
+          city.state_id ??
+          null,
+
+        state_name:
+          state?.state_name ??
+          null,
+      };
+    });
+
+    // ==========================================
+    // RESPONSE
+    // ==========================================
+
+    return res.status(200).json({
+      success: true,
+      message:
+        "City dropdown fetched successfully",
+      data,
+      total: data.length,
+    });
+
+  } catch (error) {
+    console.error(
+      "City dropdown error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Failed to fetch city dropdown",
+      error: error.message,
+    });
+  }
+};
 // =====================================================
 // ESCAPE REGEX
 // =====================================================

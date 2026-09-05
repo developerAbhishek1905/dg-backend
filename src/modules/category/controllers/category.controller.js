@@ -1,21 +1,108 @@
 import mongoose from "mongoose";
 import XLSX from "xlsx";
 import Category from "../models/category.model.js";
+import Product from "../../product/models/product.model.js  "
+
+// export const createCategory = async (req, res) => {
+//   try {
+//     const {
+//       groupCategoryCode,
+//       description = "",
+//       category = "",
+//       categoryDescription = "",
+//       status = "ACTIVE",
+//       product_id,
+//     } = req.body;
+
+//     // if (!groupCategoryCode?.trim()) {
+//     //   return res.status(400).json({
+//     //     success: false,
+//     //     message: "Group category code is required",
+//     //   });
+//     // }
+
+//     if (!["ACTIVE", "INACTIVE"].includes(status)) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid status",
+//       });
+//     }
+
+//     const normalizedCode = groupCategoryCode.trim().toUpperCase();
+
+//     const existingCategory = await Category.findOne({
+//       groupCategoryCode: normalizedCode,
+//     });
+
+//     // if (existingCategory) {
+//     //   return res.status(409).json({
+//     //     success: false,
+//     //     message: "Group category code already exists",
+//     //   });
+//     // }
+
+//     const newCategory = await Category.create({
+//       groupCategoryCode: normalizedCode,
+//       description: description?.trim() || "",
+//       category: category?.trim() || "",
+//       product_id,
+//       categoryDescription: categoryDescription?.trim() || "",
+//       status,
+//     });
+
+//     return res.status(201).json({
+//       success: true,
+//       message: "Category created successfully",
+//       data: formatCategory(newCategory),
+//     });
+//   } catch (error) {
+//     console.error("Create Category Error:", error);
+
+//     if (error.code === 11000) {
+//       return res.status(409).json({
+//         success: false,
+//         message: "Group category code already exists",
+//       });
+//     }
+
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to create category",
+//     });
+//   }
+// };
+
 
 export const createCategory = async (req, res) => {
   try {
     const {
-      groupCategoryCode,
       description = "",
       category = "",
       categoryDescription = "",
       status = "ACTIVE",
+      product_id,
     } = req.body;
 
-    if (!groupCategoryCode?.trim()) {
+
+        console.log("REQ BODY:", req.body);
+    console.log("PRODUCT ID:", product_id);
+    if (
+      product_id === undefined ||
+      product_id === null ||
+      product_id === ""
+    ) {
       return res.status(400).json({
         success: false,
-        message: "Group category code is required",
+        message: "Product ID is required",
+      });
+    }
+
+    const parsedProductId = Number(product_id);
+
+    if (Number.isNaN(parsedProductId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Product ID must be a valid number",
       });
     }
 
@@ -26,21 +113,8 @@ export const createCategory = async (req, res) => {
       });
     }
 
-    const normalizedCode = groupCategoryCode.trim().toUpperCase();
-
-    const existingCategory = await Category.findOne({
-      groupCategoryCode: normalizedCode,
-    });
-
-    if (existingCategory) {
-      return res.status(409).json({
-        success: false,
-        message: "Group category code already exists",
-      });
-    }
-
     const newCategory = await Category.create({
-      groupCategoryCode: normalizedCode,
+      product_id: parsedProductId,
       description: description?.trim() || "",
       category: category?.trim() || "",
       categoryDescription: categoryDescription?.trim() || "",
@@ -55,51 +129,31 @@ export const createCategory = async (req, res) => {
   } catch (error) {
     console.error("Create Category Error:", error);
 
-    if (error.code === 11000) {
-      return res.status(409).json({
-        success: false,
-        message: "Group category code already exists",
-      });
-    }
-
     return res.status(500).json({
       success: false,
       message: "Failed to create category",
+      error: error.message,
     });
   }
 };
+
 
 export const getCategories = async (req, res) => {
   try {
     const { search = "", status = "" } = req.query;
 
-    const filter = {};
+    const match = {};
 
-    // =========================================
-    // SEARCH FILTER
-    // =========================================
     if (search.trim()) {
       const searchRegex = new RegExp(search.trim(), "i");
 
-      filter.$or = [
-        {
-          groupCategoryCode: searchRegex,
-        },
-        {
-          description: searchRegex,
-        },
-        {
-          category: searchRegex,
-        },
-        {
-          categoryDescription: searchRegex,
-        },
+      match.$or = [
+        { description: searchRegex },
+        { category: searchRegex },
+        { categoryDescription: searchRegex },
       ];
     }
 
-    // =========================================
-    // STATUS FILTER
-    // =========================================
     if (status) {
       if (!["ACTIVE", "INACTIVE"].includes(status)) {
         return res.status(400).json({
@@ -108,20 +162,57 @@ export const getCategories = async (req, res) => {
         });
       }
 
-      filter.status = status;
+      match.status = status;
     }
 
-    // =========================================
-    // FETCH CATEGORIES
-    // =========================================
-    const categories = await Category.find(filter).sort({
-      createdAt: -1,
-    });
+    const categories = await Category.aggregate([
+      {
+        $match: match,
+      },
+
+      {
+        $lookup: {
+          from: "products",
+          localField: "product_id",
+          foreignField: "product_id",
+          as: "product",
+        },
+      },
+
+      {
+        $unwind: {
+          path: "$product",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+
+      {
+        $project: {
+          id: "$_id",
+          product_id: 1,
+          product_name: {
+            $ifNull: ["$product.product_name", ""],
+          },
+          description: 1,
+          category: 1,
+          categoryDescription: 1,
+          status: 1,
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      },
+
+      {
+        $sort: {
+          createdAt: -1,
+        },
+      },
+    ]);
 
     return res.status(200).json({
       success: true,
       count: categories.length,
-      data: categories.map(formatCategory),
+      data: categories,
     });
   } catch (error) {
     console.error("Get Categories Error:", error);
@@ -129,6 +220,7 @@ export const getCategories = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to fetch categories",
+      error: error.message,
     });
   }
 };
@@ -144,9 +236,47 @@ export const getCategoryById = async (req, res) => {
       });
     }
 
-    const category = await Category.findById(id);
+    const categories = await Category.aggregate([
+      {
+        $match: {
+          _id: new mongoose.Types.ObjectId(id),
+        },
+      },
 
-    if (!category) {
+      {
+        $lookup: {
+          from: "products",
+          localField: "product_id",
+          foreignField: "product_id",
+          as: "product",
+        },
+      },
+
+      {
+        $unwind: {
+          path: "$product",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+
+      {
+        $project: {
+          id: "$_id",
+          product_id: 1,
+          product_name: {
+            $ifNull: ["$product.product_name", ""],
+          },
+          description: 1,
+          category: 1,
+          categoryDescription: 1,
+          status: 1,
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      },
+    ]);
+
+    if (!categories.length) {
       return res.status(404).json({
         success: false,
         message: "Category not found",
@@ -155,7 +285,7 @@ export const getCategoryById = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      data: formatCategory(category),
+      data: categories[0],
     });
   } catch (error) {
     console.error("Get Category Error:", error);
@@ -163,16 +293,122 @@ export const getCategoryById = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to fetch category",
+      error: error.message,
     });
   }
 };
+
+// export const updateCategory = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+
+//     const {
+//       groupCategoryCode,
+//       product_id,
+//       description,
+//       category,
+//       categoryDescription,
+//       status,
+//     } = req.body;
+
+//     if (!mongoose.Types.ObjectId.isValid(id)) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid category ID",
+//       });
+//     }
+
+//     const existingCategory = await Category.findById(id);
+
+//     // if (!existingCategory) {
+//     //   return res.status(404).json({
+//     //     success: false,
+//     //     message: "Category not found",
+//     //   });
+//     // }
+
+//     // if (groupCategoryCode !== undefined) {
+//     //   if (!groupCategoryCode.trim()) {
+//     //     return res.status(400).json({
+//     //       success: false,
+//     //       message: "Group category code cannot be empty",
+//     //     });
+//     //   }
+
+//     //   const normalizedCode = groupCategoryCode.trim().toUpperCase();
+
+//     //   const duplicateCategory = await Category.findOne({
+//     //     groupCategoryCode: normalizedCode,
+//     //     _id: {
+//     //       $ne: id,
+//     //     },
+//     //   });
+
+//     //   if (duplicateCategory) {
+//     //     return res.status(409).json({
+//     //       success: false,
+//     //       message: "Group category code already exists",
+//     //     });
+//     //   }
+
+//     //   existingCategory.groupCategoryCode = normalizedCode;
+//     // }
+//     if (product_id !== undefined) existingCategory.product_id = product_id;
+
+//     if (description !== undefined) {
+//       existingCategory.description = description?.trim() || "";
+//     }
+
+//     if (category !== undefined) {
+//       existingCategory.category = category?.trim() || "";
+//     }
+
+//     if (categoryDescription !== undefined) {
+//       existingCategory.categoryDescription = categoryDescription?.trim() || "";
+//     }
+
+//     if (status !== undefined) {
+//       if (!["ACTIVE", "INACTIVE"].includes(status)) {
+//         return res.status(400).json({
+//           success: false,
+//           message: "Invalid status",
+//         });
+//       }
+
+//       existingCategory.status = status;
+//     }
+
+//     await existingCategory.save();
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "Category updated successfully",
+//       data: formatCategory(existingCategory),
+//     });
+//   } catch (error) {
+//     console.error("Update Category Error:", error);
+
+//     if (error.code === 11000) {
+//       return res.status(409).json({
+//         success: false,
+//         message: "Group category code already exists",
+//       });
+//     }
+
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to update category",
+//     });
+//   }
+// };
+
 
 export const updateCategory = async (req, res) => {
   try {
     const { id } = req.params;
 
     const {
-      groupCategoryCode,
+      product_id,
       description,
       category,
       categoryDescription,
@@ -195,31 +431,17 @@ export const updateCategory = async (req, res) => {
       });
     }
 
-    if (groupCategoryCode !== undefined) {
-      if (!groupCategoryCode.trim()) {
+    if (product_id !== undefined) {
+      const parsedProductId = Number(product_id);
+
+      if (Number.isNaN(parsedProductId)) {
         return res.status(400).json({
           success: false,
-          message: "Group category code cannot be empty",
+          message: "Product ID must be a valid number",
         });
       }
 
-      const normalizedCode = groupCategoryCode.trim().toUpperCase();
-
-      const duplicateCategory = await Category.findOne({
-        groupCategoryCode: normalizedCode,
-        _id: {
-          $ne: id,
-        },
-      });
-
-      if (duplicateCategory) {
-        return res.status(409).json({
-          success: false,
-          message: "Group category code already exists",
-        });
-      }
-
-      existingCategory.groupCategoryCode = normalizedCode;
+      existingCategory.product_id = parsedProductId;
     }
 
     if (description !== undefined) {
@@ -231,7 +453,8 @@ export const updateCategory = async (req, res) => {
     }
 
     if (categoryDescription !== undefined) {
-      existingCategory.categoryDescription = categoryDescription?.trim() || "";
+      existingCategory.categoryDescription =
+        categoryDescription?.trim() || "";
     }
 
     if (status !== undefined) {
@@ -255,19 +478,14 @@ export const updateCategory = async (req, res) => {
   } catch (error) {
     console.error("Update Category Error:", error);
 
-    if (error.code === 11000) {
-      return res.status(409).json({
-        success: false,
-        message: "Group category code already exists",
-      });
-    }
-
     return res.status(500).json({
       success: false,
       message: "Failed to update category",
+      error: error.message,
     });
   }
 };
+
 
 export const deleteCategory = async (req, res) => {
   try {
@@ -305,39 +523,37 @@ export const deleteCategory = async (req, res) => {
   }
 };
 
-export const getCategoryDropdown = async (req, res) => {
-  try {
-    const categories = await Category.find({
-      status: "ACTIVE",
-    })
-      .select(
-        "_id groupCategoryCode category categoryDescription"
-      )
-      .sort({
-        category: 1,
-      });
+// export const getCategoryDropdown = async (req, res) => {
+//   try {
+//     const categories = await Category.find({
+//       status: "ACTIVE",
+//     })
+//       .select("_id groupCategoryCode category categoryDescription")
+//       .sort({
+//         category: 1,
+//       });
 
-    const data = categories.map((item) => ({
-      id: item._id,
-      groupCategoryCode: item.groupCategoryCode,
-      category: item.category,
-      categoryDescription: item.categoryDescription,
-    }));
+//     const data = categories.map((item) => ({
+//       id: item._id,
+//       groupCategoryCode: item.groupCategoryCode,
+//       category: item.category,
+//       categoryDescription: item.categoryDescription,
+//     }));
 
-    return res.status(200).json({
-      success: true,
-      count: data.length,
-      data,
-    });
-  } catch (error) {
-    console.error("Category Dropdown Error:", error);
+//     return res.status(200).json({
+//       success: true,
+//       count: data.length,
+//       data,
+//     });
+//   } catch (error) {
+//     console.error("Category Dropdown Error:", error);
 
-    return res.status(500).json({
-      success: false,
-      message: "Failed to fetch category dropdown",
-    });
-  }
-};
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to fetch category dropdown",
+//     });
+//   }
+// };
 
 export const importCategories = async (req, res) => {
   try {
@@ -381,68 +597,82 @@ export const importCategories = async (req, res) => {
       const row = rows[index];
 
       try {
-        // Support multiple possible Excel column names
-        const groupCategoryCode = String(
-          row.groupCategoryCode ??
-            row["Group Category Code"] ??
-            row["group_category_code"] ??
-            ""
-        )
-          .trim()
-          .toUpperCase();
+        // const groupCategoryCode = String(
+        //   row.groupCategoryCode ??
+        //     row["Group Category Code"] ??
+        //     row["group_category_code"] ??
+        //     "",
+        // )
+        //   .trim()
+        //   .toUpperCase();
+
+        const productIdRaw =
+          row.product_id ??
+          row["Product ID"] ??
+          row["product id"] ??
+          row["productId"] ??
+          "";
+
+        const product_id = Number(productIdRaw);
 
         const description = String(
-          row.description ??
-            row["Description"] ??
-            ""
+          row.description ?? row["Description"] ?? "",
         ).trim();
 
         const category = String(
-          row.category ??
-            row["Category"] ??
-            ""
+          row.category ?? row["Category"] ?? "",
         ).trim();
 
         const categoryDescription = String(
           row.categoryDescription ??
             row["Category Description"] ??
             row["category_description"] ??
-            ""
+            "",
         ).trim();
 
         const status = String(
-          row.status ??
-            row["Status"] ??
-            "ACTIVE"
+          row.status ?? row["Status"] ?? "ACTIVE",
         )
           .trim()
           .toUpperCase();
 
-        // Required field validation
-        if (!groupCategoryCode) {
-          throw new Error("Group Category Code is required");
+        // Group Category Code validation removed
+        // if (!groupCategoryCode) {
+        //   throw new Error("Group Category Code is required");
+        // }
+
+        if (
+          productIdRaw === "" ||
+          productIdRaw === null ||
+          productIdRaw === undefined
+        ) {
+          throw new Error("Product ID is required");
         }
 
-        // Status validation
+        if (Number.isNaN(product_id)) {
+          throw new Error("Product ID must be a valid number");
+        }
+
         if (!["ACTIVE", "INACTIVE"].includes(status)) {
           throw new Error(
-            "Status must be either ACTIVE or INACTIVE"
+            "Status must be either ACTIVE or INACTIVE",
           );
         }
 
-        // Check duplicate
-        const existingCategory = await Category.findOne({
-          groupCategoryCode,
-        });
+        // Duplicate Group Category Code check removed
+        // const existingCategory = await Category.findOne({
+        //   groupCategoryCode,
+        // });
 
-        if (existingCategory) {
-          throw new Error(
-            `Group Category Code '${groupCategoryCode}' already exists`
-          );
-        }
+        // if (existingCategory) {
+        //   throw new Error(
+        //     `Group Category Code '${groupCategoryCode}' already exists`,
+        //   );
+        // }
 
         const newCategory = await Category.create({
-          groupCategoryCode,
+          // groupCategoryCode,
+          product_id,
           description,
           category,
           categoryDescription,
@@ -451,16 +681,18 @@ export const importCategories = async (req, res) => {
 
         imported.push({
           row: index + 2,
-          groupCategoryCode: newCategory.groupCategoryCode,
+          product_id: newCategory.product_id,
           category: newCategory.category,
         });
       } catch (error) {
         failed.push({
           row: index + 2,
-          groupCategoryCode:
-            row.groupCategoryCode ??
-            row["Group Category Code"] ??
+          product_id:
+            row.product_id ??
+            row["Product ID"] ??
+            row["productId"] ??
             "",
+          category: row.category ?? row["Category"] ?? "",
           message: error.message,
         });
       }
@@ -502,7 +734,9 @@ export const exportCategories = async (req, res) => {
     }
 
     const exportData = categories.map((item) => ({
-      "Group Category Code": item.groupCategoryCode,
+      // "Group Category Code": item.groupCategoryCode,
+
+      "Product ID": item.product_id,
       Description: item.description || "",
       Category: item.category || "",
       "Category Description": item.categoryDescription || "",
@@ -511,9 +745,9 @@ export const exportCategories = async (req, res) => {
 
     const worksheet = XLSX.utils.json_to_sheet(exportData);
 
-    // Set Excel column widths
     worksheet["!cols"] = [
-      { wch: 22 },
+      // { wch: 22 }, // Group Category Code
+      { wch: 15 }, // Product ID
       { wch: 35 },
       { wch: 25 },
       { wch: 40 },
@@ -525,7 +759,7 @@ export const exportCategories = async (req, res) => {
     XLSX.utils.book_append_sheet(
       workbook,
       worksheet,
-      "Categories"
+      "Categories",
     );
 
     const excelBuffer = XLSX.write(workbook, {
@@ -537,12 +771,12 @@ export const exportCategories = async (req, res) => {
 
     res.setHeader(
       "Content-Type",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     );
 
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename="${fileName}"`
+      `attachment; filename="${fileName}"`,
     );
 
     return res.send(excelBuffer);
@@ -561,14 +795,18 @@ export const downloadCategorySample = async (req, res) => {
   try {
     const sampleData = [
       {
-        "Group Category Code": "WM",
+        // "Group Category Code": "WM",
+
+        "Product ID": 1,
         Description: "Washing Machine Group",
         Category: "Washing Machine",
         "Category Description": "Washing Machine Products",
         Status: "ACTIVE",
       },
       {
-        "Group Category Code": "RF",
+        // "Group Category Code": "RF",
+
+        "Product ID": 2,
         Description: "Refrigerator Group",
         Category: "Refrigerator",
         "Category Description": "Refrigerator Products",
@@ -579,7 +817,8 @@ export const downloadCategorySample = async (req, res) => {
     const worksheet = XLSX.utils.json_to_sheet(sampleData);
 
     worksheet["!cols"] = [
-      { wch: 22 },
+      // { wch: 22 }, // Group Category Code
+      { wch: 15 }, // Product ID
       { wch: 35 },
       { wch: 25 },
       { wch: 40 },
@@ -591,7 +830,7 @@ export const downloadCategorySample = async (req, res) => {
     XLSX.utils.book_append_sheet(
       workbook,
       worksheet,
-      "Category Sample"
+      "Category Sample",
     );
 
     const excelBuffer = XLSX.write(workbook, {
@@ -601,12 +840,12 @@ export const downloadCategorySample = async (req, res) => {
 
     res.setHeader(
       "Content-Type",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     );
 
     res.setHeader(
       "Content-Disposition",
-      'attachment; filename="category-import-sample.xlsx"'
+      'attachment; filename="category-import-sample.xlsx"',
     );
 
     return res.send(excelBuffer);
@@ -621,10 +860,181 @@ export const downloadCategorySample = async (req, res) => {
   }
 };
 
+export const getCategoryDropdown = async (req, res) => {
+  try {
+    const {
+      product_id,
+      search = "",
+    } = req.query;
+
+    const filter = {};
+
+    // ==========================================
+    // PRODUCT ID - OPTIONAL
+    // ==========================================
+
+    if (
+      product_id !== undefined &&
+      product_id !== null &&
+      String(product_id).trim() !== ""
+    ) {
+      const productId = Number(product_id);
+
+      if (
+        !Number.isInteger(productId) ||
+        productId <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Valid product_id is required",
+        });
+      }
+
+      // Check product exists
+      const productExists = await Product.exists({
+        product_id: productId,
+      });
+
+      if (!productExists) {
+        return res.status(404).json({
+          success: false,
+          message: `Product with ID ${productId} not found`,
+        });
+      }
+
+      // Filter categories by product
+      filter.product_id = productId;
+    }
+
+    // ==========================================
+    // SEARCH - OPTIONAL
+    // ==========================================
+
+    if (String(search).trim()) {
+      const searchValue = String(search).trim();
+
+      const regex = {
+        $regex: escapeRegex(searchValue),
+        $options: "i",
+      };
+
+      filter.$or = [
+        {
+          category: regex,
+        },
+        {
+          description: regex,
+        },
+        {
+          categoryDescription: regex,
+        },
+      ];
+    }
+
+    // ==========================================
+    // GET CATEGORIES
+    // ==========================================
+
+    const categories = await Category.find(filter)
+      .select(
+        "_id product_id category description categoryDescription status"
+      )
+      .sort({
+        category: 1,
+      })
+      .lean();
+
+    // ==========================================
+    // GET PRODUCT IDS
+    // ==========================================
+
+    const productIds = [
+      ...new Set(
+        categories
+          .map((item) => item.product_id)
+          .filter(
+            (id) =>
+              id !== null &&
+              id !== undefined
+          )
+      ),
+    ];
+
+    // ==========================================
+    // GET PRODUCT NAMES
+    // ==========================================
+
+    const products = await Product.find({
+      product_id: {
+        $in: productIds,
+      },
+    })
+      .select("product_id product_name")
+      .lean();
+
+    // ==========================================
+    // CREATE PRODUCT MAP
+    // ==========================================
+
+    const productMap = new Map(
+      products.map((product) => [
+        product.product_id,
+        product.product_name,
+      ])
+    );
+
+    // ==========================================
+    // FORMAT RESPONSE
+    // ==========================================
+
+    const data = categories.map((category) => ({
+      _id: category._id,
+
+      product_id: category.product_id,
+
+      product_name:
+        productMap.get(category.product_id) || null,
+
+      category: category.category,
+
+      description: category.description,
+
+      categoryDescription:
+        category.categoryDescription,
+
+      status: category.status,
+    }));
+
+    // ==========================================
+    // RESPONSE
+    // ==========================================
+
+    return res.status(200).json({
+      success: true,
+      message: "Categories fetched successfully",
+      data,
+      total: data.length,
+    });
+  } catch (error) {
+    console.error(
+      "Category dropdown error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch categories",
+      error: error.message,
+    });
+  }
+};
+
 const formatCategory = (category) => ({
   id: category._id,
 
   groupCategoryCode: category.groupCategoryCode,
+  
+  product_id: category.product_id,
 
   description: category.description,
 

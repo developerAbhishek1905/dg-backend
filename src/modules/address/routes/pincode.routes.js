@@ -9,6 +9,8 @@ import {
   importPincodes,
   exportPincodes,
   getPincodesByCityId,
+  searchPincodeDetails,
+  getPincodeDropdown,
 } from "../controller/pincode.controller.js";
 
 import { uploadExcel } from "../middleware/upload.middleware.js";
@@ -20,16 +22,23 @@ router.post("/", createPincode);
 
 // Get all
 router.get("/", getAllPincodes);
+router.get(
+  "/dropdown",
+  getPincodeDropdown
+);
+
+router.get(
+  "/:id",
+  getPincodeById
+);
 
 // Import
 router.post("/import", uploadExcel.single("file"), importPincodes);
 
 // Export
 router.get("/export", exportPincodes);
-router.get(
-  "/city/:city_id",
-  getPincodesByCityId
-);
+router.get("/city/:city_id", getPincodesByCityId);
+router.get("/search/details", searchPincodeDetails);
 
 // Get by pincode_id
 router.get("/:id", getPincodeById);

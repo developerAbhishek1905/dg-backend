@@ -8,7 +8,7 @@ import {
   deleteDistrict,
   importDistricts,
   exportDistricts,
-  getDistrictsByStateId
+  getDistrictsDropdown
 } from "../controller/district.controller.js";
 
 import { uploadExcel } from "../middleware/upload.middleware.js";
@@ -27,7 +27,10 @@ router.post("/import", uploadExcel.single("file"), importDistricts);
 // Excel export
 router.get("/export", exportDistricts);
 
-router.get("/state/:state_id", getDistrictsByStateId);
+router.get(
+  "/dropdown",
+  getDistrictsDropdown
+);
 
 // Get by district_id
 router.get("/:id", getDistrictById);
