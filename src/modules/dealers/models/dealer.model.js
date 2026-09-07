@@ -1,39 +1,69 @@
 import mongoose from "mongoose";
 
+const { Schema } = mongoose;
+
+/* =========================================================
+   ADDRESS
+========================================================= */
+
 const addressSchema = new mongoose.Schema(
   {
     addressLine: {
       type: String,
-      required: true,
       trim: true,
-    },
-  },
-  {
-    _id: false,
-  },
-);
-
-const capacitySchema = new mongoose.Schema(
-  {
-    categoryId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Category",
-      required: true,
+      default: "",
     },
 
-    rate: {
+    stateId: {
       type: Number,
-      default: 0,
-      min: 0,
+      default: null,
+      index: true,
     },
 
-    capacity: {
+    state: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    stateCode: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      default: "",
+    },
+
+    districtId: {
       type: Number,
-      required: true,
-      min: 1,
+      default: null,
+      index: true,
     },
 
-    serviceType: {
+    district: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    cityId: {
+      type: Number,
+      default: null,
+      index: true,
+    },
+
+    city: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    pincodeId: {
+      type: Number,
+      default: null,
+      index: true,
+    },
+
+    pinCode: {
       type: String,
       trim: true,
       default: "",
@@ -44,22 +74,203 @@ const capacitySchema = new mongoose.Schema(
   },
 );
 
-const documentSchema = new mongoose.Schema(
+/* =========================================================
+   PRODUCT SERVICE CATEGORY
+========================================================= */
+
+const productCategorySchema = new mongoose.Schema(
   {
-    fileName: String,
-    filePath: String,
-    mimeType: String,
+    categoryId: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    categoryName: {
+      type: String,
+      required: true,
+      trim: true,
+    },
   },
   {
     _id: false,
   },
 );
 
+/* =========================================================
+   PRODUCT + SERVICES
+========================================================= */
+
+const productServiceSchema = new mongoose.Schema(
+  {
+    productId: {
+      type: Number,
+      required: true,
+      index: true,
+    },
+
+    productName: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    categories: {
+      type: [productCategorySchema],
+      default: [],
+    },
+  },
+  {
+    _id: false,
+  },
+);
+
+/* =========================================================
+   COMBINED CAPACITY PRODUCT
+========================================================= */
+
+const capacityProductSchema = new mongoose.Schema(
+  {
+    productId: {
+      type: Number,
+      required: true,
+    },
+
+    productName: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+  },
+  {
+    _id: false,
+  },
+);
+
+/* =========================================================
+   COMBINED CAPACITY
+========================================================= */
+
+const combinedCapacitySchema = new mongoose.Schema(
+  {
+    products: {
+      type: [capacityProductSchema],
+      default: [],
+    },
+
+    capacity: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+  },
+  {
+    _id: false,
+  },
+);
+
+/* =========================================================
+   INDIVIDUAL CAPACITY
+========================================================= */
+
+const individualCapacitySchema = new mongoose.Schema(
+  {
+    productId: {
+      type: Number,
+      required: true,
+    },
+
+    productName: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    capacity: {
+      type: Number,
+      required: true,
+      min: 1,
+    },
+  },
+  {
+    _id: false,
+  },
+);
+
+/* =========================================================
+   DOCUMENTS
+========================================================= */
+
+const documentsSchema = new mongoose.Schema(
+  {
+    aadhaarFront: {
+      type: String,
+      default: "",
+    },
+
+    aadhaarBack: {
+      type: String,
+      default: "",
+    },
+
+    panFront: {
+      type: String,
+      default: "",
+    },
+
+    panBack: {
+      type: String,
+      default: "",
+    },
+
+    drivingLicenceFront: {
+      type: String,
+      default: "",
+    },
+
+    drivingLicenceBack: {
+      type: String,
+      default: "",
+    },
+
+    otherDocuments: {
+      type: [String],
+      default: [],
+    },
+  },
+  {
+    _id: false,
+  },
+);
+
+/* =========================================================
+   DEALER
+========================================================= */
+
 const dealerSchema = new mongoose.Schema(
   {
-    // =====================================
-    // BASIC INFORMATION
-    // =====================================
+    dealerCode: {
+      type: String,
+      unique: true,
+      sparse: true,
+      trim: true,
+      uppercase: true,
+      index: true,
+    },
+
+    technicianCode: {
+      type: String,
+      unique: true,
+      sparse: true,
+      trim: true,
+      uppercase: true,
+      index: true,
+    },
+
+    /* =========================
+       BASIC INFORMATION
+    ========================= */
+
     headCode: {
       type: String,
       required: true,
@@ -84,23 +295,9 @@ const dealerSchema = new mongoose.Schema(
       default: "",
     },
 
-    segment: {
-      type: String,
-      trim: true,
-      default: "",
-    },
-
-    // =====================================
-    // TECHNICIAN INFORMATION
-    // =====================================
-    technicianCode: {
-      type: String,
-      required: true,
-      unique: true,
-      trim: true,
-      uppercase: true,
-      index: true,
-    },
+    /* =========================
+       TECHNICIAN INFORMATION
+    ========================= */
 
     technicianFirmName: {
       type: String,
@@ -129,52 +326,58 @@ const dealerSchema = new mongoose.Schema(
     email: {
       type: String,
       required: true,
-      lowercase: true,
       trim: true,
+      lowercase: true,
     },
 
     technicianStatus: {
       type: String,
       enum: ["ACTIVE", "INACTIVE"],
       default: "ACTIVE",
+      index: true,
     },
 
-    // =====================================
-    // ADDRESS
-    // =====================================
-    address: {
-      type: [addressSchema],
-      default: [],
-    },
+    /* =========================
+       IDENTITY
+    ========================= */
 
-    city: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-
-    district: {
+    aadhaarNumber: {
       type: String,
       trim: true,
       default: "",
     },
 
-    state: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-
-    stateCode: {
+    panNumber: {
       type: String,
       trim: true,
+      uppercase: true,
       default: "",
     },
 
-    pinCode: {
+    drivingLicenceNumber: {
       type: String,
-      required: true,
       trim: true,
+      uppercase: true,
+      default: "",
+    },
+
+    documents: {
+      type: documentsSchema,
+      default: () => ({}),
+    },
+
+    /* =========================
+       ADDRESS
+    ========================= */
+
+    businessAddress: {
+      type: addressSchema,
+      default: () => ({}),
+    },
+
+    residentialAddress: {
+      type: addressSchema,
+      default: () => ({}),
     },
 
     zone: {
@@ -183,60 +386,32 @@ const dealerSchema = new mongoose.Schema(
       default: "",
     },
 
-    // =====================================
-    // IDENTITY
-    // =====================================
-    aadhaarNumber: {
+    contactPerson: {
       type: String,
-      required: true,
       trim: true,
+      default: "",
     },
 
-    panNumber: {
+    phoneNumbers: {
       type: String,
-      required: true,
-      uppercase: true,
       trim: true,
+      default: "",
     },
 
-    drivingLicenceNumber: {
-      type: String,
-      required: true,
-      trim: true,
-    },
+    /* =========================
+       TAX INFORMATION
+    ========================= */
 
-    aadhaarFile: {
-      type: documentSchema,
-      default: null,
-    },
-
-    panFile: {
-      type: documentSchema,
-      default: null,
-    },
-
-    drivingLicenceFile: {
-      type: documentSchema,
-      default: null,
-    },
-
-    documentUpload: {
-      type: [documentSchema],
-      default: [],
-    },
-
-    // =====================================
-    // TAX
-    // =====================================
     taxApply: {
       type: String,
-      enum: ["", "WITHIN_STATE", "OUTSIDE_STATE"],
+      trim: true,
       default: "",
     },
 
     gstNumber: {
       type: String,
       trim: true,
+      uppercase: true,
       default: "",
     },
 
@@ -254,14 +429,14 @@ const dealerSchema = new mongoose.Schema(
 
     gstApplicable: {
       type: String,
-      enum: ["", "YES", "NO"],
+      enum: ["YES", "NO", ""],
       default: "",
     },
 
     gstRate: {
       type: Number,
-      default: 0,
       min: 0,
+      default: 0,
     },
 
     hsnCode: {
@@ -272,13 +447,13 @@ const dealerSchema = new mongoose.Schema(
 
     reverseChargeLimit: {
       type: Number,
-      default: 0,
       min: 0,
+      default: 0,
     },
 
     taxInputPayable: {
       type: String,
-      enum: ["", "INPUT", "PAYABLE"],
+      enum: ["INPUT", "PAYABLE", ""],
       default: "",
     },
 
@@ -288,24 +463,32 @@ const dealerSchema = new mongoose.Schema(
       default: "",
     },
 
-    // =====================================
-    // CREDIT
-    // =====================================
+    segment: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    /* =========================
+       CREDIT
+    ========================= */
+
     creditDays: {
       type: Number,
-      default: 0,
       min: 0,
+      default: 0,
     },
 
     creditLimit: {
       type: Number,
-      default: 0,
       min: 0,
+      default: 0,
     },
 
-    // =====================================
-    // ACCOUNT CONFIG
-    // =====================================
+    /* =========================
+       ACCOUNT
+    ========================= */
+
     accountType: {
       type: String,
       enum: [
@@ -338,9 +521,10 @@ const dealerSchema = new mongoose.Schema(
       default: false,
     },
 
-    // =====================================
-    // OTHER INFORMATION
-    // =====================================
+    /* =========================
+       OTHER INFORMATION
+    ========================= */
+
     otherInfo: {
       type: String,
       trim: true,
@@ -349,8 +533,9 @@ const dealerSchema = new mongoose.Schema(
 
     rating: {
       type: Number,
-      default: 0,
       min: 0,
+      max: 5,
+      default: 0,
     },
 
     openingBalance: {
@@ -364,35 +549,153 @@ const dealerSchema = new mongoose.Schema(
       default: "DR",
     },
 
-    // =====================================
-    // PRODUCT / SERVICE
-    // =====================================
-    productId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Category",
-      required: true,
+    /* =========================
+       PRODUCT & SERVICES
+    ========================= */
+
+    productServices: {
+      type: [productServiceSchema],
+      default: [],
     },
 
-    productServiceType: {
-      type: String,
-      enum: [
-        "INSTALLATION",
-        "SERVICE",
-        "REPAIR",
-        "MAINTENANCE",
-        "UNINSTALLATION",
-      ],
-      required: true,
+    /* =========================
+       CAPACITY MASTER
+    ========================= */
+
+    // capacityType: {
+    //   type: String,
+    //   enum: ["COMBINED", "INDIVIDUAL"],
+    //   required: true,
+    //   default: "INDIVIDUAL",
+    // },
+
+    combinedCapacity: {
+      type: combinedCapacitySchema,
+      default: () => ({
+        products: [],
+        capacity: 0,
+      }),
+    },
+
+    individualCapacities: {
+      type: [individualCapacitySchema],
+      default: [],
     },
 
     capacityMaster: {
-      type: [capacitySchema],
+      type: [individualCapacitySchema],
       default: [],
+    },
+
+    /* =========================
+       STATUS
+    ========================= */
+
+    status: {
+      type: String,
+      enum: ["ACTIVE", "INACTIVE", "SUSPENDED"],
+      default: "ACTIVE",
+      index: true,
     },
   },
   {
     timestamps: true,
   },
 );
+
+/* =========================================================
+   VALIDATION
+========================================================= */
+
+dealerSchema.pre("validate", function () {
+  /* ======================================
+     PRODUCT SERVICES DUPLICATES
+  ====================================== */
+
+  const productServiceIds =
+    this.productServices?.map(
+      (item) => item.productId,
+    ) ?? [];
+
+  if (
+    new Set(productServiceIds).size !==
+    productServiceIds.length
+  ) {
+    throw new Error(
+      "Duplicate products are not allowed in product services",
+    );
+  }
+
+  /* ======================================
+     COMBINED CAPACITY
+  ====================================== */
+
+  const combinedProducts =
+    this.combinedCapacity?.products ?? [];
+
+  if (combinedProducts.length > 0) {
+    const capacity = Number(
+      this.combinedCapacity?.capacity ?? 0,
+    );
+
+    if (capacity < 1) {
+      throw new Error(
+        "Combined capacity must be greater than 0",
+      );
+    }
+
+    const combinedProductIds =
+      combinedProducts.map(
+        (item) => item.productId,
+      );
+
+    if (
+      new Set(combinedProductIds).size !==
+      combinedProductIds.length
+    ) {
+      throw new Error(
+        "Duplicate products are not allowed in combined capacity",
+      );
+    }
+  }
+
+  /* ======================================
+     INDIVIDUAL CAPACITY
+  ====================================== */
+
+  const individualCapacities =
+    this.individualCapacities ?? [];
+
+  if (individualCapacities.length > 0) {
+    const individualProductIds =
+      individualCapacities.map(
+        (item) => item.productId,
+      );
+
+    if (
+      new Set(individualProductIds).size !==
+      individualProductIds.length
+    ) {
+      throw new Error(
+        "Duplicate products are not allowed in individual capacity",
+      );
+    }
+
+    individualCapacities.forEach(
+      (item) => {
+        if (
+          Number(item.capacity) < 1
+        ) {
+          throw new Error(
+            `${
+              item.productName ||
+              "Product"
+            } capacity must be greater than 0`,
+          );
+        }
+      },
+    );
+  }
+});
 
 export default mongoose.model("Dealer", dealerSchema);

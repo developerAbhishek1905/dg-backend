@@ -1,10 +1,10 @@
-import mongoose from "mongoose";
-
 import Dealer from "../models/dealer.model.js";
-import Category from "../../category/models/category.model.js";
 
+/* =========================================================
+   HELPERS
+========================================================= */
 
-const parseJSON = (value, fallback = []) => {
+const parseJSON = (value, fallback = undefined) => {
   if (value === undefined || value === null || value === "") {
     return fallback;
   }
@@ -15,364 +15,241 @@ const parseJSON = (value, fallback = []) => {
 
   try {
     return JSON.parse(value);
-  } catch {
+  } catch (error) {
     return fallback;
   }
 };
 
-const toNumber = (value, fallback = 0) => {
-  const parsed = Number(value);
+const parseNumber = (value, fallback = 0) => {
+  if (value === undefined || value === null || value === "") {
+    return fallback;
+  }
 
-  return Number.isNaN(parsed)
-    ? fallback
-    : parsed;
+  const number = Number(value);
+
+  return Number.isNaN(number) ? fallback : number;
 };
 
-const toBoolean = (value) => {
-  return value === true || value === "true";
+const parseBoolean = (value, fallback = false) => {
+  if (value === undefined || value === null || value === "") {
+    return fallback;
+  }
+
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  return value === "true";
 };
 
-const mapFile = (file) => {
-  if (!file) return null;
-
-  return {
-    fileName: file.originalname,
-    filePath: file.path,
-    mimeType: file.mimetype,
-  };
+const getUploadedFile = (files, fieldName) => {
+  return files?.[fieldName]?.[0]
+    ? `/uploads/dealers/${files[fieldName][0].filename}`
+    : "";
 };
 
+const getUploadedFiles = (files, fieldName) => {
+  return (
+    files?.[fieldName]?.map((file) => `/uploads/dealers/${file.filename}`) ?? []
+  );
+};
+
+/* =========================================================
+   CREATE DEALER
+========================================================= */
 
 export const createDealer = async (req, res) => {
   try {
     const {
-      headCode,
-      groupHead = "",
-      headName,
-      grade = "",
-      segment = "",
-
+      technicianCode,
       technicianFirmName,
       technicianName,
-      mobileNumber,
-      alternativeNumber = "",
-      email,
-      technicianStatus = "ACTIVE",
-
-      city,
-      district = "",
-      state,
-      stateCode = "",
-      pinCode,
-      zone = "",
 
       aadhaarNumber,
+      alternativeNumber,
       panNumber,
       drivingLicenceNumber,
 
-      taxApply = "",
-      gstNumber = "",
-      tinNumber = "",
-      uinNumber = "",
-      gstApplicable = "",
-      hsnCode = "",
-      taxInputPayable = "",
-      vat15Column = "",
+      technicianStatus,
 
-      accountType = "STANDARD",
-      otherInfo = "",
-      openingBalanceType = "DR",
+      headCode,
+      groupHead,
+      headName,
+      grade,
 
-      productId,
-      productServiceType,
+      zone,
+      contactPerson,
+      phoneNumbers,
+      mobileNumber,
+      email,
+
+      taxApply,
+      gstNumber,
+      tinNumber,
+      uinNumber,
+      gstApplicable,
+      hsnCode,
+      taxInputPayable,
+      vat15Column,
+      segment,
+
+      accountType,
+      otherInfo,
+      openingBalanceType,
     } = req.body;
 
-    if (!headCode?.trim()) {
-      return res.status(400).json({
-        success: false,
-        message: "Head code is required",
+    /* ===============================
+       CHECK DUPLICATES
+    =============================== */
+
+    if (mobileNumber) {
+      const existingMobile = await Dealer.findOne({
+        mobileNumber,
       });
-    }
 
-    if (!headName?.trim()) {
-      return res.status(400).json({
-        success: false,
-        message: "Head name is required",
-      });
-    }
-
-    if (!technicianFirmName?.trim()) {
-      return res.status(400).json({
-        success: false,
-        message: "Technician firm name is required",
-      });
-    }
-
-    if (!technicianName?.trim()) {
-      return res.status(400).json({
-        success: false,
-        message: "Technician name is required",
-      });
-    }
-
-    if (!mobileNumber?.trim()) {
-      return res.status(400).json({
-        success: false,
-        message: "Phone number is required",
-      });
-    }
-
-    if (!email?.trim()) {
-      return res.status(400).json({
-        success: false,
-        message: "Email is required",
-      });
-    }
-
-    if (!productId) {
-      return res.status(400).json({
-        success: false,
-        message: "Product is required",
-      });
-    }
-
-    if (!mongoose.Types.ObjectId.isValid(productId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid product/category ID",
-      });
-    }
-
-    const product = await Category.findById(productId);
-
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: "Product/category not found",
-      });
-    }
-
-    const address = parseJSON(
-      req.body.address,
-      [],
-    );
-
-    const capacityMaster = parseJSON(
-      req.body.capacityMaster,
-      [],
-    );
-
-    if (!Array.isArray(address) || address.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "At least one address is required",
-      });
-    }
-
-    if (
-      !Array.isArray(capacityMaster) ||
-      capacityMaster.length === 0
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "At least one capacity mapping is required",
-      });
-    }
-
-    for (const item of capacityMaster) {
-      if (
-        !mongoose.Types.ObjectId.isValid(
-          item.categoryId,
-        )
-      ) {
-        return res.status(400).json({
+      if (existingMobile) {
+        return res.status(409).json({
           success: false,
-          message: "Invalid category in capacity master",
+          message: "Dealer with this mobile number already exists",
         });
       }
     }
 
-    const lastDealer = await Dealer.findOne()
-      .sort({
-        createdAt: -1,
-      })
-      .select("technicianCode");
+    if (email) {
+      const existingEmail = await Dealer.findOne({
+        email: email.toLowerCase(),
+      });
 
-    let nextNumber = 1;
-
-    if (lastDealer?.technicianCode) {
-      const match =
-        lastDealer.technicianCode.match(/\d+$/);
-
-      if (match) {
-        nextNumber =
-          Number(match[0]) + 1;
+      if (existingEmail) {
+        return res.status(409).json({
+          success: false,
+          message: "Dealer with this email already exists",
+        });
       }
     }
 
-    const technicianCode = `TECH-${String(
-      nextNumber,
-    ).padStart(5, "0")}`;
+    /* ===============================
+       NESTED DATA
+    =============================== */
 
-    const aadhaarFile =
-      req.files?.aadhaarFile?.[0];
+    const businessAddress = parseJSON(req.body.businessAddress, {});
 
-    const panFile =
-      req.files?.panFile?.[0];
+    const residentialAddress = parseJSON(req.body.residentialAddress, {});
 
-    const drivingLicenceFile =
-      req.files?.drivingLicenceFile?.[0];
+    const productServices = parseJSON(req.body.productServices, []);
 
-    const otherDocuments =
-      req.files?.documentUpload || [];
+    const combinedCapacity = parseJSON(req.body.combinedCapacity, {
+      products: [],
+      capacity: 0,
+    });
 
-    if (!aadhaarFile) {
-      return res.status(400).json({
-        success: false,
-        message: "Aadhaar document is required",
-      });
-    }
+    const individualCapacities = parseJSON(req.body.individualCapacities, []);
 
-    if (!panFile) {
-      return res.status(400).json({
-        success: false,
-        message: "PAN document is required",
-      });
-    }
+    /* ===============================
+       DOCUMENTS
+    =============================== */
 
-    if (!drivingLicenceFile) {
-      return res.status(400).json({
-        success: false,
-        message: "Driving licence document is required",
-      });
-    }
+    const documents = {
+      aadhaarFront: getUploadedFile(req.files, "aadhaarFrontFile"),
+
+      aadhaarBack: getUploadedFile(req.files, "aadhaarBackFile"),
+
+      panFront: getUploadedFile(req.files, "panFrontFile"),
+
+      panBack: getUploadedFile(req.files, "panBackFile"),
+
+      drivingLicenceFront: getUploadedFile(
+        req.files,
+        "drivingLicenceFrontFile",
+      ),
+
+      drivingLicenceBack: getUploadedFile(req.files, "drivingLicenceBackFile"),
+
+      otherDocuments: getUploadedFiles(req.files, "documentUpload"),
+    };
+
+    /* ===============================
+       CREATE
+    =============================== */
 
     const dealer = await Dealer.create({
-      headCode: headCode.trim(),
-      groupHead: groupHead.trim(),
-      headName: headName.trim(),
-      grade: grade.trim(),
-      segment: segment.trim(),
+      technicianCode: technicianCode || undefined,
 
-      technicianCode,
+      technicianFirmName,
+      technicianName,
 
-      technicianFirmName:
-        technicianFirmName.trim(),
+      aadhaarNumber,
+      alternativeNumber,
+      panNumber,
+      drivingLicenceNumber,
 
-      technicianName:
-        technicianName.trim(),
+      technicianStatus: technicianStatus || "ACTIVE",
 
-      mobileNumber: mobileNumber.trim(),
+      headCode,
+      groupHead,
+      headName,
+      grade,
 
-      alternativeNumber:
-        alternativeNumber.trim(),
+      businessAddress,
+      residentialAddress,
 
-      email: email.trim().toLowerCase(),
-
-      technicianStatus,
-
-      address,
-
-      city: city?.trim() || "",
-      district: district.trim(),
-      state: state?.trim() || "",
-      stateCode: stateCode.trim(),
-      pinCode: pinCode?.trim() || "",
-      zone: zone.trim(),
-
-      aadhaarNumber:
-        aadhaarNumber?.trim() || "",
-
-      panNumber:
-        panNumber?.trim().toUpperCase() || "",
-
-      drivingLicenceNumber:
-        drivingLicenceNumber?.trim() || "",
-
-      aadhaarFile:
-        mapFile(aadhaarFile),
-
-      panFile:
-        mapFile(panFile),
-
-      drivingLicenceFile:
-        mapFile(drivingLicenceFile),
-
-      documentUpload:
-        otherDocuments.map(mapFile),
+      zone,
+      contactPerson,
+      phoneNumbers,
+      mobileNumber,
+      email,
 
       taxApply,
-      gstNumber: gstNumber.trim(),
-      tinNumber: tinNumber.trim(),
-      uinNumber: uinNumber.trim(),
+      gstNumber,
+      tinNumber,
+      uinNumber,
       gstApplicable,
 
-      gstRate: toNumber(
-        req.body.gstRate,
-      ),
+      gstRate: parseNumber(req.body.gstRate),
 
-      hsnCode: hsnCode.trim(),
+      hsnCode,
 
-      reverseChargeLimit: toNumber(
-        req.body.reverseChargeLimit,
-      ),
+      reverseChargeLimit: parseNumber(req.body.reverseChargeLimit),
 
       taxInputPayable,
-      vat15Column: vat15Column.trim(),
+      vat15Column,
+      segment,
 
-      creditDays: toNumber(
-        req.body.creditDays,
-      ),
+      creditDays: parseNumber(req.body.creditDays),
 
-      creditLimit: toNumber(
-        req.body.creditLimit,
-      ),
+      creditLimit: parseNumber(req.body.creditLimit),
 
-      accountType,
+      accountType: accountType || "STANDARD",
 
-      isDealer: toBoolean(
-        req.body.isDealer,
-      ),
+      isDealer: parseBoolean(req.body.isDealer, true),
 
-      disableChallan: toBoolean(
-        req.body.disableChallan,
-      ),
+      disableChallan: parseBoolean(req.body.disableChallan),
 
-      ledgerSummaryOnly: toBoolean(
-        req.body.ledgerSummaryOnly,
-      ),
+      ledgerSummaryOnly: parseBoolean(req.body.ledgerSummaryOnly),
 
-      accountDeactivated: toBoolean(
-        req.body.accountDeactivated,
-      ),
+      accountDeactivated: parseBoolean(req.body.accountDeactivated),
 
-      otherInfo: otherInfo.trim(),
+      otherInfo,
 
-      rating: toNumber(
-        req.body.rating,
-      ),
+      rating: parseNumber(req.body.rating),
 
-      openingBalance: toNumber(
-        req.body.openingBalance,
-      ),
+      openingBalance: parseNumber(req.body.openingBalance),
 
-      openingBalanceType,
+      openingBalanceType: openingBalanceType || "DR",
 
-      productId,
+      productServices,
 
-      productServiceType,
+      combinedCapacity: {
+        products: combinedCapacity?.products ?? [],
 
-      capacityMaster: capacityMaster.map(
-        (item) => ({
-          categoryId: item.categoryId,
-          rate: toNumber(item.rate),
-          capacity: toNumber(
-            item.capacity,
-          ),
-          serviceType:
-            item.serviceType || "",
-        }),
-      ),
+        capacity: parseNumber(combinedCapacity?.capacity),
+      },
+
+      individualCapacities,
+
+      documents,
+
+      status: technicianStatus || "ACTIVE",
     });
 
     return res.status(201).json({
@@ -381,62 +258,54 @@ export const createDealer = async (req, res) => {
       data: dealer,
     });
   } catch (error) {
-    console.error(
-      "Create Dealer Error:",
-      error,
-    );
+    console.error("Create Dealer Error:", error);
 
     if (error.code === 11000) {
+      const field = Object.keys(error.keyPattern ?? {})[0] ?? "field";
+
       return res.status(409).json({
         success: false,
-        message:
-          "Duplicate dealer information found",
+        message: `${field} already exists`,
       });
     }
 
     return res.status(500).json({
       success: false,
-      message: "Failed to create dealer",
+      message: error.message || "Failed to create dealer",
     });
   }
 };
 
-export const getDealers = async (
-  req,
-  res,
-) => {
+/* =========================================================
+   GET ALL DEALERS
+========================================================= */
+
+export const getDealers = async (req, res) => {
   try {
-    const {
-      search = "",
-      status = "",
-    } = req.query;
+    const { page = 1, limit = 10, search = "", status = "" } = req.query;
+
+    const currentPage = Math.max(Number(page) || 1, 1);
+
+    const pageLimit = Math.max(Number(limit) || 10, 1);
 
     const filter = {};
 
-    if (search.trim()) {
-      const escapedSearch =
-        search
-          .trim()
-          .replace(
-            /[.*+?^${}()|[\]\\]/g,
-            "\\$&",
-          );
+    if (status) {
+      filter.status = status;
+    }
 
-      const regex =
-        new RegExp(
-          escapedSearch,
-          "i",
-        );
+    if (search) {
+      const regex = new RegExp(search, "i");
 
       filter.$or = [
-        {
-          technicianCode: regex,
-        },
         {
           technicianFirmName: regex,
         },
         {
           technicianName: regex,
+        },
+        {
+          technicianCode: regex,
         },
         {
           mobileNumber: regex,
@@ -445,103 +314,54 @@ export const getDealers = async (
           email: regex,
         },
         {
-          headCode: regex,
-        },
-        {
-          headName: regex,
-        },
-        {
-          city: regex,
+          gstNumber: regex,
         },
       ];
     }
 
-    if (status) {
-      if (
-        ![
-          "ACTIVE",
-          "INACTIVE",
-        ].includes(status)
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Invalid status",
-        });
-      }
+    const total = await Dealer.countDocuments(filter);
 
-      filter.technicianStatus =
-        status;
-    }
-
-    const dealers =
-      await Dealer.find(filter)
-        .populate(
-          "productId",
-          "groupCategoryCode category categoryDescription",
-        )
-        .populate(
-          "capacityMaster.categoryId",
-          "groupCategoryCode category categoryDescription",
-        )
-        .sort({
-          createdAt: -1,
-        });
+    const dealers = await Dealer.find(filter)
+      .sort({
+        createdAt: -1,
+      })
+      .skip((currentPage - 1) * pageLimit)
+      .limit(pageLimit);
 
     return res.status(200).json({
       success: true,
-      count: dealers.length,
+
       data: dealers,
+
+      pagination: {
+        page: currentPage,
+        limit: pageLimit,
+        total,
+        totalPages: Math.ceil(total / pageLimit),
+      },
     });
   } catch (error) {
-    console.error(
-      "Get Dealers Error:",
-      error,
-    );
+    console.error("Get Dealers Error:", error);
 
     return res.status(500).json({
       success: false,
-      message:
-        "Failed to fetch dealers",
+      message: "Failed to fetch dealers",
     });
   }
 };
 
-export const getDealerById = async (
-  req,
-  res,
-) => {
+/* =========================================================
+   GET DEALER BY ID
+========================================================= */
+
+export const getDealerById = async (req, res) => {
   try {
-    const { id } = req.params;
-
-    if (
-      !mongoose.Types.ObjectId.isValid(
-        id,
-      )
-    ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Invalid dealer ID",
-      });
-    }
-
-    const dealer =
-      await Dealer.findById(id)
-        .populate(
-          "productId",
-          "groupCategoryCode category categoryDescription",
-        )
-        .populate(
-          "capacityMaster.categoryId",
-          "groupCategoryCode category categoryDescription",
-        );
+    const dealer = await Dealer.findById(req.params.id);
 
     if (!dealer) {
       return res.status(404).json({
         success: false,
-        message:
-          "Dealer not found",
+        message: "Dealer not found",
       });
     }
 
@@ -550,73 +370,94 @@ export const getDealerById = async (
       data: dealer,
     });
   } catch (error) {
-    console.error(
-      "Get Dealer Error:",
-      error,
-    );
-
     return res.status(500).json({
       success: false,
-      message:
-        "Failed to fetch dealer",
+      message: "Failed to fetch dealer",
     });
   }
 };
 
-export const updateDealer = async (
-  req,
-  res,
-) => {
+/* =========================================================
+   UPDATE DEALER
+========================================================= */
+
+export const updateDealer = async (req, res) => {
   try {
-    const { id } = req.params;
-
-    if (
-      !mongoose.Types.ObjectId.isValid(
-        id,
-      )
-    ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Invalid dealer ID",
-      });
-    }
-
-    const dealer =
-      await Dealer.findById(id);
+    const dealer = await Dealer.findById(req.params.id);
 
     if (!dealer) {
       return res.status(404).json({
         success: false,
-        message:
-          "Dealer not found",
+        message: "Dealer not found",
       });
     }
 
-    const fields = [
+    /* ===============================
+       DUPLICATE MOBILE
+    =============================== */
+
+    if (req.body.mobileNumber) {
+      const existingMobile = await Dealer.findOne({
+        mobileNumber: req.body.mobileNumber,
+
+        _id: {
+          $ne: req.params.id,
+        },
+      });
+
+      if (existingMobile) {
+        return res.status(409).json({
+          success: false,
+          message: "Dealer with this mobile number already exists",
+        });
+      }
+    }
+
+    /* ===============================
+       DUPLICATE EMAIL
+    =============================== */
+
+    if (req.body.email) {
+      const existingEmail = await Dealer.findOne({
+        email: req.body.email.toLowerCase(),
+
+        _id: {
+          $ne: req.params.id,
+        },
+      });
+
+      if (existingEmail) {
+        return res.status(409).json({
+          success: false,
+          message: "Dealer with this email already exists",
+        });
+      }
+    }
+
+    /* ===============================
+       STRING FIELDS
+    =============================== */
+
+    const stringFields = [
+      "technicianCode",
+      "technicianFirmName",
+      "technicianName",
+      "aadhaarNumber",
+      "alternativeNumber",
+      "panNumber",
+      "drivingLicenceNumber",
+      "technicianStatus",
+
       "headCode",
       "groupHead",
       "headName",
       "grade",
-      "segment",
 
-      "technicianFirmName",
-      "technicianName",
-      "mobileNumber",
-      "alternativeNumber",
-      "email",
-      "technicianStatus",
-
-      "city",
-      "district",
-      "state",
-      "stateCode",
-      "pinCode",
       "zone",
-
-      "aadhaarNumber",
-      "panNumber",
-      "drivingLicenceNumber",
+      "contactPerson",
+      "phoneNumbers",
+      "mobileNumber",
+      "email",
 
       "taxApply",
       "gstNumber",
@@ -626,57 +467,24 @@ export const updateDealer = async (
       "hsnCode",
       "taxInputPayable",
       "vat15Column",
+      "segment",
 
       "accountType",
       "otherInfo",
       "openingBalanceType",
-
-      "productId",
-      "productServiceType",
     ];
 
-    fields.forEach((field) => {
-      if (
-        req.body[field] !== undefined
-      ) {
-        dealer[field] =
-          req.body[field];
+    stringFields.forEach((field) => {
+      if (req.body[field] !== undefined) {
+        dealer[field] = req.body[field];
       }
     });
 
-    if (
-      req.body.address !== undefined
-    ) {
-      dealer.address =
-        parseJSON(
-          req.body.address,
-          dealer.address,
-        );
-    }
+    /* ===============================
+       NUMBER FIELDS
+    =============================== */
 
-    if (
-      req.body.capacityMaster !==
-      undefined
-    ) {
-      dealer.capacityMaster =
-        parseJSON(
-          req.body.capacityMaster,
-          dealer.capacityMaster,
-        ).map((item) => ({
-          categoryId:
-            item.categoryId,
-          rate:
-            toNumber(item.rate),
-          capacity:
-            toNumber(
-              item.capacity,
-            ),
-          serviceType:
-            item.serviceType || "",
-        }));
-    }
-
-    const numericFields = [
+    const numberFields = [
       "gstRate",
       "reverseChargeLimit",
       "creditDays",
@@ -685,19 +493,15 @@ export const updateDealer = async (
       "openingBalance",
     ];
 
-    numericFields.forEach(
-      (field) => {
-        if (
-          req.body[field] !==
-          undefined
-        ) {
-          dealer[field] =
-            toNumber(
-              req.body[field],
-            );
-        }
-      },
-    );
+    numberFields.forEach((field) => {
+      if (req.body[field] !== undefined) {
+        dealer[field] = parseNumber(req.body[field]);
+      }
+    });
+
+    /* ===============================
+       BOOLEAN FIELDS
+    =============================== */
 
     const booleanFields = [
       "isDealer",
@@ -706,131 +510,189 @@ export const updateDealer = async (
       "accountDeactivated",
     ];
 
-    booleanFields.forEach(
-      (field) => {
-        if (
-          req.body[field] !==
-          undefined
-        ) {
-          dealer[field] =
-            toBoolean(
-              req.body[field],
-            );
-        }
-      },
-    );
+    booleanFields.forEach((field) => {
+      if (req.body[field] !== undefined) {
+        dealer[field] = parseBoolean(req.body[field]);
+      }
+    });
 
-    if (
-      req.files?.aadhaarFile?.[0]
-    ) {
-      dealer.aadhaarFile =
-        mapFile(
-          req.files
-            .aadhaarFile[0],
-        );
+    /* ===============================
+       NESTED FIELDS
+    =============================== */
+
+    if (req.body.businessAddress !== undefined) {
+      dealer.businessAddress = parseJSON(req.body.businessAddress, {});
     }
 
-    if (
-      req.files?.panFile?.[0]
-    ) {
-      dealer.panFile =
-        mapFile(
-          req.files.panFile[0],
-        );
+    if (req.body.residentialAddress !== undefined) {
+      dealer.residentialAddress = parseJSON(req.body.residentialAddress, {});
     }
 
-    if (
-      req.files
-        ?.drivingLicenceFile?.[0]
-    ) {
-      dealer.drivingLicenceFile =
-        mapFile(
-          req.files
-            .drivingLicenceFile[0],
-        );
+    if (req.body.productServices !== undefined) {
+      dealer.productServices = parseJSON(req.body.productServices, []);
     }
 
-    if (
-      req.files?.documentUpload
-        ?.length
-    ) {
-      dealer.documentUpload = [
-        ...dealer.documentUpload,
-        ...req.files.documentUpload.map(
-          mapFile,
-        ),
+    if (req.body.combinedCapacity !== undefined) {
+      const combined = parseJSON(req.body.combinedCapacity, {
+        products: [],
+        capacity: 0,
+      });
+
+      dealer.combinedCapacity = {
+        products: combined.products ?? [],
+
+        capacity: parseNumber(combined.capacity),
+      };
+    }
+
+    if (req.body.individualCapacities !== undefined) {
+      dealer.individualCapacities = parseJSON(
+        req.body.individualCapacities,
+        [],
+      );
+    }
+
+    /* ===============================
+       UPDATE FILES
+    =============================== */
+
+    if (req.files?.aadhaarFrontFile?.[0]) {
+      dealer.documents.aadhaarFront = getUploadedFile(
+        req.files,
+        "aadhaarFrontFile",
+      );
+    }
+
+    if (req.files?.aadhaarBackFile?.[0]) {
+      dealer.documents.aadhaarBack = getUploadedFile(
+        req.files,
+        "aadhaarBackFile",
+      );
+    }
+
+    if (req.files?.panFrontFile?.[0]) {
+      dealer.documents.panFront = getUploadedFile(req.files, "panFrontFile");
+    }
+
+    if (req.files?.panBackFile?.[0]) {
+      dealer.documents.panBack = getUploadedFile(req.files, "panBackFile");
+    }
+
+    if (req.files?.drivingLicenceFrontFile?.[0]) {
+      dealer.documents.drivingLicenceFront = getUploadedFile(
+        req.files,
+        "drivingLicenceFrontFile",
+      );
+    }
+
+    if (req.files?.drivingLicenceBackFile?.[0]) {
+      dealer.documents.drivingLicenceBack = getUploadedFile(
+        req.files,
+        "drivingLicenceBackFile",
+      );
+    }
+
+    const newOtherDocuments = getUploadedFiles(req.files, "documentUpload");
+
+    if (newOtherDocuments.length) {
+      dealer.documents.otherDocuments = [
+        ...(dealer.documents.otherDocuments ?? []),
+        ...newOtherDocuments,
       ];
+    }
+
+    if (req.body.technicianStatus) {
+      dealer.status = req.body.technicianStatus;
     }
 
     await dealer.save();
 
     return res.status(200).json({
       success: true,
-      message:
-        "Dealer updated successfully",
+      message: "Dealer updated successfully",
       data: dealer,
     });
   } catch (error) {
-    console.error(
-      "Update Dealer Error:",
-      error,
-    );
+    console.error("Update Dealer Error:", error);
 
     return res.status(500).json({
       success: false,
-      message:
-        "Failed to update dealer",
+      message: error.message || "Failed to update dealer",
     });
   }
 };
 
-export const deleteDealer = async (
-  req,
-  res,
-) => {
+/* =========================================================
+   DELETE DEALER
+========================================================= */
+
+export const deleteDealer = async (req, res) => {
   try {
-    const { id } = req.params;
-
-    if (
-      !mongoose.Types.ObjectId.isValid(
-        id,
-      )
-    ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Invalid dealer ID",
-      });
-    }
-
-    const dealer =
-      await Dealer.findById(id);
+    const dealer = await Dealer.findByIdAndDelete(req.params.id);
 
     if (!dealer) {
       return res.status(404).json({
         success: false,
-        message:
-          "Dealer not found",
+        message: "Dealer not found",
       });
     }
 
-    await dealer.deleteOne();
+    return res.status(200).json({
+      success: true,
+      message: "Dealer deleted successfully",
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Failed to delete dealer",
+    });
+  }
+};
+
+/* =========================================================
+   UPDATE STATUS
+========================================================= */
+
+export const updateDealerStatus = async (req, res) => {
+  try {
+    const { status } = req.body;
+
+    if (!["ACTIVE", "INACTIVE", "SUSPENDED"].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid dealer status",
+      });
+    }
+
+    const dealer = await Dealer.findByIdAndUpdate(
+      req.params.id,
+      {
+        status,
+
+        technicianStatus: status === "SUSPENDED" ? "INACTIVE" : status,
+      },
+      {
+        new: true,
+        runValidators: true,
+      },
+    );
+
+    if (!dealer) {
+      return res.status(404).json({
+        success: false,
+        message: "Dealer not found",
+      });
+    }
 
     return res.status(200).json({
       success: true,
-      message:
-        "Dealer deleted successfully",
+      message: "Dealer status updated successfully",
+      data: dealer,
     });
   } catch (error) {
-    console.error(
-      "Delete Dealer Error:",
-      error,
-    );
-
     return res.status(500).json({
       success: false,
-      message:
-        "Failed to delete dealer",
+      message: "Failed to update dealer status",
     });
   }
 };

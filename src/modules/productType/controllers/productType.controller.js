@@ -22,12 +22,12 @@ export const createProductType = async (req, res) => {
       });
     }
 
-    if (!String(product_code || "").trim()) {
-      return res.status(400).json({
-        success: false,
-        message: "Product code is required",
-      });
-    }
+    // if (!String(product_code || "").trim()) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: "Product code is required",
+    //   });
+    // }
 
     if (!String(product_type || "").trim()) {
       return res.status(400).json({
@@ -51,7 +51,7 @@ export const createProductType = async (req, res) => {
       });
     }
 
-    const productCode = String(product_code).trim().toUpperCase();
+    // const productCode = String(product_code).trim().toUpperCase();
 
     const productTypeName = String(product_type).trim();
 
@@ -59,20 +59,20 @@ export const createProductType = async (req, res) => {
     // DUPLICATE PRODUCT CODE
     // ==========================================
 
-    const duplicateCode = await ProductType.findOne({
-      product_id: productId,
-      product_code: {
-        $regex: `^${escapeRegex(productCode)}$`,
-        $options: "i",
-      },
-    });
+    // const duplicateCode = await ProductType.findOne({
+    //   product_id: productId,
+    //   product_code: {
+    //     $regex: `^${escapeRegex(productCode)}$`,
+    //     $options: "i",
+    //   },
+    // });
 
-    if (duplicateCode) {
-      return res.status(409).json({
-        success: false,
-        message: "Product code already exists for this product",
-      });
-    }
+    // if (duplicateCode) {
+    //   return res.status(409).json({
+    //     success: false,
+    //     message: "Product code already exists for this product",
+    //   });
+    // }
 
     // ==========================================
     // DUPLICATE PRODUCT TYPE
@@ -99,7 +99,7 @@ export const createProductType = async (req, res) => {
 
     const productType = await ProductType.create({
       product_id: productId,
-      product_code: productCode,
+    //   product_code: productCode,
       product_type: productTypeName,
     });
 
@@ -115,12 +115,12 @@ export const createProductType = async (req, res) => {
   } catch (error) {
     console.error("Create product type error:", error);
 
-    if (error.code === 11000) {
-      return res.status(409).json({
-        success: false,
-        message: "Product code or product type already exists",
-      });
-    }
+    // if (error.code === 11000) {
+    //   return res.status(409).json({
+    //     success: false,
+    //     message: "Product code or product type already exists",
+    //   });
+    // }
 
     return res.status(500).json({
       success: false,
@@ -356,18 +356,18 @@ export const updateProductType = async (req, res) => {
     // PRODUCT CODE
     // ==========================================
 
-    if (product_code !== undefined) {
-      const productCode = String(product_code).trim().toUpperCase();
+    // if (product_code !== undefined) {
+    //   const productCode = String(product_code).trim().toUpperCase();
 
-      if (!productCode) {
-        return res.status(400).json({
-          success: false,
-          message: "Product code cannot be empty",
-        });
-      }
+    //   if (!productCode) {
+    //     return res.status(400).json({
+    //       success: false,
+    //       message: "Product code cannot be empty",
+    //     });
+    //   }
 
-      productType.product_code = productCode;
-    }
+    //   productType.product_code = productCode;
+    // }
 
     // ==========================================
     // PRODUCT TYPE
@@ -390,25 +390,25 @@ export const updateProductType = async (req, res) => {
     // DUPLICATE CODE
     // ==========================================
 
-    const duplicateCode = await ProductType.findOne({
-      _id: {
-        $ne: productType._id,
-      },
+    // const duplicateCode = await ProductType.findOne({
+    //   _id: {
+    //     $ne: productType._id,
+    //   },
 
-      product_id: productType.product_id,
+    //   product_id: productType.product_id,
 
-      product_code: {
-        $regex: `^${escapeRegex(productType.product_code)}$`,
-        $options: "i",
-      },
-    });
+    //   product_code: {
+    //     $regex: `^${escapeRegex(productType.product_code)}$`,
+    //     $options: "i",
+    //   },
+    // });
 
-    if (duplicateCode) {
-      return res.status(409).json({
-        success: false,
-        message: "Product code already exists for this product",
-      });
-    }
+    // if (duplicateCode) {
+    //   return res.status(409).json({
+    //     success: false,
+    //     message: "Product code already exists for this product",
+    //   });
+    // }
 
     // ==========================================
     // DUPLICATE TYPE
@@ -454,12 +454,12 @@ export const updateProductType = async (req, res) => {
   } catch (error) {
     console.error("Update product type error:", error);
 
-    if (error.code === 11000) {
-      return res.status(409).json({
-        success: false,
-        message: "Product code or product type already exists",
-      });
-    }
+    // if (error.code === 11000) {
+    //   return res.status(409).json({
+    //     success: false,
+    //     message: "Product code or product type already exists",
+    //   });
+    // }
 
     return res.status(500).json({
       success: false,
@@ -562,11 +562,11 @@ export const importProductTypes = async (req, res) => {
           row.product_id ?? row["Product ID"] ?? row.productId,
         );
 
-        const productCode = String(
-          row.product_code ?? row["Product Code"] ?? row.productCode ?? "",
-        )
-          .trim()
-          .toUpperCase();
+        // const productCode = String(
+        //   row.product_code ?? row["Product Code"] ?? row.productCode ?? "",
+        // )
+        //   .trim()
+        //   .toUpperCase();
 
         const productTypeName = String(
           row.product_type ?? row["Product Type"] ?? row.productType ?? "",
@@ -604,18 +604,18 @@ export const importProductTypes = async (req, res) => {
         // DUPLICATE CODE
         // ======================================
 
-        const duplicateCode = await ProductType.findOne({
-          product_id: productId,
+        // const duplicateCode = await ProductType.findOne({
+        //   product_id: productId,
 
-          product_code: {
-            $regex: `^${escapeRegex(productCode)}$`,
-            $options: "i",
-          },
-        });
+        //   product_code: {
+        //     $regex: `^${escapeRegex(productCode)}$`,
+        //     $options: "i",
+        //   },
+        // });
 
-        if (duplicateCode) {
-          throw new Error(`Product Code ${productCode} already exists`);
-        }
+        // if (duplicateCode) {
+        //   throw new Error(`Product Code ${productCode} already exists`);
+        // }
 
         // ======================================
         // DUPLICATE PRODUCT TYPE
@@ -642,7 +642,7 @@ export const importProductTypes = async (req, res) => {
 
         const productType = await ProductType.create({
           product_id: productId,
-          product_code: productCode,
+        //   product_code: productCode,
           product_type: productTypeName,
         });
 
@@ -655,7 +655,7 @@ export const importProductTypes = async (req, res) => {
 
           product_name: product.product_name,
 
-          product_code: productType.product_code,
+        //   product_code: productType.product_code,
 
           product_type: productType.product_type,
         });
@@ -736,7 +736,7 @@ export const exportProductTypes = async (req, res) => {
 
       "Product Name": productMap.get(item.product_id) || "",
 
-      "Product Code": item.product_code,
+    //   "Product Code": item.product_code,
 
       "Product Type": item.product_type,
     }));
@@ -794,11 +794,11 @@ export const downloadProductTypeSample = async (req, res) => {
         "Product Code": "WM-FL",
         "Product Type": "Front Load",
       },
-      {
-        "Product ID": 1,
-        "Product Code": "WM-TL",
-        "Product Type": "Top Load",
-      },
+    //   {
+    //     "Product ID": 1,
+    //     "Product Code": "WM-TL",
+    //     "Product Type": "Top Load",
+    //   },
       {
         "Product ID": 2,
         "Product Code": "REF-DD",

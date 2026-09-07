@@ -10,7 +10,7 @@ const productTypeSchema = new mongoose.Schema(
 
     product_code: {
       type: String,
-      required: true,
+    //   required: true,
       trim: true,
       uppercase: true,
     },
