@@ -851,6 +851,59 @@ export const downloadProductTypeSample = async (req, res) => {
   }
 };
 
+export const getProductTypeDropdown = async (req, res) => {
+  try {
+    const { product_id, search = "" } = req.query;
+
+    const filter = {};
+
+    if (product_id) {
+      filter.product_id = Number(product_id);
+    }
+
+    if (search.trim()) {
+      filter.$or = [
+        {
+          product_type: {
+            $regex: search.trim(),
+            $options: "i",
+          },
+        },
+        {
+          product_code: {
+            $regex: search.trim(),
+            $options: "i",
+          },
+        },
+      ];
+    }
+
+    const productTypes = await ProductType.find(filter)
+      .select("_id product_id product_code product_type")
+      .sort({ product_type: 1 })
+      .lean();
+
+    return res.status(200).json({
+      success: true,
+      message: "Product type dropdown fetched successfully",
+      data: productTypes.map((item) => ({
+        id: item._id,
+        product_id: item.product_id,
+        product_code: item.product_code,
+        product_type: item.product_type,
+      })),
+    });
+  } catch (error) {
+    console.error("Product type dropdown error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch product type dropdown",
+      error: error.message,
+    });
+  }
+};
+
 // ======================================================
 // HELPER
 // ======================================================

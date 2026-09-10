@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import path from "path";
 
 import roleRoutes from "./modules/accessControl/routes/role.routes.js";
 import permissionRoutes from "./modules/accessControl/routes/permission.routes.js";
@@ -15,6 +16,8 @@ import areaRoutes from "./modules/address/routes/area.routes.js";
 import brandRoutes from "./modules/brand/routes/brand.routes.js";
 import productRoutes from "./modules/product/routes/product.routes.js";
 import productTypeRoutes from "./modules/productType/routes/productType.routes.js";
+import customerRoutes from "./modules/Customer/routes/customer.routes.js"
+import complaintRoutes from "./modules/Complaint/routes/complaint.routes.js"
 
 const app = express();
 
@@ -32,6 +35,8 @@ app.use(
     credentials: true,
   }),
 );
+
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -41,7 +46,9 @@ app.get("/", (req, res) => {
     message: "API is running",
   });
 });
-app.use("/uploads", express.static("uploads"));
+
+
+// app.use("/uploads", express.static("uploads"));
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/roles", roleRoutes);
 app.use("/api/v1/permissions", permissionRoutes);
@@ -56,5 +63,15 @@ app.use("/api/v1/areas", areaRoutes);
 app.use("/api/v1/brands", brandRoutes);
 app.use("/api/v1/products", productRoutes);
 app.use("/api/v1/product-types", productTypeRoutes);
+app.use(
+  "/api/v1/customers",
+  customerRoutes,
+);
+
+
+app.use(
+  "/api/v1/complaints",
+  complaintRoutes,
+);
 
 export default app;

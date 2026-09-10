@@ -1,4 +1,6 @@
 import Dealer from "../models/dealer.model.js";
+import User from "../../users/models/user.model.js";
+import Role from "../../accessControl/models/role.model.js";
 
 /* =========================================================
    HELPERS
@@ -64,25 +66,20 @@ export const createDealer = async (req, res) => {
       technicianCode,
       technicianFirmName,
       technicianName,
-
       aadhaarNumber,
       alternativeNumber,
       panNumber,
       drivingLicenceNumber,
-
       technicianStatus,
-
       headCode,
       groupHead,
       headName,
       grade,
-
       zone,
       contactPerson,
       phoneNumbers,
       mobileNumber,
       email,
-
       taxApply,
       gstNumber,
       tinNumber,
@@ -92,42 +89,72 @@ export const createDealer = async (req, res) => {
       taxInputPayable,
       vat15Column,
       segment,
-
       accountType,
       otherInfo,
       openingBalanceType,
     } = req.body;
 
+    console.log(req.body)
+    console.log(req.files)
+
     /* ===============================
-       CHECK DUPLICATES
+       REQUIRED LOGIN FIELDS
     =============================== */
 
-    if (mobileNumber) {
-      const existingMobile = await Dealer.findOne({
-        mobileNumber,
+    if (!mobileNumber) {
+      return res.status(400).json({
+        success: false,
+        message: "Mobile number is required",
       });
-
-      if (existingMobile) {
-        return res.status(409).json({
-          success: false,
-          message: "Dealer with this mobile number already exists",
-        });
-      }
     }
 
-    if (email) {
-      const existingEmail = await Dealer.findOne({
-        email: email.toLowerCase(),
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: "Email is required",
       });
-
-      if (existingEmail) {
-        return res.status(409).json({
-          success: false,
-          message: "Dealer with this email already exists",
-        });
-      }
     }
 
+    /* ===============================
+       CHECK DEALER DUPLICATES
+    =============================== */
+
+    const existingMobile = await Dealer.findOne({
+      mobileNumber,
+    });
+
+    if (existingMobile) {
+      return res.status(409).json({
+        success: false,
+        message: "Dealer with this mobile number already exists",
+      });
+    }
+
+    const existingDealerEmail = await Dealer.findOne({
+      email: email.toLowerCase(),
+    });
+
+    if (existingDealerEmail) {
+      return res.status(409).json({
+        success: false,
+        message: "Dealer with this email already exists",
+      });
+    }
+
+    /* ===============================
+       CHECK USER DUPLICATE
+    =============================== */
+
+    const existingUser = await User.findOne({
+      email: email.toLowerCase(),
+    });
+
+    if (existingUser) {
+      return res.status(409).json({
+        success: false,
+        message: "User with this email already exists",
+      });
+    }
     /* ===============================
        NESTED DATA
     =============================== */
@@ -174,88 +201,102 @@ export const createDealer = async (req, res) => {
 
     const dealer = await Dealer.create({
       technicianCode: technicianCode || undefined,
-
       technicianFirmName,
       technicianName,
-
       aadhaarNumber,
       alternativeNumber,
       panNumber,
       drivingLicenceNumber,
-
       technicianStatus: technicianStatus || "ACTIVE",
-
       headCode,
       groupHead,
       headName,
       grade,
-
       businessAddress,
       residentialAddress,
-
       zone,
       contactPerson,
       phoneNumbers,
       mobileNumber,
       email,
-
       taxApply,
       gstNumber,
       tinNumber,
       uinNumber,
       gstApplicable,
-
       gstRate: parseNumber(req.body.gstRate),
-
       hsnCode,
-
       reverseChargeLimit: parseNumber(req.body.reverseChargeLimit),
-
       taxInputPayable,
       vat15Column,
       segment,
-
       creditDays: parseNumber(req.body.creditDays),
-
       creditLimit: parseNumber(req.body.creditLimit),
-
       accountType: accountType || "STANDARD",
-
       isDealer: parseBoolean(req.body.isDealer, true),
-
       disableChallan: parseBoolean(req.body.disableChallan),
-
       ledgerSummaryOnly: parseBoolean(req.body.ledgerSummaryOnly),
-
       accountDeactivated: parseBoolean(req.body.accountDeactivated),
-
       otherInfo,
-
       rating: parseNumber(req.body.rating),
-
       openingBalance: parseNumber(req.body.openingBalance),
-
       openingBalanceType: openingBalanceType || "DR",
-
       productServices,
-
       combinedCapacity: {
         products: combinedCapacity?.products ?? [],
-
         capacity: parseNumber(combinedCapacity?.capacity),
       },
-
       individualCapacities,
-
       documents,
-
       status: technicianStatus || "ACTIVE",
+    });
+
+    /* ===============================
+       FIND DEALER ROLE
+    =============================== */
+
+    const dealerRole = await Role.findOne({
+      code: "DEALER",
+      status: "ACTIVE",
+    });
+
+    /* ===============================
+       CREATE LOGIN USER
+    =============================== */
+
+    const user = await User.create({
+      name: technicianName,
+
+      email: email.toLowerCase(),
+
+      phone: mobileNumber,
+
+      // Mobile number will be initial password.
+      // Your User pre-save hook will automatically hash it.
+      password: mobileNumber,
+
+      // If DEALER role is not found -> null
+      roleId: dealerRole?._id ?? null,
+
+      dealerId: dealer._id,
+
+      status: technicianStatus === "INACTIVE" ? "INACTIVE" : "ACTIVE",
     });
 
     return res.status(201).json({
       success: true,
       message: "Dealer created successfully",
       data: dealer,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        dealerId: user.dealerId,
+        roleId: user.roleId,
+        roleAssigned: !!dealerRole,
+        status: user.status,
+      },
     });
   } catch (error) {
     console.error("Create Dealer Error:", error);
@@ -384,6 +425,9 @@ export const getDealerById = async (req, res) => {
 export const updateDealer = async (req, res) => {
   try {
     const dealer = await Dealer.findById(req.params.id);
+
+    console.log(req.body)
+    console.log(req.files)
 
     if (!dealer) {
       return res.status(404).json({

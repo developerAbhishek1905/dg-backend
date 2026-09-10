@@ -1048,3 +1048,15 @@ const formatCategory = (category) => ({
 
   updatedAt: category.updatedAt,
 });
+
+
+// =====================================================
+// ESCAPE REGEX
+// =====================================================
+
+const escapeRegex = (value) => {
+  return String(value).replace(
+    /[.*+?^${}()|[\]\\]/g,
+    "\\$&"
+  );
+};
