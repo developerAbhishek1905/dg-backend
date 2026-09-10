@@ -34,7 +34,7 @@ const userSchema = new mongoose.Schema(
     roleId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Role",
-      required: true,
+      // required: true,
     },
 
     dealerId: {

@@ -10,6 +10,7 @@ import {
   importBrands,
   exportBrands,
   downloadBrandSample,
+  getBrandDropdown
 } from "../controllers/brand.controller.js";
 import { uploadExcel } from "../../address/middleware/upload.middleware.js";
 
@@ -21,6 +22,7 @@ router.post("/import", uploadExcel.single("file"), importBrands);
 router.get("/export", exportBrands);
 
 router.get("/sample", downloadBrandSample);
+router.get("/dropdown", getBrandDropdown);
 
 // CRUD APIs
 router.post("/", createBrand);

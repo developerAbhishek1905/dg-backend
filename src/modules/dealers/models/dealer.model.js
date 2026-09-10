@@ -1,10 +1,9 @@
 import mongoose from "mongoose";
+import { type } from "node:os";
 
 const { Schema } = mongoose;
 
-/* =========================================================
-   ADDRESS
-========================================================= */
+//  ADDRESS
 
 const addressSchema = new mongoose.Schema(
   {
@@ -74,9 +73,7 @@ const addressSchema = new mongoose.Schema(
   },
 );
 
-/* =========================================================
-   PRODUCT SERVICE CATEGORY
-========================================================= */
+//  PRODUCT SERVICE CATEGORY
 
 const productCategorySchema = new mongoose.Schema(
   {
@@ -91,15 +88,22 @@ const productCategorySchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+
+    description:{
+      type: String,
+      trim:true
+    },
+    rate:{
+      type: Number,
+      trim: true
+    }
   },
   {
     _id: false,
   },
 );
 
-/* =========================================================
-   PRODUCT + SERVICES
-========================================================= */
+//  PRODUCT + SERVICES
 
 const productServiceSchema = new mongoose.Schema(
   {
@@ -125,9 +129,7 @@ const productServiceSchema = new mongoose.Schema(
   },
 );
 
-/* =========================================================
-   COMBINED CAPACITY PRODUCT
-========================================================= */
+//  COMBINED CAPACITY PRODUCT
 
 const capacityProductSchema = new mongoose.Schema(
   {
@@ -147,9 +149,7 @@ const capacityProductSchema = new mongoose.Schema(
   },
 );
 
-/* =========================================================
-   COMBINED CAPACITY
-========================================================= */
+//  COMBINED CAPACITY
 
 const combinedCapacitySchema = new mongoose.Schema(
   {
@@ -169,9 +169,7 @@ const combinedCapacitySchema = new mongoose.Schema(
   },
 );
 
-/* =========================================================
-   INDIVIDUAL CAPACITY
-========================================================= */
+//  INDIVIDUAL CAPACITY
 
 const individualCapacitySchema = new mongoose.Schema(
   {
@@ -197,9 +195,7 @@ const individualCapacitySchema = new mongoose.Schema(
   },
 );
 
-/* =========================================================
-   DOCUMENTS
-========================================================= */
+//  DOCUMENTS
 
 const documentsSchema = new mongoose.Schema(
   {
@@ -243,9 +239,7 @@ const documentsSchema = new mongoose.Schema(
   },
 );
 
-/* =========================================================
-   DEALER
-========================================================= */
+//  DEALER
 
 const dealerSchema = new mongoose.Schema(
   {
@@ -603,98 +597,60 @@ const dealerSchema = new mongoose.Schema(
   },
 );
 
-/* =========================================================
-   VALIDATION
-========================================================= */
+//  VALIDATION
 
 dealerSchema.pre("validate", function () {
-  /* ======================================
-     PRODUCT SERVICES DUPLICATES
-  ====================================== */
+  //  PRODUCT SERVICES DUPLICATES
 
   const productServiceIds =
-    this.productServices?.map(
-      (item) => item.productId,
-    ) ?? [];
+    this.productServices?.map((item) => item.productId) ?? [];
 
-  if (
-    new Set(productServiceIds).size !==
-    productServiceIds.length
-  ) {
-    throw new Error(
-      "Duplicate products are not allowed in product services",
-    );
+  if (new Set(productServiceIds).size !== productServiceIds.length) {
+    throw new Error("Duplicate products are not allowed in product services");
   }
 
-  /* ======================================
-     COMBINED CAPACITY
-  ====================================== */
+  //  COMBINED CAPACITY
 
-  const combinedProducts =
-    this.combinedCapacity?.products ?? [];
+  const combinedProducts = this.combinedCapacity?.products ?? [];
 
   if (combinedProducts.length > 0) {
-    const capacity = Number(
-      this.combinedCapacity?.capacity ?? 0,
-    );
+    const capacity = Number(this.combinedCapacity?.capacity ?? 0);
 
     if (capacity < 1) {
-      throw new Error(
-        "Combined capacity must be greater than 0",
-      );
+      throw new Error("Combined capacity must be greater than 0");
     }
 
-    const combinedProductIds =
-      combinedProducts.map(
-        (item) => item.productId,
-      );
+    const combinedProductIds = combinedProducts.map((item) => item.productId);
 
-    if (
-      new Set(combinedProductIds).size !==
-      combinedProductIds.length
-    ) {
+    if (new Set(combinedProductIds).size !== combinedProductIds.length) {
       throw new Error(
         "Duplicate products are not allowed in combined capacity",
       );
     }
   }
 
-  /* ======================================
-     INDIVIDUAL CAPACITY
-  ====================================== */
+  //  INDIVIDUAL CAPACITY
 
-  const individualCapacities =
-    this.individualCapacities ?? [];
+  const individualCapacities = this.individualCapacities ?? [];
 
   if (individualCapacities.length > 0) {
-    const individualProductIds =
-      individualCapacities.map(
-        (item) => item.productId,
-      );
+    const individualProductIds = individualCapacities.map(
+      (item) => item.productId,
+    );
 
-    if (
-      new Set(individualProductIds).size !==
-      individualProductIds.length
-    ) {
+    if (new Set(individualProductIds).size !== individualProductIds.length) {
       throw new Error(
         "Duplicate products are not allowed in individual capacity",
       );
     }
 
-    individualCapacities.forEach(
-      (item) => {
-        if (
-          Number(item.capacity) < 1
-        ) {
-          throw new Error(
-            `${
-              item.productName ||
-              "Product"
-            } capacity must be greater than 0`,
-          );
-        }
-      },
-    );
+    individualCapacities.forEach((item) => {
+      if (Number(item.capacity) < 1) {
+        throw new Error(
+          `${item.productName || "Product"} capacity must be greater than 0`,
+        );
+      }
+    });
   }
 });
 

@@ -491,9 +491,52 @@ export const downloadBrandSample = async (req, res) => {
   }
 };
 
+export const getBrandDropdown = async (req, res) => {
+  try {
+    const { search = "" } = req.query;
+
+    const filter = {
+      isActive: true,
+    };
+
+    if (search.trim()) {
+      filter.brandName = {
+        $regex: search.trim(),
+        $options: "i",
+      };
+    }
+
+    const brands = await Brand.find(filter)
+      .select("_id brandName")
+      .sort({ brandName: 1 })
+      .lean();
+
+    const data = brands.map((brand) => ({
+      id: brand._id,
+      brandName: brand.brandName,
+    }));
+
+    return res.status(200).json({
+      success: true,
+      message: "Brand dropdown fetched successfully",
+      data,
+    });
+  } catch (error) {
+    console.error("Get brand dropdown error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch brand dropdown",
+      error: error.message,
+    });
+  }
+};
+
 // ============================================
 // HELPER
 // ============================================
+
+
 
 const escapeRegex = (value) => {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

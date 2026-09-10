@@ -9,6 +9,7 @@ import {
   importProductTypes,
   exportProductTypes,
   downloadProductTypeSample,
+  getProductTypeDropdown
 } from "../controllers/productType.controller.js";
 
 import { uploadExcel } from "../../address/middleware/upload.middleware.js";
@@ -33,6 +34,7 @@ router.post("/import", uploadExcel.single("file"), importProductTypes);
 router.get("/export", exportProductTypes);
 
 router.get("/sample", downloadProductTypeSample);
+router.get("/dropdown", getProductTypeDropdown);
 
 // ==========================================
 // DYNAMIC ROUTES LAST
