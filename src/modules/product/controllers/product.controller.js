@@ -1,20 +1,15 @@
 import XLSX from "xlsx";
-
 import Product from "../models/product.model.js";
 import Category from "../../category/models/category.model.js";
 import Brand from "../../brand/models/brand.model.js";
-// import ProductType from "../../productType/models/productType.model.js";
-
 import {
   getNextProductId,
   syncProductCounter,
 } from "../utils/productId.util.js";
+import { escapeRegex } from "../../../helper/escapeRegex.js";
 
 
-// ======================================================
 // CREATE PRODUCT
-// ======================================================
-
 export const createProduct = async (req, res) => {
   try {
     const {
@@ -109,10 +104,8 @@ export const createProduct = async (req, res) => {
   }
 };
 
-// ======================================================
-// GET ALL PRODUCTS
-// ======================================================
 
+// GET ALL PRODUCTS
 export const getAllProducts = async (req, res) => {
   try {
     const {
@@ -174,10 +167,8 @@ export const getAllProducts = async (req, res) => {
   }
 };
 
-// ======================================================
-// GET PRODUCT BY PRODUCT_ID
-// ======================================================
 
+// GET PRODUCT BY PRODUCT_ID
 export const getProductById = async (req, res) => {
   try {
     const productId = Number(req.params.id);
@@ -216,10 +207,8 @@ export const getProductById = async (req, res) => {
   }
 };
 
-// ======================================================
-// UPDATE PRODUCT
-// ======================================================
 
+// UPDATE PRODUCT
 export const updateProduct = async (req, res) => {
   try {
     const productId = Number(req.params.id);
@@ -303,10 +292,8 @@ export const updateProduct = async (req, res) => {
   }
 };
 
-// ======================================================
-// DELETE PRODUCT
-// ======================================================
 
+// DELETE PRODUCT
 export const deleteProduct = async (req, res) => {
   try {
     const productId = Number(req.params.id);
@@ -336,10 +323,9 @@ export const deleteProduct = async (req, res) => {
     });
   }
 };
-// ======================================================
-// IMPORT PRODUCTS
-// ======================================================
 
+
+// IMPORT PRODUCTS
 export const importProducts = async (req, res) => {
   try {
     if (!req.file) {
@@ -519,10 +505,8 @@ export const importProducts = async (req, res) => {
   }
 };
 
-// ======================================================
-// EXPORT PRODUCTS
-// ======================================================
 
+// EXPORT PRODUCTS
 export const exportProducts = async (req, res) => {
   try {
     const products = await Product.find()
@@ -532,9 +516,7 @@ export const exportProducts = async (req, res) => {
       .lean();
 
     const categoryIds = [...new Set(products.map((item) => item.category_id))];
-
     const brandIds = [...new Set(products.map((item) => item.brand_id))];
-
     const productTypeIds = [
       ...new Set(products.map((item) => item.product_type_id).filter(Boolean)),
     ];
@@ -582,32 +564,20 @@ export const exportProducts = async (req, res) => {
 
     const excelData = products.map((product, index) => ({
       "S.No": index + 1,
-
       "Product ID": product.product_id,
-
       "Product Name": product.product_name,
-
       "Category ID": product.category_id,
-
       "Category Name": categoryMap.get(product.category_id) || "",
-
       "Brand ID": product.brand_id,
-
       "Brand Name": brandMap.get(product.brand_id) || "",
-
       "Product Type ID": product.product_type_id || "",
-
       "Product Type Name": productTypeMap.get(product.product_type_id) || "",
-
       "Model Number": product.model_number || "",
-
       Description: product.description || "",
-
       Status: product.status || "",
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(excelData);
-
     worksheet["!cols"] = [
       { wch: 8 },
       { wch: 12 },
@@ -624,7 +594,6 @@ export const exportProducts = async (req, res) => {
     ];
 
     const workbook = XLSX.utils.book_new();
-
     XLSX.utils.book_append_sheet(workbook, worksheet, "Products");
 
     const buffer = XLSX.write(workbook, {
@@ -644,8 +613,6 @@ export const exportProducts = async (req, res) => {
 
     return res.send(buffer);
   } catch (error) {
-    console.error("Product export error:", error);
-
     return res.status(500).json({
       success: false,
       message: "Failed to export products",
@@ -654,16 +621,12 @@ export const exportProducts = async (req, res) => {
   }
 };
 
-// ======================================================
-// DOWNLOAD PRODUCT SAMPLE EXCEL
-// ======================================================
 
+// DOWNLOAD PRODUCT SAMPLE EXCEL
 export const downloadProductSample = async (req, res) => {
   try {
-    // ==========================================
-    // SAMPLE DATA
-    // ==========================================
 
+    // SAMPLE DATA
     const sampleData = [
       {
         "Product Name": "Washing Machine",
@@ -683,16 +646,11 @@ export const downloadProductSample = async (req, res) => {
       },
     ];
 
-    // ==========================================
     // CREATE WORKSHEET
-    // ==========================================
-
     const worksheet = XLSX.utils.json_to_sheet(sampleData);
 
-    // ==========================================
-    // COLUMN WIDTH
-    // ==========================================
 
+    // COLUMN WIDTH
     worksheet["!cols"] = [
       {
         wch: 30,
@@ -702,31 +660,21 @@ export const downloadProductSample = async (req, res) => {
       },
     ];
 
-    // ==========================================
     // CREATE WORKBOOK
-    // ==========================================
-
     const workbook = XLSX.utils.book_new();
-
     XLSX.utils.book_append_sheet(
       workbook,
       worksheet,
       "Products"
     );
 
-    // ==========================================
     // GENERATE EXCEL BUFFER
-    // ==========================================
-
     const buffer = XLSX.write(workbook, {
       type: "buffer",
       bookType: "xlsx",
     });
 
-    // ==========================================
     // RESPONSE HEADERS
-    // ==========================================
-
     res.setHeader(
       "Content-Disposition",
       'attachment; filename="product_import_sample.xlsx"'
@@ -737,10 +685,7 @@ export const downloadProductSample = async (req, res) => {
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     );
 
-    // ==========================================
     // SEND FILE
-    // ==========================================
-
     return res.send(buffer);
 
   } catch (error) {
@@ -757,6 +702,7 @@ export const downloadProductSample = async (req, res) => {
   }
 };
 
+
 export const getProductDropdown = async (req, res) => {
   try {
     const {
@@ -766,10 +712,7 @@ export const getProductDropdown = async (req, res) => {
 
     const filter = {};
 
-    // ==========================================
     // STATUS FILTER
-    // ==========================================
-
     if (status) {
       const normalizedStatus = String(status)
         .trim()
@@ -785,10 +728,7 @@ export const getProductDropdown = async (req, res) => {
       filter.status = normalizedStatus;
     }
 
-    // ==========================================
     // SEARCH
-    // ==========================================
-
     if (String(search).trim()) {
       const searchValue = String(search).trim();
 
@@ -798,10 +738,7 @@ export const getProductDropdown = async (req, res) => {
       };
     }
 
-    // ==========================================
     // GET PRODUCTS
-    // ==========================================
-
     const products = await Product.find(filter)
       .select("_id product_id product_name status")
       .sort({
@@ -809,10 +746,7 @@ export const getProductDropdown = async (req, res) => {
       })
       .lean();
 
-    // ==========================================
     // RESPONSE DATA
-    // ==========================================
-
     const data = products.map((product) => ({
       _id: product._id,
       product_id: product.product_id,
@@ -835,12 +769,4 @@ export const getProductDropdown = async (req, res) => {
       error: error.message,
     });
   }
-};
-
-// ======================================================
-// HELPER
-// ======================================================
-
-const escapeRegex = (value) => {
-  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 };

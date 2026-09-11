@@ -1,4 +1,3 @@
-// import Counter from "../../../shared/models/counter.model.js";
 import Counter from "../../address/model/counter.model.js"
 import Product from "../models/product.model.js";
 
