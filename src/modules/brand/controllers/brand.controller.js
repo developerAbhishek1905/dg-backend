@@ -1,10 +1,8 @@
 import XLSX from "xlsx";
 import Brand from "../models/brand.model.js";
+import { escapeRegex } from "../../../helper/escapeRegex.js";
 
-// ============================================
 // CREATE BRAND
-// ============================================
-
 export const createBrand = async (req, res) => {
   try {
     const { brandName } = req.body;
@@ -50,10 +48,7 @@ export const createBrand = async (req, res) => {
   }
 };
 
-// ============================================
 // GET ALL BRANDS
-// ============================================
-
 export const getAllBrands = async (req, res) => {
   try {
     const { search = "", status } = req.query;
@@ -93,10 +88,7 @@ export const getAllBrands = async (req, res) => {
   }
 };
 
-// ============================================
 // GET BRAND BY ID
-// ============================================
-
 export const getBrandById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -125,10 +117,7 @@ export const getBrandById = async (req, res) => {
   }
 };
 
-// ============================================
 // UPDATE BRAND
-// ============================================
-
 export const updateBrand = async (req, res) => {
   try {
     const { id } = req.params;
@@ -189,10 +178,7 @@ export const updateBrand = async (req, res) => {
   }
 };
 
-// ============================================
 // DELETE BRAND
-// ============================================
-
 export const deleteBrand = async (req, res) => {
   try {
     const { id } = req.params;
@@ -221,10 +207,7 @@ export const deleteBrand = async (req, res) => {
   }
 };
 
-// ============================================
 // TOGGLE BRAND STATUS
-// ============================================
-
 export const toggleBrandStatus = async (req, res) => {
   try {
     const { id } = req.params;
@@ -260,10 +243,7 @@ export const toggleBrandStatus = async (req, res) => {
   }
 };
 
-// ============================================
 // IMPORT BRANDS FROM EXCEL
-// ============================================
-
 export const importBrands = async (req, res) => {
   try {
     if (!req.file) {
@@ -379,10 +359,7 @@ export const importBrands = async (req, res) => {
   }
 };
 
-// ============================================
 // EXPORT BRANDS TO EXCEL
-// ============================================
-
 export const exportBrands = async (req, res) => {
   try {
     const brands = await Brand.find({})
@@ -434,10 +411,7 @@ export const exportBrands = async (req, res) => {
   }
 };
 
-// ============================================
 // DOWNLOAD SAMPLE EXCEL
-// ============================================
-
 export const downloadBrandSample = async (req, res) => {
   try {
     const sampleData = [
@@ -530,14 +504,4 @@ export const getBrandDropdown = async (req, res) => {
       error: error.message,
     });
   }
-};
-
-// ============================================
-// HELPER
-// ============================================
-
-
-
-const escapeRegex = (value) => {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 };
