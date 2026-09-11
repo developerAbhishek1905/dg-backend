@@ -1,18 +1,13 @@
 import mongoose from "mongoose";
 import XLSX from "xlsx";
-
-
 import ProductType from "../model/productType.model.js";
 import Product from "../../product/models/product.model.js";
+import { escapeRegex } from "../../../helper/escapeRegex.js";
 
-// ======================================================
 // CREATE PRODUCT TYPE
-// ======================================================
-
 export const createProductType = async (req, res) => {
   try {
     const { product_id, product_code, product_type } = req.body;
-
     const productId = Number(product_id);
 
     if (!Number.isInteger(productId) || productId <= 0) {
@@ -22,13 +17,6 @@ export const createProductType = async (req, res) => {
       });
     }
 
-    // if (!String(product_code || "").trim()) {
-    //   return res.status(400).json({
-    //     success: false,
-    //     message: "Product code is required",
-    //   });
-    // }
-
     if (!String(product_type || "").trim()) {
       return res.status(400).json({
         success: false,
@@ -36,10 +24,7 @@ export const createProductType = async (req, res) => {
       });
     }
 
-    // ==========================================
     // CHECK PRODUCT EXISTS
-    // ==========================================
-
     const product = await Product.findOne({
       product_id: productId,
     });
@@ -51,33 +36,9 @@ export const createProductType = async (req, res) => {
       });
     }
 
-    // const productCode = String(product_code).trim().toUpperCase();
-
     const productTypeName = String(product_type).trim();
 
-    // ==========================================
-    // DUPLICATE PRODUCT CODE
-    // ==========================================
-
-    // const duplicateCode = await ProductType.findOne({
-    //   product_id: productId,
-    //   product_code: {
-    //     $regex: `^${escapeRegex(productCode)}$`,
-    //     $options: "i",
-    //   },
-    // });
-
-    // if (duplicateCode) {
-    //   return res.status(409).json({
-    //     success: false,
-    //     message: "Product code already exists for this product",
-    //   });
-    // }
-
-    // ==========================================
     // DUPLICATE PRODUCT TYPE
-    // ==========================================
-
     const duplicateType = await ProductType.findOne({
       product_id: productId,
       product_type: {
@@ -93,13 +54,9 @@ export const createProductType = async (req, res) => {
       });
     }
 
-    // ==========================================
     // CREATE
-    // ==========================================
-
     const productType = await ProductType.create({
       product_id: productId,
-    //   product_code: productCode,
       product_type: productTypeName,
     });
 
@@ -115,13 +72,6 @@ export const createProductType = async (req, res) => {
   } catch (error) {
     console.error("Create product type error:", error);
 
-    // if (error.code === 11000) {
-    //   return res.status(409).json({
-    //     success: false,
-    //     message: "Product code or product type already exists",
-    //   });
-    // }
-
     return res.status(500).json({
       success: false,
       message: "Failed to create product type",
@@ -130,24 +80,15 @@ export const createProductType = async (req, res) => {
   }
 };
 
-// ======================================================
 // GET ALL PRODUCT TYPES
-// ======================================================
-
 export const getAllProductTypes = async (req, res) => {
   try {
     const { search = "", product_id, page = 1, limit = 20 } = req.query;
-
     const pageNumber = Math.max(Number(page) || 1, 1);
-
     const limitNumber = Math.min(Math.max(Number(limit) || 20, 1), 100);
-
     const filter = {};
 
-    // ==========================================
     // PRODUCT FILTER
-    // ==========================================
-
     if (product_id) {
       const productId = Number(product_id);
 
@@ -161,10 +102,7 @@ export const getAllProductTypes = async (req, res) => {
       filter.product_id = productId;
     }
 
-    // ==========================================
     // SEARCH
-    // ==========================================
-
     if (String(search).trim()) {
       const regex = {
         $regex: escapeRegex(String(search).trim()),
@@ -181,12 +119,8 @@ export const getAllProductTypes = async (req, res) => {
       ];
     }
 
-    // ==========================================
     // GET DATA
-    // ==========================================
-
     const total = await ProductType.countDocuments(filter);
-
     const productTypes = await ProductType.find(filter)
       .sort({
         product_type: 1,
@@ -195,10 +129,7 @@ export const getAllProductTypes = async (req, res) => {
       .limit(limitNumber)
       .lean();
 
-    // ==========================================
     // GET PRODUCT NAMES
-    // ==========================================
-
     const productIds = [
       ...new Set(productTypes.map((item) => item.product_id)),
     ];
@@ -215,13 +146,9 @@ export const getAllProductTypes = async (req, res) => {
       products.map((product) => [product.product_id, product.product_name]),
     );
 
-    // ==========================================
     // ADD PRODUCT NAME
-    // ==========================================
-
     const data = productTypes.map((item) => ({
       ...item,
-
       product_name: productMap.get(item.product_id) || null,
     }));
 
@@ -248,10 +175,7 @@ export const getAllProductTypes = async (req, res) => {
   }
 };
 
-// ======================================================
 // GET PRODUCT TYPE BY MONGO ID
-// ======================================================
-
 export const getProductTypeById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -298,10 +222,7 @@ export const getProductTypeById = async (req, res) => {
   }
 };
 
-// ======================================================
 // UPDATE PRODUCT TYPE
-// ======================================================
-
 export const updateProductType = async (req, res) => {
   try {
     const { id } = req.params;
@@ -469,10 +390,7 @@ export const updateProductType = async (req, res) => {
   }
 };
 
-// ======================================================
 // DELETE PRODUCT TYPE
-// ======================================================
-
 export const deleteProductType = async (req, res) => {
   try {
     const { id } = req.params;
@@ -508,10 +426,7 @@ export const deleteProductType = async (req, res) => {
   }
 };
 
-// ======================================================
 // IMPORT PRODUCT TYPES
-// ======================================================
-
 export const importProductTypes = async (req, res) => {
   try {
     if (!req.file) {
@@ -692,10 +607,7 @@ export const importProductTypes = async (req, res) => {
   }
 };
 
-// ======================================================
 // EXPORT PRODUCT TYPES
-// ======================================================
-
 export const exportProductTypes = async (req, res) => {
   try {
     const productTypes = await ProductType.find()
@@ -782,10 +694,7 @@ export const exportProductTypes = async (req, res) => {
   }
 };
 
-// ======================================================
 // DOWNLOAD SAMPLE EXCEL
-// ======================================================
-
 export const downloadProductTypeSample = async (req, res) => {
   try {
     const sampleData = [
@@ -902,12 +811,4 @@ export const getProductTypeDropdown = async (req, res) => {
       error: error.message,
     });
   }
-};
-
-// ======================================================
-// HELPER
-// ======================================================
-
-const escapeRegex = (value) => {
-  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 };
