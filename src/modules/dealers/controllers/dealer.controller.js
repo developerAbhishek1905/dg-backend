@@ -1,7 +1,11 @@
 import Dealer from "../models/dealer.model.js";
 import User from "../../users/models/user.model.js";
 import Role from "../../accessControl/models/role.model.js";
+<<<<<<< Updated upstream
 
+=======
+import Allocation from '../../allocation/model/allocation.model.js'
+>>>>>>> Stashed changes
 /* =========================================================
    HELPERS
 ========================================================= */
@@ -56,6 +60,164 @@ const getUploadedFiles = (files, fieldName) => {
   );
 };
 
+<<<<<<< Updated upstream
+=======
+const buildAllocationRules = ({
+  dealer,
+  productServices,
+  combinedCapacity,
+  individualCapacities,
+}) => {
+  const capacityRules = [];
+
+  /*
+  |--------------------------------------------------------------------------
+  | COMBINED CAPACITY
+  |--------------------------------------------------------------------------
+  */
+
+  if (
+    combinedCapacity?.products?.length &&
+    Number(combinedCapacity.capacity) > 0
+  ) {
+    const combinedProducts =
+      combinedCapacity.products.map((capacityProduct) => {
+        const serviceProduct = productServices.find(
+          (item) =>
+            Number(item.productId) ===
+            Number(capacityProduct.productId),
+        );
+
+        return {
+          productId: Number(capacityProduct.productId),
+
+          productName:
+            capacityProduct.productName ??
+            serviceProduct?.productName ??
+            "",
+
+          services:
+            serviceProduct?.categories?.map((category) => ({
+              categoryId: category.categoryId,
+
+              category:
+                category.categoryName ??
+                category.category ??
+                "",
+
+              description:
+                category.description ?? "",
+
+              categoryDescription:
+                category.categoryDescription ?? "",
+            })) ?? [],
+
+          dailyCapacity: 0,
+        };
+      });
+
+    capacityRules.push({
+      capacityType: "COMBINED",
+
+      ruleName: combinedProducts
+        .map((product) => product.productName)
+        .filter(Boolean)
+        .join(" + "),
+
+      dailyCapacity: Number(
+        combinedCapacity.capacity ?? 0,
+      ),
+
+      products: combinedProducts,
+
+      status: "ACTIVE",
+    });
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | INDIVIDUAL CAPACITY
+  |--------------------------------------------------------------------------
+  */
+
+  for (const individual of individualCapacities ?? []) {
+    const serviceProduct = productServices.find(
+      (item) =>
+        Number(item.productId) ===
+        Number(individual.productId),
+    );
+
+    capacityRules.push({
+      capacityType: "INDIVIDUAL",
+
+      ruleName:
+        individual.productName ??
+        serviceProduct?.productName ??
+        "",
+
+      dailyCapacity: 0,
+
+      products: [
+        {
+          productId: Number(individual.productId),
+
+          productName:
+            individual.productName ??
+            serviceProduct?.productName ??
+            "",
+
+          dailyCapacity: Number(
+            individual.capacity ?? 0,
+          ),
+
+          services:
+            serviceProduct?.categories?.map((category) => ({
+              categoryId: category.categoryId,
+
+              category:
+                category.categoryName ??
+                category.category ??
+                "",
+
+              description:
+                category.description ?? "",
+
+              categoryDescription:
+                category.categoryDescription ?? "",
+            })) ?? [],
+        },
+      ],
+
+      status: "ACTIVE",
+    });
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | DEALER CITY
+  |--------------------------------------------------------------------------
+  */
+
+  const cityId =
+    dealer.businessAddress?.cityId ??
+    dealer.residentialAddress?.cityId ??
+    null;
+
+  const cityName =
+    dealer.businessAddress?.city ??
+    dealer.residentialAddress?.city ??
+    "";
+
+  return [
+    {
+      cityId,
+      cityName,
+      capacityRules,
+    },
+  ];
+};
+
+>>>>>>> Stashed changes
 /* =========================================================
    CREATE DEALER
 ========================================================= */
@@ -283,10 +445,77 @@ export const createDealer = async (req, res) => {
       status: technicianStatus === "INACTIVE" ? "INACTIVE" : "ACTIVE",
     });
 
+<<<<<<< Updated upstream
+=======
+    /* ===============================
+   CREATE INITIAL ALLOCATION
+=============================== */
+
+const now = new Date();
+
+const allocationMonth = now.getMonth() + 1;
+
+const allocationYear = now.getFullYear();
+
+const from = new Date(
+  allocationYear,
+  allocationMonth - 1,
+  1,
+);
+
+const to = new Date(
+  allocationYear,
+  allocationMonth,
+  0,
+  23,
+  59,
+  59,
+  999,
+);
+
+const allocationRules = buildAllocationRules({
+  dealer,
+  productServices,
+  combinedCapacity,
+  individualCapacities,
+});
+
+const allocation = await Allocation.create({
+  dealerId: dealer._id,
+
+  dealerCode: dealer.technicianCode,
+
+  dealerName:
+    dealer.technicianFirmName ||
+    dealer.technicianName,
+
+  allocationMonth,
+
+  allocationYear,
+
+  average_amount: 0,
+
+  from,
+
+  to,
+
+  rules: allocationRules,
+
+  status:
+    dealer.status === "ACTIVE"
+      ? "ACTIVE"
+      : "INACTIVE",
+});
+
+>>>>>>> Stashed changes
     return res.status(201).json({
       success: true,
       message: "Dealer created successfully",
       data: dealer,
+<<<<<<< Updated upstream
+=======
+      allocation,
+>>>>>>> Stashed changes
       user: {
         id: user._id,
         name: user.name,

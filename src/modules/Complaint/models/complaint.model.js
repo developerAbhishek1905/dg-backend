@@ -249,6 +249,16 @@ const complaintSchema = new mongoose.Schema(
       trim: true,
     },
 
+<<<<<<< Updated upstream
+=======
+    categoryId: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "Category",
+  default: null,
+  index: true,
+},
+
+>>>>>>> Stashed changes
     category: {
       type: String,
       trim: true,
@@ -265,7 +275,11 @@ const complaintSchema = new mongoose.Schema(
 
     complaintType: {
       type: String,
+<<<<<<< Updated upstream
       enum: ["REGULAR", "REPEAT", "WARRANTY", "PAID_SERVICE"],
+=======
+      enum: ["REGULAR", "REPEAT", "WARRANTY", "INQUIRY"],
+>>>>>>> Stashed changes
       default: "REGULAR",
       required: true,
       index: true,
@@ -371,6 +385,49 @@ const complaintSchema = new mongoose.Schema(
       default: "",
     },
 
+<<<<<<< Updated upstream
+=======
+    allocatedDealerId: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "Dealer",
+  default: null,
+},
+
+allocationId: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "Allocation",
+  default: null,
+},
+
+allocationRuleId: {
+  type: mongoose.Schema.Types.ObjectId,
+  default: null,
+},
+
+allocatedAt: {
+  type: Date,
+  default: null,
+},
+
+appointmentDate: {
+  type: Date,
+  default: null,
+  index: true,
+},
+
+appointmentTime: {
+  type: String,
+  trim: true,
+  default: "",
+},
+
+pendingReason: {
+  type: String,
+  trim: true,
+  default: "",
+},
+
+>>>>>>> Stashed changes
     /*
     |--------------------------------------------------------------------------
     | Closure

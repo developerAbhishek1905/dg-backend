@@ -3,12 +3,44 @@ import mongoose from "mongoose";
 import Complaint from "../models/complaint.model.js";
 import Customer from "../../Customer/models/customer.model.js";
 import { getIsWarranty } from "../../../helper/warranty.util.js";
+<<<<<<< Updated upstream
+=======
+import { allocateDealerForComplaint } from "../../allocation/services/allocateDealer.service.js";
+import { sendComplaintAllocationNotifications } from "../../../services/complaintWhatsapp.service.js";
+// import { sendComplaintAllocationNotifications } from "../../../services/complaintNotification.service.js";
+// import { sendComplaintWhatsAppNotifications } from "../../../services/complaintWhatsapp.service.js";
+
+>>>>>>> Stashed changes
 /*
 |--------------------------------------------------------------------------
 | Complaint Number Generator
 |--------------------------------------------------------------------------
 */
 
+<<<<<<< Updated upstream
+=======
+export const generateCustomerCode = async () => {
+  const lastCustomer = await Customer.findOne({
+    customerCode: { $regex: /^CUST\d+$/ },
+  })
+    .sort({ createdAt: -1 })
+    .select("customerCode")
+    .lean();
+
+  let nextNumber = 1;
+
+  if (lastCustomer?.customerCode) {
+    const lastNumber = Number(
+      lastCustomer.customerCode.replace("CUST", ""),
+    );
+
+    nextNumber = lastNumber + 1;
+  }
+
+  return `CUST${String(nextNumber).padStart(6, "0")}`;
+};
+
+>>>>>>> Stashed changes
 const generateComplaintNumber = async () => {
   const now = new Date();
 
@@ -76,7 +108,13 @@ export const createComplaint = async (req, res) => {
 
       faultReported,
 
+<<<<<<< Updated upstream
       category,
+=======
+      categoryId,
+      category,
+
+>>>>>>> Stashed changes
       priority,
 
       complaintType,
@@ -169,6 +207,7 @@ export const createComplaint = async (req, res) => {
     |--------------------------------------------------------------------------
     */
 
+<<<<<<< Updated upstream
     if (!customer) {
       const customerCode = await generateCustomerCode();
 
@@ -220,6 +259,63 @@ export const createComplaint = async (req, res) => {
         status: "ACTIVE",
       });
     }
+=======
+if (!customer) {
+  const customerCode = await generateCustomerCode();
+
+  customer = await Customer.create({
+    customerCode,
+
+    name: customerName.trim(),
+
+    phone: phone.trim(),
+
+    alternatePhone: alternatePhone?.trim() || "",
+
+    email: email?.trim()?.toLowerCase() || "",
+
+    address: {
+      addressLine: address?.addressLine?.trim() || "",
+
+      stateId:
+        address?.stateId !== undefined &&
+        address?.stateId !== null
+          ? Number(address.stateId)
+          : null,
+
+      state: address?.state?.trim() || "",
+
+      districtId:
+        address?.districtId !== undefined &&
+        address?.districtId !== null
+          ? Number(address.districtId)
+          : null,
+
+      district: address?.district?.trim() || "",
+
+      cityId:
+        address?.cityId !== undefined &&
+        address?.cityId !== null
+          ? Number(address.cityId)
+          : null,
+
+      city: address?.city?.trim() || "",
+
+      pincodeId:
+        address?.pincodeId !== undefined &&
+        address?.pincodeId !== null
+          ? Number(address.pincodeId)
+          : null,
+
+      pinCode: address?.pinCode?.trim() || "",
+    },
+
+    contactInfo: contactInfo?.trim() || "",
+
+    status: "ACTIVE",
+  });
+}
+>>>>>>> Stashed changes
 
     /*
     |--------------------------------------------------------------------------
@@ -263,6 +359,29 @@ export const createComplaint = async (req, res) => {
     }
 
     /*
+<<<<<<< Updated upstream
+=======
+|--------------------------------------------------------------------------
+| Auto Allocate Dealer
+|--------------------------------------------------------------------------
+*/
+
+    let dealerAllocation = null;
+
+    if (address?.cityId && productId && (categoryId || category)) {
+      dealerAllocation = await allocateDealerForComplaint({
+        cityId: Number(address.cityId),
+
+        productId: Number(productId),
+
+        categoryId,
+
+        category,
+      });
+    }
+
+    /*
+>>>>>>> Stashed changes
     |--------------------------------------------------------------------------
     | Create Complaint
     |--------------------------------------------------------------------------
@@ -376,6 +495,13 @@ export const createComplaint = async (req, res) => {
 
       faultReported: faultReported.trim(),
 
+<<<<<<< Updated upstream
+=======
+      categoryId:
+        categoryId && mongoose.Types.ObjectId.isValid(categoryId)
+          ? categoryId
+          : null,
+>>>>>>> Stashed changes
       category: category?.trim() || "",
 
       priority: priority || "MEDIUM",
@@ -392,9 +518,69 @@ export const createComplaint = async (req, res) => {
 
       description: description?.trim() || "",
 
+<<<<<<< Updated upstream
       status: "REGISTERED",
     });
 
+=======
+      allocatedDealerId: dealerAllocation?.dealerId ?? null,
+
+      allocationId: dealerAllocation?.allocationId ?? null,
+
+      allocationRuleId: dealerAllocation?.capacityRuleId ?? null,
+
+      allocatedAt: dealerAllocation ? new Date() : null,
+
+      status: dealerAllocation ? "ALLOCATED" : "REGISTERED",
+
+      // status: "REGISTERED",
+    });
+
+    /*
+|--------------------------------------------------------------------------
+| SEND WHATSAPP NOTIFICATIONS
+|--------------------------------------------------------------------------
+*/
+
+// if (dealerAllocation?.dealerId) {
+//   try {
+//     await sendComplaintAllocationNotifications({
+//       complaint,
+//       dealerId:
+//         dealerAllocation.dealerId,
+//     });
+//   } catch (error) {
+//     /*
+//      * Do NOT fail complaint creation
+//      * because WhatsApp failed.
+//      */
+//     console.error(
+//       "WhatsApp notification failed:",
+//       error,
+//     );
+//   }
+// }
+
+/*
+|--------------------------------------------------------------------------
+| WHATSAPP NOTIFICATIONS
+|--------------------------------------------------------------------------
+*/
+
+if (dealerAllocation?.dealerId) {
+  sendComplaintAllocationNotifications({
+    complaint,
+    dealerId:
+      dealerAllocation.dealerId,
+  }).catch((error) => {
+    console.error(
+      "WhatsApp notification error:",
+      error,
+    );
+  });
+}
+
+>>>>>>> Stashed changes
     const populatedComplaint = await Complaint.findById(complaint._id)
       .populate(
         "customerId",
@@ -402,7 +588,19 @@ export const createComplaint = async (req, res) => {
       )
       .populate("brandId", "brandName")
       .populate("productTypeId", "product_id product_code product_type")
+<<<<<<< Updated upstream
       .populate("parentComplaintId", "complaintNumber complaintType status");
+=======
+      .populate(
+        "categoryId",
+        "product_id category description categoryDescription status",
+      )
+      .populate("parentComplaintId", "complaintNumber complaintType status")
+      .populate(
+        "allocatedDealerId",
+        "technicianCode technicianFirmName technicianName mobileNumber rating status",
+      );
+>>>>>>> Stashed changes
 
     return res.status(201).json({
       success: true,
@@ -657,6 +855,7 @@ export const getComplaints = async (req, res) => {
 |--------------------------------------------------------------------------
 */
 
+<<<<<<< Updated upstream
 export const getComplaintById = async (
   req,
   res,
@@ -705,22 +904,61 @@ export const getComplaintById = async (
         )
 
         .lean();
+=======
+export const getComplaintById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid complaint ID",
+      });
+    }
+
+    const complaint = await Complaint.findById(id)
+
+      .populate("customerId")
+
+      .populate(
+        "parentComplaintId",
+        "complaintNumber complaintType status createdAt warrantyStartDate warrantyEndDate",
+      )
+
+      .populate("technicianId")
+
+      .populate("dealerId")
+
+      .populate("brandId", "brandName")
+
+      .populate("productTypeId", "product_id product_code product_type")
+
+      .lean();
+>>>>>>> Stashed changes
 
     if (!complaint) {
       return res.status(404).json({
         success: false,
+<<<<<<< Updated upstream
         message:
           "Complaint not found",
+=======
+        message: "Complaint not found",
+>>>>>>> Stashed changes
       });
     }
 
     const data = {
       ...complaint,
 
+<<<<<<< Updated upstream
       isWarranty:
         getIsWarranty(
           complaint,
         ),
+=======
+      isWarranty: getIsWarranty(complaint),
+>>>>>>> Stashed changes
     };
 
     return res.status(200).json({
@@ -728,19 +966,29 @@ export const getComplaintById = async (
       data,
     });
   } catch (error) {
+<<<<<<< Updated upstream
     console.error(
       "Get complaint by ID error:",
       error,
     );
+=======
+    console.error("Get complaint by ID error:", error);
+>>>>>>> Stashed changes
 
     return res.status(500).json({
       success: false,
 
+<<<<<<< Updated upstream
       message:
         "Failed to fetch complaint",
 
       error:
         error.message,
+=======
+      message: "Failed to fetch complaint",
+
+      error: error.message,
+>>>>>>> Stashed changes
     });
   }
 };
@@ -803,6 +1051,10 @@ export const updateComplaint = async (req, res) => {
 
       "faultReported",
 
+<<<<<<< Updated upstream
+=======
+      "categoryId",
+>>>>>>> Stashed changes
       "category",
       "priority",
 
@@ -884,6 +1136,16 @@ export const updateComplaint = async (req, res) => {
           : null;
     }
 
+<<<<<<< Updated upstream
+=======
+    if (req.body.categoryId !== undefined) {
+      complaint.categoryId =
+        req.body.categoryId &&
+        mongoose.Types.ObjectId.isValid(req.body.categoryId)
+          ? req.body.categoryId
+          : null;
+    }
+>>>>>>> Stashed changes
     if (req.body.units !== undefined) {
       complaint.units = Number(req.body.units);
     }
@@ -954,6 +1216,13 @@ export const updateComplaint = async (req, res) => {
       )
       .populate("brandId", "brandName")
       .populate("productTypeId", "product_id product_code product_type")
+<<<<<<< Updated upstream
+=======
+      .populate(
+        "categoryId",
+        "product_id category description categoryDescription status",
+      )
+>>>>>>> Stashed changes
       .populate("parentComplaintId", "complaintNumber complaintType status");
 
     return res.status(200).json({

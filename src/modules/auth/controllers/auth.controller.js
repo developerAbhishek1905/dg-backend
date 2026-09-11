@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import User from "../../users/models/user.model.js";
+<<<<<<< Updated upstream
 
 const generateToken = (user) => {
   return jwt.sign(
@@ -7,6 +8,49 @@ const generateToken = (user) => {
       id: user._id,
       roleId: user.roleId?._id || user.roleId,
     },
+=======
+import Dealer from "../../dealers/models/dealer.model.js"
+
+// const generateToken = (user) => {
+//   return jwt.sign(
+//     {
+//       id: user._id,
+//       roleId: user.roleId?._id || user.roleId,
+//     },
+//     process.env.JWT_SECRET,
+//     {
+//       expiresIn: process.env.JWT_EXPIRES_IN || "7d",
+//     },
+//   );
+// };
+
+export const generateToken = (
+  user,
+  dealerId = null,
+) => {
+  const payload = {
+    id: user._id,
+
+    roleId: user.roleId._id,
+
+    role: {
+      id: user.roleId._id,
+      name: user.roleId.name,
+      code: user.roleId.code,
+    },
+  };
+
+  if (user.roleId.code === "DEALER" && dealerId) {
+    payload.dealerId = dealerId;
+  }
+
+
+
+  console.log("fhdkfbdkbk",payload)
+
+  return jwt.sign(
+    payload,
+>>>>>>> Stashed changes
     process.env.JWT_SECRET,
     {
       expiresIn: process.env.JWT_EXPIRES_IN || "7d",
@@ -74,7 +118,35 @@ export const login = async (req, res) => {
       });
     }
 
+<<<<<<< Updated upstream
     const token = generateToken(user);
+=======
+    const isDealer = user.roleId.code === "DEALER";
+
+    let dealerId = null;
+
+    // Get dealerId from Dealer collection
+    if (isDealer) {
+      const dealer = await Dealer.findOne({
+        email: normalizedEmail,
+      }).select("_id");
+
+      if (!dealer) {
+        return res.status(403).json({
+          success: false,
+          message: "Dealer profile not found for this user",
+        });
+      }
+
+      
+
+      dealerId = dealer._id;
+    }
+
+    console.log(dealerId)
+
+    const token = generateToken(user, dealerId);
+>>>>>>> Stashed changes
 
     return res.status(200).json({
       success: true,
@@ -95,10 +167,19 @@ export const login = async (req, res) => {
             id: user.roleId._id,
             name: user.roleId.name,
             code: user.roleId.code,
+<<<<<<< Updated upstream
             permissions: user.roleId.permissions,
           },
 
           dealerId: user.dealerId || null,
+=======
+            permissions: user.roleId.permissions || [],
+          },
+
+          ...(isDealer && {
+            dealerId,
+          }),
+>>>>>>> Stashed changes
 
           status: user.status,
         },

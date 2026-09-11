@@ -5,7 +5,11 @@ import path from "path";
 import roleRoutes from "./modules/accessControl/routes/role.routes.js";
 import permissionRoutes from "./modules/accessControl/routes/permission.routes.js";
 import userRoutes from "./modules/users/routes/user.routes.js";
+<<<<<<< Updated upstream
 import authRoutes from "./modules/auth/routes/auth.routes.js";
+=======
+import authRoutes from "./modules/auth/router/auth.routes.js";
+>>>>>>> Stashed changes
 import categoryRoutes from "./modules/category/routes/category.routes.js";
 import dealerRoutes from "./modules/dealers/routes/dealer.routes.js";
 import stateRoutes from "./modules/address/routes/state.routes.js";
@@ -18,7 +22,12 @@ import productRoutes from "./modules/product/routes/product.routes.js";
 import productTypeRoutes from "./modules/productType/routes/productType.routes.js";
 import customerRoutes from "./modules/Customer/routes/customer.routes.js"
 import complaintRoutes from "./modules/Complaint/routes/complaint.routes.js"
+<<<<<<< Updated upstream
 
+=======
+import { testWhatsApp } from "./services/smartpingWhatsapp.service.js";
+import appointmentRoutes from "./modules/appointment/router/appointment.route.js";
+>>>>>>> Stashed changes
 const app = express();
 
 app.use(
@@ -74,4 +83,17 @@ app.use(
   complaintRoutes,
 );
 
+<<<<<<< Updated upstream
+=======
+app.post(
+  "/api/v1/test-whatsapp",
+  testWhatsApp,
+);
+
+app.use(
+  "/api/v1/appointments",
+  appointmentRoutes,
+);
+
+>>>>>>> Stashed changes
 export default app;
