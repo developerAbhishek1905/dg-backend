@@ -27,10 +27,6 @@
 //   ],
 // });
 
-<<<<<<< Updated upstream
-
-=======
->>>>>>> Stashed changes
 import mongoose from "mongoose";
 
 const allocationServiceSchema = new mongoose.Schema(
@@ -270,11 +266,6 @@ const allocationSchema = new mongoose.Schema(
       required: true,
     },
 
-<<<<<<< Updated upstream
-    performanceSnapshot: {
-      type: performanceSnapshotSchema,
-      default: {},
-=======
     // performanceSnapshot: {
     //   type: performanceSnapshotSchema,
     //   default: {},
@@ -310,7 +301,6 @@ const allocationSchema = new mongoose.Schema(
         type: Number,
         default: 0,
       },
->>>>>>> Stashed changes
     },
 
     rules: {
@@ -320,16 +310,7 @@ const allocationSchema = new mongoose.Schema(
 
     status: {
       type: String,
-<<<<<<< Updated upstream
-      enum: [
-        "DRAFT",
-        "ACTIVE",
-        "COMPLETED",
-        "INACTIVE",
-      ],
-=======
       enum: ["DRAFT", "ACTIVE", "COMPLETED", "INACTIVE"],
->>>>>>> Stashed changes
       default: "DRAFT",
       index: true,
     },
@@ -356,11 +337,4 @@ allocationSchema.index(
   },
 );
 
-<<<<<<< Updated upstream
-export default mongoose.model(
-  "Allocation",
-  allocationSchema,
-);
-=======
 export default mongoose.model("Allocation", allocationSchema);
->>>>>>> Stashed changes

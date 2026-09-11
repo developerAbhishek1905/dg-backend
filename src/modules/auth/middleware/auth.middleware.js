@@ -1,7 +1,5 @@
 import jwt from "jsonwebtoken";
 import User from "../../users/models/user.model.js";
-<<<<<<< Updated upstream
-=======
 import Dealer from '../../dealers/models/dealer.model.js'
 
 // export const protect = async (req, res, next) => {
@@ -103,7 +101,6 @@ import Dealer from '../../dealers/models/dealer.model.js'
 //     });
 //   }
 // };
->>>>>>> Stashed changes
 
 export const protect = async (req, res, next) => {
   try {
@@ -111,14 +108,7 @@ export const protect = async (req, res, next) => {
 
     const authorization = req.headers.authorization;
 
-<<<<<<< Updated upstream
-    if (
-      authorization &&
-      authorization.startsWith("Bearer ")
-    ) {
-=======
     if (authorization && authorization.startsWith("Bearer ")) {
->>>>>>> Stashed changes
       token = authorization.split(" ")[1];
     }
 
@@ -129,14 +119,7 @@ export const protect = async (req, res, next) => {
       });
     }
 
-<<<<<<< Updated upstream
-    const decoded = jwt.verify(
-      token,
-      process.env.JWT_SECRET,
-    );
-=======
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
->>>>>>> Stashed changes
 
     const user = await User.findById(decoded.id).populate(
       "roleId",
@@ -170,8 +153,6 @@ export const protect = async (req, res, next) => {
         message: "Assigned role is inactive",
       });
     }
-<<<<<<< Updated upstream
-=======
 console.log("aaaaaaaaa",user.dealerId)
     /*
     |--------------------------------------------------------------------------
@@ -203,7 +184,6 @@ console.log("aaaaaaaaa",user.dealerId)
     | Request User
     |--------------------------------------------------------------------------
     */
->>>>>>> Stashed changes
 
     req.user = {
       id: user._id,
@@ -219,13 +199,10 @@ console.log("aaaaaaaaa",user.dealerId)
       },
 
       permissions: user.roleId.permissions || [],
-<<<<<<< Updated upstream
-=======
 
       ...(dealerId && {
         dealerId,
       }),
->>>>>>> Stashed changes
     };
 
     next();
@@ -251,8 +228,4 @@ console.log("aaaaaaaaa",user.dealerId)
       message: "Authentication failed",
     });
   }
-<<<<<<< Updated upstream
 };
-=======
-};
->>>>>>> Stashed changes

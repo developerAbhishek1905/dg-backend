@@ -1,11 +1,7 @@
 import Dealer from "../models/dealer.model.js";
 import User from "../../users/models/user.model.js";
 import Role from "../../accessControl/models/role.model.js";
-<<<<<<< Updated upstream
-
-=======
 import Allocation from '../../allocation/model/allocation.model.js'
->>>>>>> Stashed changes
 /* =========================================================
    HELPERS
 ========================================================= */
@@ -60,8 +56,6 @@ const getUploadedFiles = (files, fieldName) => {
   );
 };
 
-<<<<<<< Updated upstream
-=======
 const buildAllocationRules = ({
   dealer,
   productServices,
@@ -217,7 +211,6 @@ const buildAllocationRules = ({
   ];
 };
 
->>>>>>> Stashed changes
 /* =========================================================
    CREATE DEALER
 ========================================================= */
@@ -445,8 +438,6 @@ export const createDealer = async (req, res) => {
       status: technicianStatus === "INACTIVE" ? "INACTIVE" : "ACTIVE",
     });
 
-<<<<<<< Updated upstream
-=======
     /* ===============================
    CREATE INITIAL ALLOCATION
 =============================== */
@@ -507,15 +498,11 @@ const allocation = await Allocation.create({
       : "INACTIVE",
 });
 
->>>>>>> Stashed changes
     return res.status(201).json({
       success: true,
       message: "Dealer created successfully",
       data: dealer,
-<<<<<<< Updated upstream
-=======
       allocation,
->>>>>>> Stashed changes
       user: {
         id: user._id,
         name: user.name,

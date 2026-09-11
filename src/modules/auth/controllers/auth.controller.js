@@ -1,14 +1,5 @@
 import jwt from "jsonwebtoken";
 import User from "../../users/models/user.model.js";
-<<<<<<< Updated upstream
-
-const generateToken = (user) => {
-  return jwt.sign(
-    {
-      id: user._id,
-      roleId: user.roleId?._id || user.roleId,
-    },
-=======
 import Dealer from "../../dealers/models/dealer.model.js"
 
 // const generateToken = (user) => {
@@ -50,7 +41,6 @@ export const generateToken = (
 
   return jwt.sign(
     payload,
->>>>>>> Stashed changes
     process.env.JWT_SECRET,
     {
       expiresIn: process.env.JWT_EXPIRES_IN || "7d",
@@ -118,9 +108,6 @@ export const login = async (req, res) => {
       });
     }
 
-<<<<<<< Updated upstream
-    const token = generateToken(user);
-=======
     const isDealer = user.roleId.code === "DEALER";
 
     let dealerId = null;
@@ -146,7 +133,6 @@ export const login = async (req, res) => {
     console.log(dealerId)
 
     const token = generateToken(user, dealerId);
->>>>>>> Stashed changes
 
     return res.status(200).json({
       success: true,
@@ -167,19 +153,12 @@ export const login = async (req, res) => {
             id: user.roleId._id,
             name: user.roleId.name,
             code: user.roleId.code,
-<<<<<<< Updated upstream
-            permissions: user.roleId.permissions,
-          },
-
-          dealerId: user.dealerId || null,
-=======
             permissions: user.roleId.permissions || [],
           },
 
           ...(isDealer && {
             dealerId,
           }),
->>>>>>> Stashed changes
 
           status: user.status,
         },

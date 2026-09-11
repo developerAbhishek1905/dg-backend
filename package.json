@@ -10,10 +10,7 @@
   "keywords": [],
   "type": "module",
   "dependencies": {
-<<<<<<< Updated upstream
-=======
     "axios": "^1.20.0",
->>>>>>> Stashed changes
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
