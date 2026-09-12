@@ -25,8 +25,10 @@ const categorySchema = new mongoose.Schema(
 
     category: {
       type: String,
+      required: true,
       trim: true,
-      default: "",
+      unique: true,
+      index: true,
     },
 
     categoryDescription: {
