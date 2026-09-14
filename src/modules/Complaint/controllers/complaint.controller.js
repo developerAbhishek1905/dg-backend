@@ -5,9 +5,10 @@ import Customer from "../../Customer/models/customer.model.js";
 import { getIsWarranty } from "../../../helper/warranty.util.js";
 import { allocateDealerForComplaint } from "../../allocation/services/allocateDealer.service.js";
 import { sendComplaintAllocationNotifications } from "../../../services/complaintWhatsapp.service.js";
+import { createComplaintActivity } from "../services/complaintActivity.service.js";
 // import { sendComplaintAllocationNotifications } from "../../../services/complaintNotification.service.js";
 // import { sendComplaintWhatsAppNotifications } from "../../../services/complaintWhatsapp.service.js";
-
+ 
 /*
 |--------------------------------------------------------------------------
 | Complaint Number Generator
@@ -322,9 +323,7 @@ if (!customer) {
 
     const complaint = await Complaint.create({
       complaintNumber,
-
       complaintDateTime: new Date(),
-
       customerId: customer._id,
 
       /*
@@ -334,45 +333,32 @@ if (!customer) {
         */
 
       customerName: customerName.trim(),
-
       phone: phone.trim(),
-
       alternatePhone: alternatePhone?.trim() || "",
-
       email: email?.trim()?.toLowerCase() || "",
-
       address: {
         addressLine: address?.addressLine?.trim() || "",
-
         stateId:
           address?.stateId !== undefined && address?.stateId !== null
             ? Number(address.stateId)
             : null,
-
         state: address?.state?.trim() || "",
-
         districtId:
           address?.districtId !== undefined && address?.districtId !== null
             ? Number(address.districtId)
             : null,
-
         district: address?.district?.trim() || "",
-
         cityId:
           address?.cityId !== undefined && address?.cityId !== null
             ? Number(address.cityId)
             : null,
-
         city: address?.city?.trim() || "",
-
         pincodeId:
           address?.pincodeId !== undefined && address?.pincodeId !== null
             ? Number(address.pincodeId)
             : null,
-
         pinCode: address?.pinCode?.trim() || "",
       },
-
       contactInfo: contactInfo?.trim() || "",
 
       /*
@@ -383,7 +369,6 @@ if (!customer) {
 
       brandId:
         brandId && mongoose.Types.ObjectId.isValid(brandId) ? brandId : null,
-
       brand: brand?.trim() || "",
 
       /*
@@ -396,7 +381,6 @@ if (!customer) {
         productId !== undefined && productId !== null && productId !== ""
           ? Number(productId)
           : null,
-
       productName: productName.trim(),
 
       /*
@@ -409,15 +393,10 @@ if (!customer) {
         productTypeId && mongoose.Types.ObjectId.isValid(productTypeId)
           ? productTypeId
           : null,
-
       productType: productType?.trim() || "",
-
       productCode: productCode?.trim() || "",
-
       productDescription: productDescription?.trim() || "",
-
       units: Number(units) || 1,
-
       quoteAmount: Number(quoteAmount) || 0,
 
       /*
@@ -427,39 +406,89 @@ if (!customer) {
         */
 
       faultReported: faultReported.trim(),
-
       categoryId:
         categoryId && mongoose.Types.ObjectId.isValid(categoryId)
           ? categoryId
           : null,
       category: category?.trim() || "",
-
       priority: priority || "MEDIUM",
-
       complaintType: complaintType || "REGULAR",
-
       parentComplaintId: parentComplaint?._id || null,
-
       repeatComplaintNumber: parentComplaint?.complaintNumber || "",
-
       adName: adName?.trim() || "",
-
       subject: subject?.trim() || "",
-
       description: description?.trim() || "",
-
       allocatedDealerId: dealerAllocation?.dealerId ?? null,
-
       allocationId: dealerAllocation?.allocationId ?? null,
-
       allocationRuleId: dealerAllocation?.capacityRuleId ?? null,
-
       allocatedAt: dealerAllocation ? new Date() : null,
-
       status: dealerAllocation ? "ALLOCATED" : "REGISTERED",
 
       // status: "REGISTERED",
     });
+
+    await createComplaintActivity({
+  complaint,
+
+  activityType: "COMPLAINT_CREATED",
+
+  previousStatus: null,
+
+  newStatus: complaint.status,
+
+  title: "Complaint Created",
+
+  description: `Complaint ${complaint.complaintNumber} created successfully`,
+
+  user: req.user,
+
+  metadata: {
+    customerId: complaint.customerId,
+    customerName: complaint.customerName,
+    phone: complaint.phone,
+
+    productId: complaint.productId,
+    productName: complaint.productName,
+
+    categoryId: complaint.categoryId,
+    category: complaint.category,
+
+    priority: complaint.priority,
+    complaintType: complaint.complaintType,
+  },
+});
+
+if (dealerAllocation?.dealerId) {
+  await createComplaintActivity({
+    complaint,
+
+    activityType: "DEALER_ALLOCATED",
+
+    previousStatus: "REGISTERED",
+    newStatus: "ALLOCATED",
+
+    title: "Dealer Allocated",
+
+    description:
+      "Complaint automatically allocated to dealer",
+
+    dealerId: dealerAllocation.dealerId,
+
+    user: req.user,
+
+    metadata: {
+      allocationId:
+        dealerAllocation.allocationId,
+
+      allocationRuleId:
+        dealerAllocation.capacityRuleId,
+
+      allocationType: "AUTO",
+
+      allocatedAt: complaint.allocatedAt,
+    },
+  });
+}
 
     /*
 |--------------------------------------------------------------------------
@@ -710,6 +739,10 @@ export const getComplaints = async (req, res) => {
           "customerId",
           "customerCode name phone alternatePhone email address",
         )
+        .populate(
+          "categoryId",
+          "customerCode name phone alternatePhone email address",
+        )
 
         .populate("parentComplaintId", "complaintNumber complaintType status")
 
@@ -787,21 +820,31 @@ export const getComplaintById = async (req, res) => {
     }
 
     const complaint = await Complaint.findById(id)
-
-      .populate("customerId")
+      .populate(
+        "customerId",
+        "customerCode name phone alternatePhone email address contactInfo status",
+      )
 
       .populate(
         "parentComplaintId",
         "complaintNumber complaintType status createdAt warrantyStartDate warrantyEndDate",
       )
 
-      .populate("technicianId")
+      // .populate("technicianId")
 
       .populate("dealerId")
 
       .populate("brandId", "brandName")
-
       .populate("productTypeId", "product_id product_code product_type")
+      .populate(
+        "categoryId",
+        "product_id category description categoryDescription status",
+      )
+
+      .populate(
+        "allocatedDealerId",
+        "technicianCode technicianFirmName technicianName mobileNumber rating status",
+      )
 
       .lean();
 

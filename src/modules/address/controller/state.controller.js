@@ -3,6 +3,8 @@ import XLSX from "xlsx";
 import State from "../model/state.model.js";
 
 import { getNextStateId, syncStateCounter } from "../utils/stateId.util.js";
+import { escapeRegex } from "../../../helper/escapeRegex.js";
+
 
 // CREATE STATE
 export const createState = async (req, res) => {
@@ -337,155 +339,6 @@ export const deleteState = async (req, res) => {
 };
 
 // IMPORT STATES FROM EXCEL
-// export const importStates = async (req, res) => {
-//   try {
-//     if (!req.file) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Excel file is required",
-//       });
-//     }
-
-//     const workbook = XLSX.read(req.file.buffer, {
-//       type: "buffer",
-//     });
-
-//     const firstSheetName = workbook.SheetNames[0];
-
-//     if (!firstSheetName) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Excel file does not contain any sheet",
-//       });
-//     }
-
-//     const worksheet = workbook.Sheets[firstSheetName];
-
-//     const rows = XLSX.utils.sheet_to_json(worksheet, {
-//       defval: "",
-//     });
-
-//     if (!rows.length) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Excel file does not contain any data",
-//       });
-//     }
-
-//     const imported = [];
-//     const failed = [];
-
-//     for (let index = 0; index < rows.length; index++) {
-//       const row = rows[index];
-
-//       try {
-//         let stateId = row.state_id ?? row["State ID"] ?? row["state id"] ?? "";
-
-//         let stateName =
-//           row.state_name ?? row["State Name"] ?? row["state name"] ?? "";
-//         stateName = String(stateName).trim();
-
-//         if (!stateName) {
-//           failed.push({
-//             row: index + 2,
-//             data: row,
-//             message: "State name is required",
-//           });
-
-//           continue;
-//         }
-//         const duplicateName = await State.findOne({
-//           state_name: {
-//             $regex: `^${escapeRegex(stateName)}$`,
-//             $options: "i",
-//           },
-//         });
-
-//         if (duplicateName) {
-//           failed.push({
-//             row: index + 2,
-//             data: row,
-//             message: `State "${stateName}" already exists`,
-//           });
-
-//           continue;
-//         }
-
-//         if (stateId !== undefined && stateId !== null && stateId !== "") {
-//           stateId = Number(stateId);
-
-//           if (!Number.isInteger(stateId) || stateId <= 0) {
-//             failed.push({
-//               row: index + 2,
-//               data: row,
-//               message: "State ID must be a positive integer",
-//             });
-
-//             continue;
-//           }
-
-//           const duplicateId = await State.findOne({
-//             state_id: stateId,
-//           });
-
-//           if (duplicateId) {
-//             failed.push({
-//               row: index + 2,
-//               data: row,
-//               message: `State ID ${stateId} already exists`,
-//             });
-
-//             continue;
-//           }
-
-//           await syncStateCounter(stateId);
-//         } else {
-//           stateId = await getNextAvailableStateId();
-//         }
-
-//         const state = await State.create({
-//           state_id: stateId,
-//           state_name: stateName,
-//         });
-
-//         imported.push({
-//           row: index + 2,
-//           state_id: state.state_id,
-//           state_name: state.state_name,
-//         });
-//       } catch (rowError) {
-//         failed.push({
-//           row: index + 2,
-//           data: row,
-//           message: rowError.message,
-//         });
-//       }
-//     }
-
-//     return res.status(200).json({
-//       success: true,
-//       message: "State import completed",
-
-//       summary: {
-//         totalRows: rows.length,
-//         imported: imported.length,
-//         failed: failed.length,
-//       },
-
-//       imported,
-
-//       failed,
-//     });
-//   } catch (error) {
-//     console.error("Import states error:", error);
-
-//     return res.status(500).json({
-//       success: false,
-//       message: "Failed to import states",
-//       error: error.message,
-//     });
-//   }
-// };
 
 export const importStates = async (req, res) => {
   try {
@@ -849,12 +702,4 @@ const getNextAvailableStateId = async () => {
   }
 
   return stateId;
-};
-
-// =====================================================
-// HELPER - ESCAPE REGEX
-// =====================================================
-
-const escapeRegex = (value) => {
-  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 };

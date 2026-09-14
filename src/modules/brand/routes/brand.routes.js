@@ -13,22 +13,23 @@ import {
   getBrandDropdown
 } from "../controllers/brand.controller.js";
 import { uploadExcel } from "../../address/middleware/upload.middleware.js";
+import { protect } from "../../auth/middleware/auth.middleware.js";
 
 const router = express.Router();
 
 
 // Excel APIs
-router.post("/import", uploadExcel.single("file"), importBrands);
-router.get("/export", exportBrands);
-router.get("/sample", downloadBrandSample);
-router.get("/dropdown", getBrandDropdown);
+router.post("/import",protect, uploadExcel.single("file"), importBrands);
+router.get("/export",protect, exportBrands);
+router.get("/sample",protect, downloadBrandSample);
+router.get("/dropdown",protect, getBrandDropdown);
 
 // CRUD APIs
-router.post("/", createBrand);
-router.get("/", getAllBrands);
-router.get("/:id", getBrandById);
-router.put("/:id", updateBrand);
-router.delete("/:id", deleteBrand);
-router.patch("/:id/status", toggleBrandStatus);
+router.post("/",protect, createBrand);
+router.get("/",protect, getAllBrands);
+router.get("/:id",protect, getBrandById);
+router.put("/:id",protect, updateBrand);
+router.delete("/:id",protect, deleteBrand);
+router.patch("/:id/status",protect, toggleBrandStatus);
 
 export default router;

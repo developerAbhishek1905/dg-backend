@@ -13,17 +13,18 @@ import {
 } from "../controllers/product.controller.js";
 
 import { uploadExcel } from "../../address/middleware/upload.middleware.js";
+import { protect } from "../../auth/middleware/auth.middleware.js";
 
 const router = express.Router();
 
-router.post("/", createProduct);
-router.get("/", getAllProducts);
-router.get("/dropdown", getProductDropdown);
-router.post("/import", uploadExcel.single("file"), importProducts);
-router.get("/export", exportProducts);
-router.get("/sample", downloadProductSample);
-router.get("/:id", getProductById);
-router.put("/:id", updateProduct);
-router.delete("/:id", deleteProduct);
+router.post("/",protect, createProduct);
+router.get("/",protect, getAllProducts);
+router.get("/dropdown",protect, getProductDropdown);
+router.post("/import",protect, uploadExcel.single("file"), importProducts);
+router.get("/export",protect, exportProducts);
+router.get("/sample",protect, downloadProductSample);
+router.get("/:id",protect, getProductById);
+router.put("/:id",protect, updateProduct);
+router.delete("/:id",protect, deleteProduct);
 
 export default router;

@@ -12,33 +12,34 @@ import {
 } from "../controller/district.controller.js";
 
 import { uploadExcel } from "../middleware/upload.middleware.js";
+import { protect } from "../../auth/middleware/auth.middleware.js";
 
 const router = express.Router();
 
 // Create
-router.post("/", createDistrict);
+router.post("/",protect, createDistrict);
 
 // Get all
-router.get("/", getAllDistricts);
+router.get("/",protect, getAllDistricts);
 
 // Excel import
-router.post("/import", uploadExcel.single("file"), importDistricts);
+router.post("/import",protect, uploadExcel.single("file"), importDistricts);
 
 // Excel export
-router.get("/export", exportDistricts);
+router.get("/export",protect, exportDistricts);
 
 router.get(
-  "/dropdown",
+  "/dropdown",protect,
   getDistrictsDropdown
 );
 
 // Get by district_id
-router.get("/:id", getDistrictById);
+router.get("/:id",protect, getDistrictById);
 
 // Update
-router.put("/:id", updateDistrict);
+router.put("/:id",protect, updateDistrict);
 
 // Delete
-router.delete("/:id", deleteDistrict);
+router.delete("/:id",protect, deleteDistrict);
 
 export default router;

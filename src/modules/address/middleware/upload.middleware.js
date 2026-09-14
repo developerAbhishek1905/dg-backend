@@ -3,20 +3,12 @@ import multer from "multer";
 const storage = multer.memoryStorage();
 
 const fileFilter = (req, file, cb) => {
-  const allowedExtensions = [
-    ".xlsx",
-    ".xls",
-    ".csv",
-  ];
+  const allowedExtensions = [".xlsx", ".xls", ".csv"];
 
-  const extension =
-    "." + file.originalname.split(".").pop().toLowerCase();
+  const extension = "." + file.originalname.split(".").pop().toLowerCase();
 
   if (!allowedExtensions.includes(extension)) {
-    return cb(
-      new Error("Only .xlsx, .xls and .csv files are allowed"),
-      false
-    );
+    return cb(new Error("Only .xlsx, .xls and .csv files are allowed"), false);
   }
 
   cb(null, true);

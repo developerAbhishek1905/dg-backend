@@ -334,6 +334,17 @@ const complaintSchema = new mongoose.Schema(
         "REGISTERED",
         "ALLOCATED",
         "APPOINTMENT_SCHEDULED",
+        "PENDING_ON_CALL",
+        "CANCEL_ON_CALL",
+        "RESCHEDULED",
+        "VISITED",
+        "CLOSE_ON_BILLING",
+        "CANCEL_ON_VISIT",
+        "PENDING_ON_VISIT",
+        "CLOSE_ON_VERIFICATION",
+        "REOPEN",
+
+
         "PENDING",
         "WORK_IN_PROGRESS",
         "WORK_COMPLETED",
@@ -352,12 +363,12 @@ const complaintSchema = new mongoose.Schema(
     |--------------------------------------------------------------------------
     */
 
-    technicianId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Technician",
-      default: null,
-      index: true,
-    },
+    // technicianId: {
+    //   type: mongoose.Schema.Types.ObjectId,
+    //   ref: "Technician",
+    //   default: null,
+    //   index: true,
+    // },
 
     technicianName: {
       type: String,
@@ -488,10 +499,10 @@ complaintSchema.index({
   status: 1,
 });
 
-complaintSchema.index({
-  technicianId: 1,
-  status: 1,
-});
+// complaintSchema.index({
+//   technicianId: 1,
+//   status: 1,
+// });
 
 complaintSchema.index({
   dealerId: 1,

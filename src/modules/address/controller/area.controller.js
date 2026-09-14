@@ -5,6 +5,7 @@ import State from "../model/state.model.js";
 import District from "../model/district.model.js";
 import City from "../model/city.model.js";
 import Pincode from "../model/pincode.model.js";
+import { escapeRegex } from "../../../helper/escapeRegex.js";
 
 // CREATE AREA
 export const createArea = async (req, res) => {
@@ -42,11 +43,7 @@ export const createArea = async (req, res) => {
       });
     }
 
-    if (
-      state_id === undefined ||
-      state_id === null ||
-      state_id === ""
-    ) {
+    if (state_id === undefined || state_id === null || state_id === "") {
       return res.status(400).json({
         success: false,
         message: "State ID is required",
@@ -64,22 +61,14 @@ export const createArea = async (req, res) => {
       });
     }
 
-    if (
-      city_id === undefined ||
-      city_id === null ||
-      city_id === ""
-    ) {
+    if (city_id === undefined || city_id === null || city_id === "") {
       return res.status(400).json({
         success: false,
         message: "City ID is required",
       });
     }
 
-    if (
-      pincode_id === undefined ||
-      pincode_id === null ||
-      pincode_id === ""
-    ) {
+    if (pincode_id === undefined || pincode_id === null || pincode_id === "") {
       return res.status(400).json({
         success: false,
         message: "Pincode ID is required",
@@ -90,15 +79,11 @@ export const createArea = async (req, res) => {
     // FORMAT VALUES
     // =====================================================
 
-    areaCode = String(areaCode)
-      .trim()
-      .toUpperCase();
+    areaCode = String(areaCode).trim().toUpperCase();
 
     areaName = String(areaName).trim();
 
-    zone = zone
-      ? String(zone).trim()
-      : "";
+    zone = zone ? String(zone).trim() : "";
 
     state_id = Number(state_id);
     district_id = Number(district_id);
@@ -109,40 +94,28 @@ export const createArea = async (req, res) => {
     // ID VALIDATION
     // =====================================================
 
-    if (
-      !Number.isInteger(state_id) ||
-      state_id <= 0
-    ) {
+    if (!Number.isInteger(state_id) || state_id <= 0) {
       return res.status(400).json({
         success: false,
         message: "State ID must be a positive integer",
       });
     }
 
-    if (
-      !Number.isInteger(district_id) ||
-      district_id <= 0
-    ) {
+    if (!Number.isInteger(district_id) || district_id <= 0) {
       return res.status(400).json({
         success: false,
         message: "District ID must be a positive integer",
       });
     }
 
-    if (
-      !Number.isInteger(city_id) ||
-      city_id <= 0
-    ) {
+    if (!Number.isInteger(city_id) || city_id <= 0) {
       return res.status(400).json({
         success: false,
         message: "City ID must be a positive integer",
       });
     }
 
-    if (
-      !Number.isInteger(pincode_id) ||
-      pincode_id <= 0
-    ) {
+    if (!Number.isInteger(pincode_id) || pincode_id <= 0) {
       return res.status(400).json({
         success: false,
         message: "Pincode ID must be a positive integer",
@@ -183,10 +156,7 @@ export const createArea = async (req, res) => {
     // CHECK DISTRICT BELONGS TO STATE
     // =====================================================
 
-    if (
-      Number(district.state_id) !==
-      Number(state_id)
-    ) {
+    if (Number(district.state_id) !== Number(state_id)) {
       return res.status(400).json({
         success: false,
         message: `District ${district_id} does not belong to State ${state_id}`,
@@ -212,10 +182,7 @@ export const createArea = async (req, res) => {
     // CHECK CITY BELONGS TO DISTRICT
     // =====================================================
 
-    if (
-      Number(city.district_id) !==
-      Number(district_id)
-    ) {
+    if (Number(city.district_id) !== Number(district_id)) {
       return res.status(400).json({
         success: false,
         message: `City ${city_id} does not belong to District ${district_id}`,
@@ -226,10 +193,7 @@ export const createArea = async (req, res) => {
     // CHECK CITY BELONGS TO STATE
     // =====================================================
 
-    if (
-      Number(city.state_id) !==
-      Number(state_id)
-    ) {
+    if (Number(city.state_id) !== Number(state_id)) {
       return res.status(400).json({
         success: false,
         message: `City ${city_id} does not belong to State ${state_id}`,
@@ -255,10 +219,7 @@ export const createArea = async (req, res) => {
     // CHECK PINCODE BELONGS TO CITY
     // =====================================================
 
-    if (
-      Number(pincode.city_id) !==
-      Number(city_id)
-    ) {
+    if (Number(pincode.city_id) !== Number(city_id)) {
       return res.status(400).json({
         success: false,
         message: `Pincode ${pincode_id} does not belong to City ${city_id}`,
@@ -269,22 +230,13 @@ export const createArea = async (req, res) => {
     // LATITUDE
     // =====================================================
 
-    if (
-      latitude !== undefined &&
-      latitude !== null &&
-      latitude !== ""
-    ) {
+    if (latitude !== undefined && latitude !== null && latitude !== "") {
       latitude = Number(latitude);
 
-      if (
-        Number.isNaN(latitude) ||
-        latitude < -90 ||
-        latitude > 90
-      ) {
+      if (Number.isNaN(latitude) || latitude < -90 || latitude > 90) {
         return res.status(400).json({
           success: false,
-          message:
-            "Latitude must be between -90 and 90",
+          message: "Latitude must be between -90 and 90",
         });
       }
     } else {
@@ -295,22 +247,13 @@ export const createArea = async (req, res) => {
     // LONGITUDE
     // =====================================================
 
-    if (
-      longitude !== undefined &&
-      longitude !== null &&
-      longitude !== ""
-    ) {
+    if (longitude !== undefined && longitude !== null && longitude !== "") {
       longitude = Number(longitude);
 
-      if (
-        Number.isNaN(longitude) ||
-        longitude < -180 ||
-        longitude > 180
-      ) {
+      if (Number.isNaN(longitude) || longitude < -180 || longitude > 180) {
         return res.status(400).json({
           success: false,
-          message:
-            "Longitude must be between -180 and 180",
+          message: "Longitude must be between -180 and 180",
         });
       }
     } else {
@@ -321,19 +264,12 @@ export const createArea = async (req, res) => {
     // STATUS
     // =====================================================
 
-    status = status
-      ? String(status).toUpperCase()
-      : "ACTIVE";
+    status = status ? String(status).toUpperCase() : "ACTIVE";
 
-    if (
-      !["ACTIVE", "INACTIVE"].includes(
-        status
-      )
-    ) {
+    if (!["ACTIVE", "INACTIVE"].includes(status)) {
       return res.status(400).json({
         success: false,
-        message:
-          "Status must be ACTIVE or INACTIVE",
+        message: "Status must be ACTIVE or INACTIVE",
       });
     }
 
@@ -341,16 +277,14 @@ export const createArea = async (req, res) => {
     // DUPLICATE AREA CODE
     // =====================================================
 
-    const existingAreaCode =
-      await Area.findOne({
-        areaCode,
-      });
+    const existingAreaCode = await Area.findOne({
+      areaCode,
+    });
 
     if (existingAreaCode) {
       return res.status(409).json({
         success: false,
-        message:
-          `Area code ${areaCode} already exists`,
+        message: `Area code ${areaCode} already exists`,
       });
     }
 
@@ -358,22 +292,19 @@ export const createArea = async (req, res) => {
     // DUPLICATE AREA NAME IN SAME CITY
     // =====================================================
 
-    const duplicateArea =
-      await Area.findOne({
-        city: city._id,
+    const duplicateArea = await Area.findOne({
+      city: city._id,
 
-        areaName: {
-          $regex:
-            `^${escapeRegex(areaName)}$`,
-          $options: "i",
-        },
-      });
+      areaName: {
+        $regex: `^${escapeRegex(areaName)}$`,
+        $options: "i",
+      },
+    });
 
     if (duplicateArea) {
       return res.status(409).json({
         success: false,
-        message:
-          "Area already exists in this city",
+        message: "Area already exists in this city",
       });
     }
 
@@ -404,50 +335,30 @@ export const createArea = async (req, res) => {
     // POPULATE RESPONSE
     // =====================================================
 
-    const populatedArea =
-      await Area.findById(area._id)
-        .populate(
-          "state",
-          "state_id state_name"
-        )
-        .populate(
-          "district",
-          "district_id district_name state_id"
-        )
-        .populate(
-          "city",
-          "city_id city_name district_id state_id"
-        )
-        .populate(
-          "pincode",
-          "pincode_id pincode_name city_id"
-        );
+    const populatedArea = await Area.findById(area._id)
+      .populate("state", "state_id state_name")
+      .populate("district", "district_id district_name state_id")
+      .populate("city", "city_id city_name district_id state_id")
+      .populate("pincode", "pincode_id pincode_name city_id");
 
     return res.status(201).json({
       success: true,
-      message:
-        "Area created successfully",
+      message: "Area created successfully",
       data: populatedArea,
     });
-
   } catch (error) {
-    console.error(
-      "Create area error:",
-      error
-    );
+    console.error("Create area error:", error);
 
     if (error.code === 11000) {
       return res.status(409).json({
         success: false,
-        message:
-          "Area code already exists",
+        message: "Area code already exists",
       });
     }
 
     return res.status(500).json({
       success: false,
-      message:
-        "Failed to create area",
+      message: "Failed to create area",
       error: error.message,
     });
   }
@@ -470,10 +381,7 @@ export const getAllAreas = async (req, res) => {
 
     const pageNumber = Math.max(Number(page) || 1, 1);
 
-    const limitNumber = Math.min(
-      Math.max(Number(limit) || 20, 1),
-      100
-    );
+    const limitNumber = Math.min(Math.max(Number(limit) || 20, 1), 100);
 
     const filter = {};
 
@@ -588,10 +496,7 @@ export const getAllAreas = async (req, res) => {
     if (String(search).trim()) {
       const searchValue = String(search).trim();
 
-      const regex = new RegExp(
-        escapeRegex(searchValue),
-        "i"
-      );
+      const regex = new RegExp(escapeRegex(searchValue), "i");
 
       // Search State Master
       const states = await State.find({
@@ -705,28 +610,14 @@ export const getAllAreas = async (req, res) => {
     // =====================================================
 
     const areas = await Area.find(filter)
-      .populate(
-        "state",
-        "_id state_id state_name"
-      )
-      .populate(
-        "district",
-        "_id district_id district_name state_id"
-      )
-      .populate(
-        "city",
-        "_id city_id city_name district_id state_id"
-      )
-      .populate(
-        "pincode",
-        "_id pincode_id pincode_name city_id"
-      )
+      .populate("state", "_id state_id state_name")
+      .populate("district", "_id district_id district_name state_id")
+      .populate("city", "_id city_id city_name district_id state_id")
+      .populate("pincode", "_id pincode_id pincode_name city_id")
       .sort({
         createdAt: -1,
       })
-      .skip(
-        (pageNumber - 1) * limitNumber
-      )
+      .skip((pageNumber - 1) * limitNumber)
       .limit(limitNumber);
 
     // =====================================================
@@ -743,12 +634,9 @@ export const getAllAreas = async (req, res) => {
         page: pageNumber,
         limit: limitNumber,
         total,
-        totalPages: Math.ceil(
-          total / limitNumber
-        ),
+        totalPages: Math.ceil(total / limitNumber),
       },
     });
-
   } catch (error) {
     console.error("Get areas error:", error);
 
@@ -781,22 +669,10 @@ export const getAreaById = async (req, res) => {
     // ==========================================
 
     const area = await Area.findById(id)
-      .populate(
-        "state",
-        "_id state_id state_name"
-      )
-      .populate(
-        "district",
-        "_id district_id district_name state_id"
-      )
-      .populate(
-        "city",
-        "_id city_id city_name district_id state_id"
-      )
-      .populate(
-        "pincode",
-        "_id pincode_id pincode_name city_id"
-      );
+      .populate("state", "_id state_id state_name")
+      .populate("district", "_id district_id district_name state_id")
+      .populate("city", "_id city_id city_name district_id state_id")
+      .populate("pincode", "_id pincode_id pincode_name city_id");
 
     // ==========================================
     // AREA NOT FOUND
@@ -818,7 +694,6 @@ export const getAreaById = async (req, res) => {
       message: "Area fetched successfully",
       data: area,
     });
-
   } catch (error) {
     console.error("Get area by ID error:", error);
 
@@ -830,24 +705,17 @@ export const getAreaById = async (req, res) => {
   }
 };
 
-
 // =====================================================
 // GET AREA BY AREA CODE
 // =====================================================
 
 export const getAreaByCode = async (req, res) => {
   try {
-    const areaCode = String(
-      req.params.areaCode
-    )
-      .trim()
-      .toUpperCase();
-
+    const areaCode = String(req.params.areaCode).trim().toUpperCase();
 
     const area = await Area.findOne({
       areaCode,
     });
-
 
     if (!area) {
       return res.status(404).json({
@@ -856,13 +724,11 @@ export const getAreaByCode = async (req, res) => {
       });
     }
 
-
     return res.status(200).json({
       success: true,
       message: "Area fetched successfully",
       data: area,
     });
-
   } catch (error) {
     return res.status(500).json({
       success: false,
@@ -871,7 +737,6 @@ export const getAreaByCode = async (req, res) => {
     });
   }
 };
-
 
 // =====================================================
 // UPDATE AREA
@@ -1073,21 +938,15 @@ export const updateArea = async (req, res) => {
     // VALIDATE FINAL RELATIONSHIP
     // ==========================================
 
-    const finalState =
-      selectedState ||
-      (await State.findById(area.state));
+    const finalState = selectedState || (await State.findById(area.state));
 
     const finalDistrict =
-      selectedDistrict ||
-      (await District.findById(area.district));
+      selectedDistrict || (await District.findById(area.district));
 
-    const finalCity =
-      selectedCity ||
-      (await City.findById(area.city));
+    const finalCity = selectedCity || (await City.findById(area.city));
 
     const finalPincode =
-      selectedPincode ||
-      (await Pincode.findById(area.pincode));
+      selectedPincode || (await Pincode.findById(area.pincode));
 
     if (!finalState) {
       return res.status(400).json({
@@ -1121,10 +980,7 @@ export const updateArea = async (req, res) => {
     // DISTRICT -> STATE VALIDATION
     // ==========================================
 
-    if (
-      Number(finalDistrict.state_id) !==
-      Number(finalState.state_id)
-    ) {
+    if (Number(finalDistrict.state_id) !== Number(finalState.state_id)) {
       return res.status(400).json({
         success: false,
         message: `District ${finalDistrict.district_id} does not belong to State ${finalState.state_id}`,
@@ -1135,10 +991,7 @@ export const updateArea = async (req, res) => {
     // CITY -> DISTRICT VALIDATION
     // ==========================================
 
-    if (
-      Number(finalCity.district_id) !==
-      Number(finalDistrict.district_id)
-    ) {
+    if (Number(finalCity.district_id) !== Number(finalDistrict.district_id)) {
       return res.status(400).json({
         success: false,
         message: `City ${finalCity.city_id} does not belong to District ${finalDistrict.district_id}`,
@@ -1149,10 +1002,7 @@ export const updateArea = async (req, res) => {
     // CITY -> STATE VALIDATION
     // ==========================================
 
-    if (
-      Number(finalCity.state_id) !==
-      Number(finalState.state_id)
-    ) {
+    if (Number(finalCity.state_id) !== Number(finalState.state_id)) {
       return res.status(400).json({
         success: false,
         message: `City ${finalCity.city_id} does not belong to State ${finalState.state_id}`,
@@ -1163,10 +1013,7 @@ export const updateArea = async (req, res) => {
     // PINCODE -> CITY VALIDATION
     // ==========================================
 
-    if (
-      Number(finalPincode.city_id) !==
-      Number(finalCity.city_id)
-    ) {
+    if (Number(finalPincode.city_id) !== Number(finalCity.city_id)) {
       return res.status(400).json({
         success: false,
         message: `Pincode ${finalPincode.pincode_id} does not belong to City ${finalCity.city_id}`,
@@ -1191,11 +1038,7 @@ export const updateArea = async (req, res) => {
       } else {
         latitude = Number(latitude);
 
-        if (
-          Number.isNaN(latitude) ||
-          latitude < -90 ||
-          latitude > 90
-        ) {
+        if (Number.isNaN(latitude) || latitude < -90 || latitude > 90) {
           return res.status(400).json({
             success: false,
             message: "Latitude must be between -90 and 90",
@@ -1216,11 +1059,7 @@ export const updateArea = async (req, res) => {
       } else {
         longitude = Number(longitude);
 
-        if (
-          Number.isNaN(longitude) ||
-          longitude < -180 ||
-          longitude > 180
-        ) {
+        if (Number.isNaN(longitude) || longitude < -180 || longitude > 180) {
           return res.status(400).json({
             success: false,
             message: "Longitude must be between -180 and 180",
@@ -1283,29 +1122,16 @@ export const updateArea = async (req, res) => {
     // ==========================================
 
     const updatedArea = await Area.findById(area._id)
-      .populate(
-        "state",
-        "_id state_id state_name"
-      )
-      .populate(
-        "district",
-        "_id district_id district_name state_id"
-      )
-      .populate(
-        "city",
-        "_id city_id city_name district_id state_id"
-      )
-      .populate(
-        "pincode",
-        "_id pincode_id pincode_name city_id"
-      );
+      .populate("state", "_id state_id state_name")
+      .populate("district", "_id district_id district_name state_id")
+      .populate("city", "_id city_id city_name district_id state_id")
+      .populate("pincode", "_id pincode_id pincode_name city_id");
 
     return res.status(200).json({
       success: true,
       message: "Area updated successfully",
       data: updatedArea,
     });
-
   } catch (error) {
     console.error("Update area error:", error);
 
@@ -1317,7 +1143,6 @@ export const updateArea = async (req, res) => {
   }
 };
 
-
 // =====================================================
 // DELETE AREA
 // =====================================================
@@ -1326,10 +1151,7 @@ export const deleteArea = async (req, res) => {
   try {
     const { id } = req.params;
 
-
-    const area =
-      await Area.findByIdAndDelete(id);
-
+    const area = await Area.findByIdAndDelete(id);
 
     if (!area) {
       return res.status(404).json({
@@ -1338,13 +1160,11 @@ export const deleteArea = async (req, res) => {
       });
     }
 
-
     return res.status(200).json({
       success: true,
       message: "Area deleted successfully",
       data: area,
     });
-
   } catch (error) {
     console.error("Delete area error:", error);
 
@@ -1355,7 +1175,6 @@ export const deleteArea = async (req, res) => {
     });
   }
 };
-
 
 // =====================================================
 // IMPORT AREAS FROM EXCEL
@@ -1407,77 +1226,39 @@ export const importAreas = async (req, res) => {
         // READ EXCEL VALUES
         // =====================================================
 
-        let areaCode =
-          row.areaCode ??
-          row["Area Code"] ??
-          row.area_code ??
-          "";
+        let areaCode = row.areaCode ?? row["Area Code"] ?? row.area_code ?? "";
 
-        let areaName =
-          row.areaName ??
-          row["Area Name"] ??
-          row.area_name ??
-          "";
+        let areaName = row.areaName ?? row["Area Name"] ?? row.area_name ?? "";
 
-        let state_id =
-          row.state_id ??
-          row["State ID"] ??
-          row.stateId ??
-          "";
+        let state_id = row.state_id ?? row["State ID"] ?? row.stateId ?? "";
 
         let district_id =
-          row.district_id ??
-          row["District ID"] ??
-          row.districtId ??
-          "";
+          row.district_id ?? row["District ID"] ?? row.districtId ?? "";
 
-        let city_id =
-          row.city_id ??
-          row["City ID"] ??
-          row.cityId ??
-          "";
+        let city_id = row.city_id ?? row["City ID"] ?? row.cityId ?? "";
 
         let pincode_id =
-          row.pincode_id ??
-          row["Pincode ID"] ??
-          row.pincodeId ??
-          "";
+          row.pincode_id ?? row["Pincode ID"] ?? row.pincodeId ?? "";
 
-        let zone =
-          row.zone ??
-          row.Zone ??
-          "";
+        let zone = row.zone ?? row.Zone ?? "";
 
-        let latitude =
-          row.latitude ??
-          row.Latitude ??
-          "";
+        let latitude = row.latitude ?? row.Latitude ?? "";
 
-        let longitude =
-          row.longitude ??
-          row.Longitude ??
-          "";
+        let longitude = row.longitude ?? row.Longitude ?? "";
 
-        let status =
-          row.status ??
-          row.Status ??
-          "ACTIVE";
+        let status = row.status ?? row.Status ?? "ACTIVE";
 
         // =====================================================
         // FORMAT VALUES
         // =====================================================
 
-        areaCode = String(areaCode)
-          .trim()
-          .toUpperCase();
+        areaCode = String(areaCode).trim().toUpperCase();
 
         areaName = String(areaName).trim();
 
         zone = String(zone).trim();
 
-        status = String(status)
-          .trim()
-          .toUpperCase();
+        status = String(status).trim().toUpperCase();
 
         // =====================================================
         // REQUIRED VALIDATION
@@ -1503,11 +1284,7 @@ export const importAreas = async (req, res) => {
           continue;
         }
 
-        if (
-          state_id === "" ||
-          state_id === null ||
-          state_id === undefined
-        ) {
+        if (state_id === "" || state_id === null || state_id === undefined) {
           failed.push({
             row: index + 2,
             data: row,
@@ -1531,11 +1308,7 @@ export const importAreas = async (req, res) => {
           continue;
         }
 
-        if (
-          city_id === "" ||
-          city_id === null ||
-          city_id === undefined
-        ) {
+        if (city_id === "" || city_id === null || city_id === undefined) {
           failed.push({
             row: index + 2,
             data: row,
@@ -1648,15 +1421,11 @@ export const importAreas = async (req, res) => {
         // DISTRICT -> STATE RELATION
         // =====================================================
 
-        if (
-          Number(district.state_id) !==
-          Number(state_id)
-        ) {
+        if (Number(district.state_id) !== Number(state_id)) {
           failed.push({
             row: index + 2,
             data: row,
-            message:
-              `District ${district_id} does not belong to State ${state_id}`,
+            message: `District ${district_id} does not belong to State ${state_id}`,
           });
 
           continue;
@@ -1684,15 +1453,11 @@ export const importAreas = async (req, res) => {
         // CITY -> DISTRICT RELATION
         // =====================================================
 
-        if (
-          Number(city.district_id) !==
-          Number(district_id)
-        ) {
+        if (Number(city.district_id) !== Number(district_id)) {
           failed.push({
             row: index + 2,
             data: row,
-            message:
-              `City ${city_id} does not belong to District ${district_id}`,
+            message: `City ${city_id} does not belong to District ${district_id}`,
           });
 
           continue;
@@ -1702,15 +1467,11 @@ export const importAreas = async (req, res) => {
         // CITY -> STATE RELATION
         // =====================================================
 
-        if (
-          Number(city.state_id) !==
-          Number(state_id)
-        ) {
+        if (Number(city.state_id) !== Number(state_id)) {
           failed.push({
             row: index + 2,
             data: row,
-            message:
-              `City ${city_id} does not belong to State ${state_id}`,
+            message: `City ${city_id} does not belong to State ${state_id}`,
           });
 
           continue;
@@ -1738,15 +1499,11 @@ export const importAreas = async (req, res) => {
         // PINCODE -> CITY RELATION
         // =====================================================
 
-        if (
-          Number(pincode.city_id) !==
-          Number(city_id)
-        ) {
+        if (Number(pincode.city_id) !== Number(city_id)) {
           failed.push({
             row: index + 2,
             data: row,
-            message:
-              `Pincode ${pincode_id} does not belong to City ${city_id}`,
+            message: `Pincode ${pincode_id} does not belong to City ${city_id}`,
           });
 
           continue;
@@ -1770,18 +1527,10 @@ export const importAreas = async (req, res) => {
         // LATITUDE
         // =====================================================
 
-        if (
-          latitude !== "" &&
-          latitude !== null &&
-          latitude !== undefined
-        ) {
+        if (latitude !== "" && latitude !== null && latitude !== undefined) {
           latitude = Number(latitude);
 
-          if (
-            Number.isNaN(latitude) ||
-            latitude < -90 ||
-            latitude > 90
-          ) {
+          if (Number.isNaN(latitude) || latitude < -90 || latitude > 90) {
             failed.push({
               row: index + 2,
               data: row,
@@ -1798,18 +1547,10 @@ export const importAreas = async (req, res) => {
         // LONGITUDE
         // =====================================================
 
-        if (
-          longitude !== "" &&
-          longitude !== null &&
-          longitude !== undefined
-        ) {
+        if (longitude !== "" && longitude !== null && longitude !== undefined) {
           longitude = Number(longitude);
 
-          if (
-            Number.isNaN(longitude) ||
-            longitude < -180 ||
-            longitude > 180
-          ) {
+          if (Number.isNaN(longitude) || longitude < -180 || longitude > 180) {
             failed.push({
               row: index + 2,
               data: row,
@@ -1857,8 +1598,7 @@ export const importAreas = async (req, res) => {
           failed.push({
             row: index + 2,
             data: row,
-            message:
-              `Area "${areaName}" already exists in city ${city.city_name}`,
+            message: `Area "${areaName}" already exists in city ${city.city_name}`,
           });
 
           continue;
@@ -1904,7 +1644,6 @@ export const importAreas = async (req, res) => {
 
           status: area.status,
         });
-
       } catch (rowError) {
         failed.push({
           row: index + 2,
@@ -1931,7 +1670,6 @@ export const importAreas = async (req, res) => {
       imported,
       failed,
     });
-
   } catch (error) {
     console.error("Import area error:", error);
 
@@ -1942,7 +1680,6 @@ export const importAreas = async (req, res) => {
     });
   }
 };
-
 
 // =====================================================
 // EXPORT AREAS TO EXCEL
@@ -1956,28 +1693,20 @@ export const exportAreas = async (req, res) => {
       })
       .lean();
 
+    const excelData = areas.map((area) => ({
+      areaCode: area.areaCode,
+      areaName: area.areaName,
+      city: area.city,
+      district: area.district,
+      state: area.state,
+      pincode: area.pincode,
+      zone: area.zone,
+      latitude: area.latitude ?? "",
+      longitude: area.longitude ?? "",
+      status: area.status,
+    }));
 
-    const excelData = areas.map(
-      (area) => ({
-        areaCode: area.areaCode,
-        areaName: area.areaName,
-        city: area.city,
-        district: area.district,
-        state: area.state,
-        pincode: area.pincode,
-        zone: area.zone,
-        latitude: area.latitude ?? "",
-        longitude: area.longitude ?? "",
-        status: area.status,
-      })
-    );
-
-
-    const worksheet =
-      XLSX.utils.json_to_sheet(
-        excelData
-      );
-
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
 
     worksheet["!cols"] = [
       { wch: 20 },
@@ -1992,39 +1721,23 @@ export const exportAreas = async (req, res) => {
       { wch: 12 },
     ];
 
+    const workbook = XLSX.utils.book_new();
 
-    const workbook =
-      XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Areas");
 
+    const buffer = XLSX.write(workbook, {
+      type: "buffer",
+      bookType: "xlsx",
+    });
 
-    XLSX.utils.book_append_sheet(
-      workbook,
-      worksheet,
-      "Areas"
-    );
-
-
-    const buffer =
-      XLSX.write(workbook, {
-        type: "buffer",
-        bookType: "xlsx",
-      });
-
-
-    res.setHeader(
-      "Content-Disposition",
-      'attachment; filename="areas.xlsx"'
-    );
-
+    res.setHeader("Content-Disposition", 'attachment; filename="areas.xlsx"');
 
     res.setHeader(
       "Content-Type",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     );
 
-
     return res.send(buffer);
-
   } catch (error) {
     console.error("Export areas error:", error);
 
@@ -2034,18 +1747,4 @@ export const exportAreas = async (req, res) => {
       error: error.message,
     });
   }
-};
-
-
-
-
-// =====================================================
-// ESCAPE REGEX
-// =====================================================
-
-const escapeRegex = (value) => {
-  return String(value).replace(
-    /[.*+?^${}()|[\]\\]/g,
-    "\\$&"
-  );
 };

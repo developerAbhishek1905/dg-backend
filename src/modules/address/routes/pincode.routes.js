@@ -14,39 +14,34 @@ import {
 } from "../controller/pincode.controller.js";
 
 import { uploadExcel } from "../middleware/upload.middleware.js";
+import { protect } from "../../auth/middleware/auth.middleware.js";
 
 const router = express.Router();
 
 // Create
-router.post("/", createPincode);
+router.post("/",protect, createPincode);
 
 // Get all
-router.get("/", getAllPincodes);
-router.get(
-  "/dropdown",
-  getPincodeDropdown
-);
+router.get("/",protect, getAllPincodes);
+router.get("/dropdown",protect, getPincodeDropdown);
 
-router.get(
-  "/:id",
-  getPincodeById
-);
+router.get("/:id",protect, getPincodeById);
 
 // Import
-router.post("/import", uploadExcel.single("file"), importPincodes);
+router.post("/import",protect, uploadExcel.single("file"), importPincodes);
 
 // Export
-router.get("/export", exportPincodes);
-router.get("/city/:city_id", getPincodesByCityId);
-router.get("/search/details", searchPincodeDetails);
+router.get("/export",protect, exportPincodes);
+router.get("/city/:city_id",protect, getPincodesByCityId);
+router.get("/search/details",protect, searchPincodeDetails);
 
 // Get by pincode_id
-router.get("/:id", getPincodeById);
+router.get("/:id",protect, getPincodeById);
 
 // Update
-router.put("/:id", updatePincode);
+router.put("/:id",protect, updatePincode);
 
 // Delete
-router.delete("/:id", deletePincode);
+router.delete("/:id",protect, deletePincode);
 
 export default router;

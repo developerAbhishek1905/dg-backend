@@ -7,6 +7,7 @@ import State from "../model/state.model.js";
 import District from "../model/district.model.js";
 
 import { getNextCityId, syncCityCounter } from "../utils/cityId.util.js";
+import { escapeRegex } from "../../../helper/escapeRegex.js";
 
 // =====================================================
 // CREATE CITY
@@ -186,10 +187,7 @@ export const getAllCities = async (req, res) => {
 
     const pageNumber = Math.max(Number(page) || 1, 1);
 
-    const limitNumber = Math.min(
-      Math.max(Number(limit) || 20, 1),
-      100
-    );
+    const limitNumber = Math.min(Math.max(Number(limit) || 20, 1), 100);
 
     const filter = {};
 
@@ -245,11 +243,7 @@ export const getAllCities = async (req, res) => {
     // ==========================================
 
     const stateIds = [
-      ...new Set(
-        cities
-          .map((city) => city.state_id)
-          .filter(Boolean)
-      ),
+      ...new Set(cities.map((city) => city.state_id).filter(Boolean)),
     ];
 
     // ==========================================
@@ -257,11 +251,7 @@ export const getAllCities = async (req, res) => {
     // ==========================================
 
     const districtIds = [
-      ...new Set(
-        cities
-          .map((city) => city.district_id)
-          .filter(Boolean)
-      ),
+      ...new Set(cities.map((city) => city.district_id).filter(Boolean)),
     ];
 
     // ==========================================
@@ -293,10 +283,7 @@ export const getAllCities = async (req, res) => {
     // ==========================================
 
     const stateMap = new Map(
-      states.map((state) => [
-        state.state_id,
-        state.state_name,
-      ])
+      states.map((state) => [state.state_id, state.state_name]),
     );
 
     // ==========================================
@@ -307,7 +294,7 @@ export const getAllCities = async (req, res) => {
       districts.map((district) => [
         district.district_id,
         district.district_name,
-      ])
+      ]),
     );
 
     // ==========================================
@@ -317,11 +304,9 @@ export const getAllCities = async (req, res) => {
     const data = cities.map((city) => ({
       ...city,
 
-      state_name:
-        stateMap.get(city.state_id) || null,
+      state_name: stateMap.get(city.state_id) || null,
 
-      district_name:
-        districtMap.get(city.district_id) || null,
+      district_name: districtMap.get(city.district_id) || null,
     }));
 
     // ==========================================
@@ -338,12 +323,9 @@ export const getAllCities = async (req, res) => {
         page: pageNumber,
         limit: limitNumber,
         total,
-        totalPages: Math.ceil(
-          total / limitNumber
-        ),
+        totalPages: Math.ceil(total / limitNumber),
       },
     });
-
   } catch (error) {
     console.error("Get cities error:", error);
 
@@ -601,264 +583,6 @@ export const deleteCity = async (req, res) => {
   }
 };
 
-// =====================================================
-// IMPORT CITY FROM EXCEL
-// =====================================================
-
-// export const importCities = async (req, res) => {
-//   try {
-//     if (!req.file) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Excel file is required",
-//       });
-//     }
-
-//     const workbook = XLSX.read(req.file.buffer, {
-//       type: "buffer",
-//     });
-
-//     const firstSheetName = workbook.SheetNames[0];
-
-//     if (!firstSheetName) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Excel file does not contain any sheet",
-//       });
-//     }
-
-//     const worksheet = workbook.Sheets[firstSheetName];
-
-//     const rows = XLSX.utils.sheet_to_json(worksheet, {
-//       defval: "",
-//     });
-
-//     if (!rows.length) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Excel file does not contain any data",
-//       });
-//     }
-
-//     const imported = [];
-//     const failed = [];
-
-//     for (let index = 0; index < rows.length; index++) {
-//       const row = rows[index];
-
-//       try {
-//         let cityId = row.city_id ?? row["City ID"] ?? row["city id"] ?? "";
-
-//         let cityName =
-//           row.city_name ?? row["City Name"] ?? row["city name"] ?? "";
-
-//         let districtId =
-//           row.district_id ?? row["District ID"] ?? row["district id"] ?? "";
-
-//         let stateId = row.state_id ?? row["State ID"] ?? row["state id"] ?? "";
-
-//         cityName = String(cityName).trim();
-
-//         if (!cityName) {
-//           failed.push({
-//             row: index + 2,
-//             data: row,
-//             message: "City name is required",
-//           });
-
-//           continue;
-//         }
-
-//         if (
-//           districtId === "" ||
-//           districtId === null ||
-//           districtId === undefined
-//         ) {
-//           failed.push({
-//             row: index + 2,
-//             data: row,
-//             message: "District ID is required",
-//           });
-
-//           continue;
-//         }
-
-//         districtId = Number(districtId);
-
-//         if (!Number.isInteger(districtId) || districtId <= 0) {
-//           failed.push({
-//             row: index + 2,
-//             data: row,
-//             message: "Invalid district ID",
-//           });
-
-//           continue;
-//         }
-
-//         if (stateId === "" || stateId === null || stateId === undefined) {
-//           failed.push({
-//             row: index + 2,
-//             data: row,
-//             message: "State ID is required",
-//           });
-
-//           continue;
-//         }
-
-//         stateId = Number(stateId);
-
-//         if (!Number.isInteger(stateId) || stateId <= 0) {
-//           failed.push({
-//             row: index + 2,
-//             data: row,
-//             message: "Invalid state ID",
-//           });
-
-//           continue;
-//         }
-
-//         // State validation
-//         const stateExists = await State.findOne({
-//           state_id: stateId,
-//         });
-
-//         if (!stateExists) {
-//           failed.push({
-//             row: index + 2,
-//             data: row,
-//             message: `State ID ${stateId} does not exist`,
-//           });
-
-//           continue;
-//         }
-
-//         // District validation
-//         const districtExists = await District.findOne({
-//           district_id: districtId,
-//         });
-
-//         if (!districtExists) {
-//           failed.push({
-//             row: index + 2,
-//             data: row,
-//             message: `District ID ${districtId} does not exist`,
-//           });
-
-//           continue;
-//         }
-
-//         // Relation validation
-//         if (districtExists.state_id !== stateId) {
-//           failed.push({
-//             row: index + 2,
-//             data: row,
-//             message: `District ${districtId} does not belong to State ${stateId}`,
-//           });
-
-//           continue;
-//         }
-
-//         // Duplicate city
-//         const duplicateCity = await City.findOne({
-//           district_id: districtId,
-//           state_id: stateId,
-
-//           city_name: {
-//             $regex: `^${escapeRegex(cityName)}$`,
-//             $options: "i",
-//           },
-//         });
-
-//         if (duplicateCity) {
-//           failed.push({
-//             row: index + 2,
-//             data: row,
-//             message: `City "${cityName}" already exists in District ${districtId}`,
-//           });
-
-//           continue;
-//         }
-
-//         // Manual city ID
-//         if (cityId !== "" && cityId !== null && cityId !== undefined) {
-//           cityId = Number(cityId);
-
-//           if (!Number.isInteger(cityId) || cityId <= 0) {
-//             failed.push({
-//               row: index + 2,
-//               data: row,
-//               message: "Invalid city ID",
-//             });
-
-//             continue;
-//           }
-
-//           const duplicateId = await City.findOne({
-//             city_id: cityId,
-//           });
-
-//           if (duplicateId) {
-//             failed.push({
-//               row: index + 2,
-//               data: row,
-//               message: `City ID ${cityId} already exists`,
-//             });
-
-//             continue;
-//           }
-
-//           await syncCityCounter(cityId);
-//         } else {
-//           cityId = await getNextAvailableCityId();
-//         }
-
-//         const city = await City.create({
-//           city_id: cityId,
-//           city_name: cityName,
-//           district_id: districtId,
-//           state_id: stateId,
-//         });
-
-//         imported.push({
-//           row: index + 2,
-//           city_id: city.city_id,
-//           city_name: city.city_name,
-//           district_id: city.district_id,
-//           state_id: city.state_id,
-//         });
-//       } catch (rowError) {
-//         failed.push({
-//           row: index + 2,
-//           data: row,
-//           message: rowError.message,
-//         });
-//       }
-//     }
-
-//     return res.status(200).json({
-//       success: true,
-//       message: "City import completed",
-
-//       summary: {
-//         totalRows: rows.length,
-//         imported: imported.length,
-//         failed: failed.length,
-//       },
-
-//       imported,
-//       failed,
-//     });
-//   } catch (error) {
-//     console.error("Import cities error:", error);
-
-//     return res.status(500).json({
-//       success: false,
-//       message: "Failed to import cities",
-//       error: error.message,
-//     });
-//   }
-// };
-
 export const importCities = async (req, res) => {
   try {
     if (!req.file) {
@@ -915,23 +639,12 @@ export const importCities = async (req, res) => {
     const excelDistrictIds = new Set();
 
     for (const row of rows) {
-      const stateId =
-        row.state_id ??
-        row["State ID"] ??
-        row["state id"] ??
-        "";
+      const stateId = row.state_id ?? row["State ID"] ?? row["state id"] ?? "";
 
       const districtId =
-        row.district_id ??
-        row["District ID"] ??
-        row["district id"] ??
-        "";
+        row.district_id ?? row["District ID"] ?? row["district id"] ?? "";
 
-      if (
-        stateId !== "" &&
-        stateId !== null &&
-        stateId !== undefined
-      ) {
+      if (stateId !== "" && stateId !== null && stateId !== undefined) {
         const numericStateId = Number(stateId);
 
         if (Number.isInteger(numericStateId)) {
@@ -963,11 +676,11 @@ export const importCities = async (req, res) => {
       },
       {
         state_id: 1,
-      }
+      },
     ).lean();
 
     const validStateIds = new Set(
-      states.map((state) => Number(state.state_id))
+      states.map((state) => Number(state.state_id)),
     );
 
     // ==========================================
@@ -982,7 +695,7 @@ export const importCities = async (req, res) => {
       {
         district_id: 1,
         state_id: 1,
-      }
+      },
     ).lean();
 
     // districtId -> stateId
@@ -991,7 +704,7 @@ export const importCities = async (req, res) => {
     districts.forEach((district) => {
       districtStateMap.set(
         Number(district.district_id),
-        Number(district.state_id)
+        Number(district.state_id),
       );
     });
 
@@ -1005,25 +718,20 @@ export const importCities = async (req, res) => {
         city_name: 1,
         district_id: 1,
         state_id: 1,
-      }
+      },
     ).lean();
 
     const existingCityIds = new Set(
-      existingCities.map((city) =>
-        Number(city.city_id)
-      )
+      existingCities.map((city) => Number(city.city_id)),
     );
 
     // state + district + city name
     const existingCityKeys = new Set(
       existingCities.map((city) => {
-        const normalizedName =
-          String(city.city_name)
-            .trim()
-            .toLowerCase();
+        const normalizedName = String(city.city_name).trim().toLowerCase();
 
         return `${city.state_id}::${city.district_id}::${normalizedName}`;
-      })
+      }),
     );
 
     // ==========================================
@@ -1037,12 +745,7 @@ export const importCities = async (req, res) => {
     // ==========================================
     let maxCityId =
       existingCities.length > 0
-        ? Math.max(
-            ...existingCities.map(
-              (city) =>
-                Number(city.city_id) || 0
-            )
-          )
+        ? Math.max(...existingCities.map((city) => Number(city.city_id) || 0))
         : 0;
 
     // ==========================================
@@ -1051,29 +754,15 @@ export const importCities = async (req, res) => {
     for (let index = 0; index < rows.length; index++) {
       const row = rows[index];
 
-      let cityId =
-        row.city_id ??
-        row["City ID"] ??
-        row["city id"] ??
-        "";
+      let cityId = row.city_id ?? row["City ID"] ?? row["city id"] ?? "";
 
       let cityName =
-        row.city_name ??
-        row["City Name"] ??
-        row["city name"] ??
-        "";
+        row.city_name ?? row["City Name"] ?? row["city name"] ?? "";
 
       let districtId =
-        row.district_id ??
-        row["District ID"] ??
-        row["district id"] ??
-        "";
+        row.district_id ?? row["District ID"] ?? row["district id"] ?? "";
 
-      let stateId =
-        row.state_id ??
-        row["State ID"] ??
-        row["state id"] ??
-        "";
+      let stateId = row.state_id ?? row["State ID"] ?? row["state id"] ?? "";
 
       cityName = String(cityName).trim();
 
@@ -1109,10 +798,7 @@ export const importCities = async (req, res) => {
 
       districtId = Number(districtId);
 
-      if (
-        !Number.isInteger(districtId) ||
-        districtId <= 0
-      ) {
+      if (!Number.isInteger(districtId) || districtId <= 0) {
         failed.push({
           row: index + 2,
           data: row,
@@ -1125,11 +811,7 @@ export const importCities = async (req, res) => {
       // ==========================================
       // STATE ID REQUIRED
       // ==========================================
-      if (
-        stateId === "" ||
-        stateId === null ||
-        stateId === undefined
-      ) {
+      if (stateId === "" || stateId === null || stateId === undefined) {
         failed.push({
           row: index + 2,
           data: row,
@@ -1141,10 +823,7 @@ export const importCities = async (req, res) => {
 
       stateId = Number(stateId);
 
-      if (
-        !Number.isInteger(stateId) ||
-        stateId <= 0
-      ) {
+      if (!Number.isInteger(stateId) || stateId <= 0) {
         failed.push({
           row: index + 2,
           data: row,
@@ -1170,8 +849,7 @@ export const importCities = async (req, res) => {
       // ==========================================
       // DISTRICT EXISTS
       // ==========================================
-      const districtStateId =
-        districtStateMap.get(districtId);
+      const districtStateId = districtStateMap.get(districtId);
 
       if (districtStateId === undefined) {
         failed.push({
@@ -1196,11 +874,9 @@ export const importCities = async (req, res) => {
         continue;
       }
 
-      const normalizedCityName =
-        cityName.toLowerCase();
+      const normalizedCityName = cityName.toLowerCase();
 
-      const cityKey =
-        `${stateId}::${districtId}::${normalizedCityName}`;
+      const cityKey = `${stateId}::${districtId}::${normalizedCityName}`;
 
       // ==========================================
       // DUPLICATE CITY IN DATABASE
@@ -1209,8 +885,7 @@ export const importCities = async (req, res) => {
         failed.push({
           row: index + 2,
           data: row,
-          message:
-            `City "${cityName}" already exists in District ${districtId}`,
+          message: `City "${cityName}" already exists in District ${districtId}`,
         });
 
         continue;
@@ -1223,8 +898,7 @@ export const importCities = async (req, res) => {
         failed.push({
           row: index + 2,
           data: row,
-          message:
-            `Duplicate city "${cityName}" found in Excel for District ${districtId}`,
+          message: `Duplicate city "${cityName}" found in Excel for District ${districtId}`,
         });
 
         continue;
@@ -1233,17 +907,10 @@ export const importCities = async (req, res) => {
       // ==========================================
       // MANUAL CITY ID
       // ==========================================
-      if (
-        cityId !== "" &&
-        cityId !== null &&
-        cityId !== undefined
-      ) {
+      if (cityId !== "" && cityId !== null && cityId !== undefined) {
         cityId = Number(cityId);
 
-        if (
-          !Number.isInteger(cityId) ||
-          cityId <= 0
-        ) {
+        if (!Number.isInteger(cityId) || cityId <= 0) {
           failed.push({
             row: index + 2,
             data: row,
@@ -1258,8 +925,7 @@ export const importCities = async (req, res) => {
           failed.push({
             row: index + 2,
             data: row,
-            message:
-              `City ID ${cityId} already exists`,
+            message: `City ID ${cityId} already exists`,
           });
 
           continue;
@@ -1270,8 +936,7 @@ export const importCities = async (req, res) => {
           failed.push({
             row: index + 2,
             data: row,
-            message:
-              `Duplicate City ID ${cityId} found in Excel`,
+            message: `Duplicate City ID ${cityId} found in Excel`,
           });
 
           continue;
@@ -1288,10 +953,7 @@ export const importCities = async (req, res) => {
       else {
         do {
           maxCityId++;
-        } while (
-          existingCityIds.has(maxCityId) ||
-          excelCityIds.has(maxCityId)
-        );
+        } while (existingCityIds.has(maxCityId) || excelCityIds.has(maxCityId));
 
         cityId = maxCityId;
       }
@@ -1317,58 +979,41 @@ export const importCities = async (req, res) => {
     // ==========================================
     // BULK INSERT
     // ==========================================
-    const documents = validRows.map(
-      (item) => item.document
-    );
+    const documents = validRows.map((item) => item.document);
 
     let insertedDocs = [];
 
     if (documents.length > 0) {
-      insertedDocs = await City.insertMany(
-        documents,
-        {
-          ordered: false,
-        }
-      );
+      insertedDocs = await City.insertMany(documents, {
+        ordered: false,
+      });
     }
 
     // ==========================================
     // SYNC COUNTER ONLY ONCE
     // ==========================================
     if (insertedDocs.length > 0) {
-      const highestInsertedCityId =
-        Math.max(
-          ...insertedDocs.map(
-            (city) =>
-              Number(city.city_id)
-          )
-        );
-
-      await syncCityCounter(
-        highestInsertedCityId
+      const highestInsertedCityId = Math.max(
+        ...insertedDocs.map((city) => Number(city.city_id)),
       );
+
+      await syncCityCounter(highestInsertedCityId);
     }
 
     // ==========================================
     // PREPARE IMPORTED RESPONSE
     // ==========================================
-    const imported = insertedDocs.map(
-      (city, index) => ({
-        row: validRows[index]?.row,
+    const imported = insertedDocs.map((city, index) => ({
+      row: validRows[index]?.row,
 
-        city_id:
-          city.city_id,
+      city_id: city.city_id,
 
-        city_name:
-          city.city_name,
+      city_name: city.city_name,
 
-        district_id:
-          city.district_id,
+      district_id: city.district_id,
 
-        state_id:
-          city.state_id,
-      })
-    );
+      state_id: city.state_id,
+    }));
 
     return res.status(200).json({
       success: true,
@@ -1384,10 +1029,7 @@ export const importCities = async (req, res) => {
       failed,
     });
   } catch (error) {
-    console.error(
-      "Import cities error:",
-      error
-    );
+    console.error("Import cities error:", error);
 
     return res.status(500).json({
       success: false,
@@ -1572,9 +1214,7 @@ export const getCitiesByStateOrDistrict = async (req, res) => {
     // ==========================================
 
     const cities = await City.find(filter)
-      .select(
-        "_id city_id city_name state_id district_id"
-      )
+      .select("_id city_id city_name state_id district_id")
       .sort({
         city_name: 1,
       })
@@ -1586,7 +1226,6 @@ export const getCitiesByStateOrDistrict = async (req, res) => {
       data: cities,
       total: cities.length,
     });
-
   } catch (error) {
     console.error("Get cities error:", error);
 
@@ -1600,11 +1239,7 @@ export const getCitiesByStateOrDistrict = async (req, res) => {
 
 export const getCityDropdown = async (req, res) => {
   try {
-    const {
-      state_id,
-      district_id,
-      search = "",
-    } = req.query;
+    const { state_id, district_id, search = "" } = req.query;
 
     const filter = {};
 
@@ -1612,17 +1247,10 @@ export const getCityDropdown = async (req, res) => {
     // STATE FILTER
     // ==========================================
 
-    if (
-      state_id !== undefined &&
-      state_id !== null &&
-      state_id !== ""
-    ) {
+    if (state_id !== undefined && state_id !== null && state_id !== "") {
       const stateId = Number(state_id);
 
-      if (
-        !Number.isInteger(stateId) ||
-        stateId <= 0
-      ) {
+      if (!Number.isInteger(stateId) || stateId <= 0) {
         return res.status(400).json({
           success: false,
           message: "Valid state_id is required",
@@ -1643,10 +1271,7 @@ export const getCityDropdown = async (req, res) => {
     ) {
       const districtId = Number(district_id);
 
-      if (
-        !Number.isInteger(districtId) ||
-        districtId <= 0
-      ) {
+      if (!Number.isInteger(districtId) || districtId <= 0) {
         return res.status(400).json({
           success: false,
           message: "Valid district_id is required",
@@ -1662,9 +1287,7 @@ export const getCityDropdown = async (req, res) => {
 
     if (String(search).trim()) {
       filter.city_name = {
-        $regex: escapeRegex(
-          String(search).trim()
-        ),
+        $regex: escapeRegex(String(search).trim()),
         $options: "i",
       };
     }
@@ -1674,9 +1297,7 @@ export const getCityDropdown = async (req, res) => {
     // ==========================================
 
     const cities = await City.find(filter)
-      .select(
-        "_id city_id city_name district_id state_id"
-      )
+      .select("_id city_id city_name district_id state_id")
       .sort({
         city_name: 1,
       })
@@ -1691,11 +1312,7 @@ export const getCityDropdown = async (req, res) => {
       ...new Set(
         cities
           .map((city) => city.district_id)
-          .filter(
-            (value) =>
-              value !== null &&
-              value !== undefined
-          )
+          .filter((value) => value !== null && value !== undefined),
       ),
     ];
 
@@ -1707,11 +1324,7 @@ export const getCityDropdown = async (req, res) => {
       ...new Set(
         cities
           .map((city) => city.state_id)
-          .filter(
-            (value) =>
-              value !== null &&
-              value !== undefined
-          )
+          .filter((value) => value !== null && value !== undefined),
       ),
     ];
 
@@ -1719,46 +1332,33 @@ export const getCityDropdown = async (req, res) => {
     // GET DISTRICTS + STATES
     // ==========================================
 
-    const [districts, states] =
-      await Promise.all([
-        District.find({
-          district_id: {
-            $in: districtIds,
-          },
-        })
-          .select(
-            "district_id district_name state_id"
-          )
-          .lean(),
+    const [districts, states] = await Promise.all([
+      District.find({
+        district_id: {
+          $in: districtIds,
+        },
+      })
+        .select("district_id district_name state_id")
+        .lean(),
 
-        State.find({
-          state_id: {
-            $in: stateIds,
-          },
-        })
-          .select(
-            "state_id state_name"
-          )
-          .lean(),
-      ]);
+      State.find({
+        state_id: {
+          $in: stateIds,
+        },
+      })
+        .select("state_id state_name")
+        .lean(),
+    ]);
 
     // ==========================================
     // CREATE MAPS
     // ==========================================
 
     const districtMap = new Map(
-      districts.map((district) => [
-        district.district_id,
-        district,
-      ])
+      districts.map((district) => [district.district_id, district]),
     );
 
-    const stateMap = new Map(
-      states.map((state) => [
-        state.state_id,
-        state,
-      ])
-    );
+    const stateMap = new Map(states.map((state) => [state.state_id, state]));
 
     // ==========================================
     // RESPONSE DATA
@@ -1766,45 +1366,27 @@ export const getCityDropdown = async (req, res) => {
 
     const data = cities.map((city) => {
       const district =
-        city.district_id !== null &&
-        city.district_id !== undefined
-          ? districtMap.get(
-              city.district_id
-            )
+        city.district_id !== null && city.district_id !== undefined
+          ? districtMap.get(city.district_id)
           : null;
 
       const state =
-        city.state_id !== null &&
-        city.state_id !== undefined
-          ? stateMap.get(
-              city.state_id
-            )
+        city.state_id !== null && city.state_id !== undefined
+          ? stateMap.get(city.state_id)
           : null;
 
       return {
-        city_id:
-          city.city_id,
+        city_id: city.city_id,
 
-        city_name:
-          city.city_name,
+        city_name: city.city_name,
 
-        district_id:
-          district?.district_id ??
-          city.district_id ??
-          null,
+        district_id: district?.district_id ?? city.district_id ?? null,
 
-        district_name:
-          district?.district_name ??
-          null,
+        district_name: district?.district_name ?? null,
 
-        state_id:
-          state?.state_id ??
-          city.state_id ??
-          null,
+        state_id: state?.state_id ?? city.state_id ?? null,
 
-        state_name:
-          state?.state_name ??
-          null,
+        state_name: state?.state_name ?? null,
       };
     });
 
@@ -1814,30 +1396,17 @@ export const getCityDropdown = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message:
-        "City dropdown fetched successfully",
+      message: "City dropdown fetched successfully",
       data,
       total: data.length,
     });
-
   } catch (error) {
-    console.error(
-      "City dropdown error:",
-      error
-    );
+    console.error("City dropdown error:", error);
 
     return res.status(500).json({
       success: false,
-      message:
-        "Failed to fetch city dropdown",
+      message: "Failed to fetch city dropdown",
       error: error.message,
     });
   }
-};
-// =====================================================
-// ESCAPE REGEX
-// =====================================================
-
-const escapeRegex = (value) => {
-  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 };

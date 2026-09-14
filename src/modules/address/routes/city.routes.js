@@ -12,45 +12,39 @@ import {
   exportCities,
   getCitiesByStateOrDistrict,
   getCityDropdown,
-  
 } from "../controller/city.controller.js";
 
 import { uploadExcel } from "../middleware/upload.middleware.js";
+import { protect } from "../../auth/middleware/auth.middleware.js";
 
 const router = express.Router();
 
 // Create city
-router.post("/", createCity);
+router.post("/",protect, createCity);
 
 // Get all cities
-router.get("/", getAllCities);
+router.get("/",protect, getAllCities);
 
 // Excel import
-router.post("/import", uploadExcel.single("file"), importCities);
+router.post("/import",protect, uploadExcel.single("file"), importCities);
 
 // Excel export
-router.get("/export", exportCities);
-router.get(
-  "/dropdown",
-  getCityDropdown
-);
+router.get("/export",protect, exportCities);
+router.get("/dropdown",protect, getCityDropdown);
 // router.get(
-//   "/state/:state_id/district/:district_id",
+//   "/state/:state_id/district/:district_id",protect,
 //   getCitiesByStateAndDistrict
 // );
 
-router.get(
-  "/filter",
-  getCitiesByStateOrDistrict
-);
+router.get("/filter",protect, getCitiesByStateOrDistrict);
 
 // Get city by city_id
-router.get("/:id", getCityById);
+router.get("/:id",protect, getCityById);
 
 // Update city
-router.put("/:id", updateCity);
+router.put("/:id",protect, updateCity);
 
 // Delete city
-router.delete("/:id", deleteCity);
+router.delete("/:id",protect, deleteCity);
 
 export default router;

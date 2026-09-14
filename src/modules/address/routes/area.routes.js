@@ -14,31 +14,32 @@ import {
 } from "../controller/area.controller.js";
 
 import { uploadExcel } from "../middleware/upload.middleware.js";
+import { protect } from "../../auth/middleware/auth.middleware.js";
 
 const router = express.Router();
 
 // Create
-router.post("/", createArea);
+router.post("/",protect, createArea);
 
 // Get all
-router.get("/", getAllAreas);
+router.get("/",protect, getAllAreas);
 
 // Excel import
-router.post("/import", uploadExcel.single("file"), importAreas);
+router.post("/import",protect, uploadExcel.single("file"), importAreas);
 
 // Excel export
-router.get("/export", exportAreas);
+router.get("/export",protect, exportAreas);
 
 // Get by Area Code
-router.get("/code/:areaCode", getAreaByCode);
+router.get("/code/:areaCode",protect, getAreaByCode);
 
 // Get by MongoDB ID
-router.get("/:id", getAreaById);
+router.get("/:id",protect, getAreaById);
 
 // Update by MongoDB ID
-router.put("/:id", updateArea);
+router.put("/:id",protect, updateArea);
 
 // Delete by MongoDB ID
-router.delete("/:id", deleteArea);
+router.delete("/:id",protect, deleteArea);
 
 export default router;

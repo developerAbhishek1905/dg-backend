@@ -20,6 +20,7 @@ import customerRoutes from "./modules/Customer/routes/customer.routes.js"
 import complaintRoutes from "./modules/Complaint/routes/complaint.routes.js"
 import { testWhatsApp } from "./services/smartpingWhatsapp.service.js";
 import appointmentRoutes from "./modules/appointment/router/appointment.route.js";
+import reasonRoutes from "./modules/reason/routes/reason.routes.js";
 const app = express();
 
 app.use(
@@ -62,6 +63,7 @@ app.use("/api/v1/cities", cityRoutes);
 app.use("/api/v1/pincodes", pincodeRoutes);
 app.use("/api/v1/areas", areaRoutes);
 app.use("/api/v1/brands", brandRoutes);
+app.use("/api/v1/reasons", reasonRoutes);
 app.use("/api/v1/products", productRoutes);
 app.use("/api/v1/product-types", productTypeRoutes);
 app.use(
@@ -74,6 +76,7 @@ app.use(
   "/api/v1/complaints",
   complaintRoutes,
 );
+
 
 app.post(
   "/api/v1/test-whatsapp",

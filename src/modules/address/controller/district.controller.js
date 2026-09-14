@@ -7,7 +7,7 @@ import {
   getNextDistrictId,
   syncDistrictCounter,
 } from "../utils/districtId.util.js";
-
+import { escapeRegex } from "../../../helper/escapeRegex.js";
 
 // =====================================================
 // CREATE DISTRICT
@@ -15,20 +15,13 @@ import {
 
 export const createDistrict = async (req, res) => {
   try {
-    let {
-      district_id,
-      district_name,
-      state_id,
-    } = req.body;
+    let { district_id, district_name, state_id } = req.body;
 
     // ==============================
     // Validate district name
     // ==============================
 
-    if (
-      !district_name ||
-      !String(district_name).trim()
-    ) {
+    if (!district_name || !String(district_name).trim()) {
       return res.status(400).json({
         success: false,
         message: "District name is required",
@@ -37,16 +30,11 @@ export const createDistrict = async (req, res) => {
 
     district_name = String(district_name).trim();
 
-
     // ==============================
     // Validate state ID
     // ==============================
 
-    if (
-      state_id === undefined ||
-      state_id === null ||
-      state_id === ""
-    ) {
+    if (state_id === undefined || state_id === null || state_id === "") {
       return res.status(400).json({
         success: false,
         message: "State ID is required",
@@ -55,16 +43,12 @@ export const createDistrict = async (req, res) => {
 
     state_id = Number(state_id);
 
-    if (
-      !Number.isInteger(state_id) ||
-      state_id <= 0
-    ) {
+    if (!Number.isInteger(state_id) || state_id <= 0) {
       return res.status(400).json({
         success: false,
         message: "State ID must be a positive integer",
       });
     }
-
 
     // ==============================
     // Check state exists
@@ -80,7 +64,6 @@ export const createDistrict = async (req, res) => {
         message: `State with ID ${state_id} not found`,
       });
     }
-
 
     // ==============================
     // Duplicate district in same state
@@ -98,11 +81,9 @@ export const createDistrict = async (req, res) => {
     if (duplicateDistrict) {
       return res.status(409).json({
         success: false,
-        message:
-          "District already exists in this state",
+        message: "District already exists in this state",
       });
     }
-
 
     // ==============================
     // Manual district ID
@@ -115,14 +96,10 @@ export const createDistrict = async (req, res) => {
     ) {
       district_id = Number(district_id);
 
-      if (
-        !Number.isInteger(district_id) ||
-        district_id <= 0
-      ) {
+      if (!Number.isInteger(district_id) || district_id <= 0) {
         return res.status(400).json({
           success: false,
-          message:
-            "District ID must be a positive integer",
+          message: "District ID must be a positive integer",
         });
       }
 
@@ -133,8 +110,7 @@ export const createDistrict = async (req, res) => {
       if (existingId) {
         return res.status(409).json({
           success: false,
-          message:
-            `District ID ${district_id} already exists`,
+          message: `District ID ${district_id} already exists`,
         });
       }
 
@@ -144,12 +120,9 @@ export const createDistrict = async (req, res) => {
     // ==============================
     // Auto generate district ID
     // ==============================
-
     else {
-      district_id =
-        await getNextAvailableDistrictId();
+      district_id = await getNextAvailableDistrictId();
     }
-
 
     // ==============================
     // Create
@@ -166,15 +139,13 @@ export const createDistrict = async (req, res) => {
       message: "District created successfully",
       data: district,
     });
-
   } catch (error) {
     console.error("Create district error:", error);
 
     if (error.code === 11000) {
       return res.status(409).json({
         success: false,
-        message:
-          "District ID or district already exists",
+        message: "District ID or district already exists",
       });
     }
 
@@ -186,26 +157,17 @@ export const createDistrict = async (req, res) => {
   }
 };
 
-
 // =====================================================
 // GET ALL DISTRICTS
 // =====================================================
 
 export const getAllDistricts = async (req, res) => {
   try {
-    const {
-      search = "",
-      state_id,
-      page = 1,
-      limit = 20,
-    } = req.query;
+    const { search = "", state_id, page = 1, limit = 20 } = req.query;
 
     const pageNumber = Math.max(Number(page) || 1, 1);
 
-    const limitNumber = Math.min(
-      Math.max(Number(limit) || 20, 1),
-      100
-    );
+    const limitNumber = Math.min(Math.max(Number(limit) || 20, 1), 100);
 
     const filter = {};
 
@@ -253,9 +215,7 @@ export const getAllDistricts = async (req, res) => {
     // ==========================================
 
     const stateIds = [
-      ...new Set(
-        districts.map((district) => district.state_id)
-      ),
+      ...new Set(districts.map((district) => district.state_id)),
     ];
 
     const states = await State.find({
@@ -271,10 +231,7 @@ export const getAllDistricts = async (req, res) => {
     // ==========================================
 
     const stateMap = new Map(
-      states.map((state) => [
-        state.state_id,
-        state.state_name,
-      ])
+      states.map((state) => [state.state_id, state.state_name]),
     );
 
     // ==========================================
@@ -284,8 +241,7 @@ export const getAllDistricts = async (req, res) => {
     const data = districts.map((district) => ({
       ...district,
 
-      state_name:
-        stateMap.get(district.state_id) || null,
+      state_name: stateMap.get(district.state_id) || null,
     }));
 
     // ==========================================
@@ -305,7 +261,6 @@ export const getAllDistricts = async (req, res) => {
         totalPages: Math.ceil(total / limitNumber),
       },
     });
-
   } catch (error) {
     console.error("Get districts error:", error);
 
@@ -317,34 +272,24 @@ export const getAllDistricts = async (req, res) => {
   }
 };
 
-
 // =====================================================
 // GET DISTRICT BY ID
 // =====================================================
 
-export const getDistrictById = async (
-  req,
-  res
-) => {
+export const getDistrictById = async (req, res) => {
   try {
-    const districtId =
-      Number(req.params.id);
+    const districtId = Number(req.params.id);
 
-    if (
-      !Number.isInteger(districtId) ||
-      districtId <= 0
-    ) {
+    if (!Number.isInteger(districtId) || districtId <= 0) {
       return res.status(400).json({
         success: false,
-        message:
-          "Invalid district ID",
+        message: "Invalid district ID",
       });
     }
 
-    const district =
-      await District.findOne({
-        district_id: districtId,
-      });
+    const district = await District.findOne({
+      district_id: districtId,
+    });
 
     if (!district) {
       return res.status(404).json({
@@ -355,58 +300,38 @@ export const getDistrictById = async (
 
     return res.status(200).json({
       success: true,
-      message:
-        "District fetched successfully",
+      message: "District fetched successfully",
       data: district,
     });
-
   } catch (error) {
-    console.error(
-      "Get district error:",
-      error
-    );
+    console.error("Get district error:", error);
 
     return res.status(500).json({
       success: false,
-      message:
-        "Failed to fetch district",
+      message: "Failed to fetch district",
       error: error.message,
     });
   }
 };
 
-
 // =====================================================
 // UPDATE DISTRICT
 // =====================================================
 
-export const updateDistrict = async (
-  req,
-  res
-) => {
+export const updateDistrict = async (req, res) => {
   try {
-    const currentDistrictId =
-      Number(req.params.id);
+    const currentDistrictId = Number(req.params.id);
 
-    if (
-      !Number.isInteger(
-        currentDistrictId
-      ) ||
-      currentDistrictId <= 0
-    ) {
+    if (!Number.isInteger(currentDistrictId) || currentDistrictId <= 0) {
       return res.status(400).json({
         success: false,
-        message:
-          "Invalid district ID",
+        message: "Invalid district ID",
       });
     }
 
-
-    const district =
-      await District.findOne({
-        district_id:
-          currentDistrictId,
-      });
+    const district = await District.findOne({
+      district_id: currentDistrictId,
+    });
 
     if (!district) {
       return res.status(404).json({
@@ -415,13 +340,7 @@ export const updateDistrict = async (
       });
     }
 
-
-    let {
-      district_id,
-      district_name,
-      state_id,
-    } = req.body;
-
+    let { district_id, district_name, state_id } = req.body;
 
     // ==============================
     // Determine final values
@@ -429,94 +348,70 @@ export const updateDistrict = async (
 
     const finalDistrictName =
       district_name !== undefined
-        ? String(
-            district_name
-          ).trim()
+        ? String(district_name).trim()
         : district.district_name;
 
     const finalStateId =
-      state_id !== undefined &&
-      state_id !== null &&
-      state_id !== ""
+      state_id !== undefined && state_id !== null && state_id !== ""
         ? Number(state_id)
         : district.state_id;
-
 
     if (!finalDistrictName) {
       return res.status(400).json({
         success: false,
-        message:
-          "District name cannot be empty",
+        message: "District name cannot be empty",
       });
     }
-
 
     // ==============================
     // Validate state
     // ==============================
 
-    if (
-      !Number.isInteger(finalStateId) ||
-      finalStateId <= 0
-    ) {
+    if (!Number.isInteger(finalStateId) || finalStateId <= 0) {
       return res.status(400).json({
         success: false,
-        message:
-          "State ID must be a positive integer",
+        message: "State ID must be a positive integer",
       });
     }
 
-
-    const stateExists =
-      await State.findOne({
-        state_id: finalStateId,
-      });
+    const stateExists = await State.findOne({
+      state_id: finalStateId,
+    });
 
     if (!stateExists) {
       return res.status(404).json({
         success: false,
-        message:
-          `State with ID ${finalStateId} not found`,
+        message: `State with ID ${finalStateId} not found`,
       });
     }
-
 
     // ==============================
     // Check duplicate district
     // ==============================
 
-    const duplicateDistrict =
-      await District.findOne({
-        _id: {
-          $ne: district._id,
-        },
+    const duplicateDistrict = await District.findOne({
+      _id: {
+        $ne: district._id,
+      },
 
-        state_id: finalStateId,
+      state_id: finalStateId,
 
-        district_name: {
-          $regex:
-            `^${escapeRegex(
-              finalDistrictName
-            )}$`,
-          $options: "i",
-        },
-      });
+      district_name: {
+        $regex: `^${escapeRegex(finalDistrictName)}$`,
+        $options: "i",
+      },
+    });
 
     if (duplicateDistrict) {
       return res.status(409).json({
         success: false,
-        message:
-          "District already exists in this state",
+        message: "District already exists in this state",
       });
     }
 
+    district.district_name = finalDistrictName;
 
-    district.district_name =
-      finalDistrictName;
-
-    district.state_id =
-      finalStateId;
-
+    district.state_id = finalStateId;
 
     // ==============================
     // Update district ID
@@ -527,103 +422,69 @@ export const updateDistrict = async (
       district_id !== null &&
       district_id !== ""
     ) {
-      const newDistrictId =
-        Number(district_id);
+      const newDistrictId = Number(district_id);
 
-      if (
-        !Number.isInteger(
-          newDistrictId
-        ) ||
-        newDistrictId <= 0
-      ) {
+      if (!Number.isInteger(newDistrictId) || newDistrictId <= 0) {
         return res.status(400).json({
           success: false,
-          message:
-            "District ID must be a positive integer",
+          message: "District ID must be a positive integer",
         });
       }
 
-      if (
-        newDistrictId !==
-        currentDistrictId
-      ) {
-        const duplicateId =
-          await District.findOne({
-            district_id:
-              newDistrictId,
-          });
+      if (newDistrictId !== currentDistrictId) {
+        const duplicateId = await District.findOne({
+          district_id: newDistrictId,
+        });
 
         if (duplicateId) {
           return res.status(409).json({
             success: false,
-            message:
-              `District ID ${newDistrictId} already exists`,
+            message: `District ID ${newDistrictId} already exists`,
           });
         }
 
-        district.district_id =
-          newDistrictId;
+        district.district_id = newDistrictId;
 
-        await syncDistrictCounter(
-          newDistrictId
-        );
+        await syncDistrictCounter(newDistrictId);
       }
     }
-
 
     await district.save();
 
     return res.status(200).json({
       success: true,
-      message:
-        "District updated successfully",
+      message: "District updated successfully",
       data: district,
     });
-
   } catch (error) {
-    console.error(
-      "Update district error:",
-      error
-    );
+    console.error("Update district error:", error);
 
     return res.status(500).json({
       success: false,
-      message:
-        "Failed to update district",
+      message: "Failed to update district",
       error: error.message,
     });
   }
 };
 
-
 // =====================================================
 // DELETE DISTRICT
 // =====================================================
 
-export const deleteDistrict = async (
-  req,
-  res
-) => {
+export const deleteDistrict = async (req, res) => {
   try {
-    const districtId =
-      Number(req.params.id);
+    const districtId = Number(req.params.id);
 
-    if (
-      !Number.isInteger(districtId) ||
-      districtId <= 0
-    ) {
+    if (!Number.isInteger(districtId) || districtId <= 0) {
       return res.status(400).json({
         success: false,
-        message:
-          "Invalid district ID",
+        message: "Invalid district ID",
       });
     }
 
-
-    const district =
-      await District.findOneAndDelete({
-        district_id: districtId,
-      });
+    const district = await District.findOneAndDelete({
+      district_id: districtId,
+    });
 
     if (!district) {
       return res.status(404).json({
@@ -632,365 +493,26 @@ export const deleteDistrict = async (
       });
     }
 
-
     return res.status(200).json({
       success: true,
-      message:
-        "District deleted successfully",
+      message: "District deleted successfully",
       data: district,
     });
-
   } catch (error) {
-    console.error(
-      "Delete district error:",
-      error
-    );
+    console.error("Delete district error:", error);
 
     return res.status(500).json({
       success: false,
-      message:
-        "Failed to delete district",
+      message: "Failed to delete district",
       error: error.message,
     });
   }
 };
 
-
 // =====================================================
 // IMPORT DISTRICTS FROM EXCEL
 // =====================================================
 
-// export const importDistricts = async (
-//   req,
-//   res
-// ) => {
-//   try {
-//     if (!req.file) {
-//       return res.status(400).json({
-//         success: false,
-//         message:
-//           "Excel file is required",
-//       });
-//     }
-
-
-//     const workbook = XLSX.read(
-//       req.file.buffer,
-//       {
-//         type: "buffer",
-//       }
-//     );
-
-//     const firstSheetName =
-//       workbook.SheetNames[0];
-
-//     if (!firstSheetName) {
-//       return res.status(400).json({
-//         success: false,
-//         message:
-//           "Excel file does not contain any sheet",
-//       });
-//     }
-
-
-//     const worksheet =
-//       workbook.Sheets[
-//         firstSheetName
-//       ];
-
-//     const rows =
-//       XLSX.utils.sheet_to_json(
-//         worksheet,
-//         {
-//           defval: "",
-//         }
-//       );
-
-
-//     if (!rows.length) {
-//       return res.status(400).json({
-//         success: false,
-//         message:
-//           "Excel file does not contain any data",
-//       });
-//     }
-
-
-//     const imported = [];
-//     const failed = [];
-
-
-//     for (
-//       let index = 0;
-//       index < rows.length;
-//       index++
-//     ) {
-//       const row = rows[index];
-
-//       try {
-//         let districtId =
-//           row.district_id ??
-//           row["District ID"] ??
-//           row["district id"] ??
-//           "";
-
-//         let districtName =
-//           row.district_name ??
-//           row["District Name"] ??
-//           row["district name"] ??
-//           "";
-
-//         let stateId =
-//           row.state_id ??
-//           row["State ID"] ??
-//           row["state id"] ??
-//           "";
-
-
-//         // ==============================
-//         // District name required
-//         // ==============================
-
-//         districtName =
-//           String(
-//             districtName
-//           ).trim();
-
-//         if (!districtName) {
-//           failed.push({
-//             row: index + 2,
-//             data: row,
-//             message:
-//               "District name is required",
-//           });
-
-//           continue;
-//         }
-
-
-//         // ==============================
-//         // State ID required
-//         // ==============================
-
-//         if (
-//           stateId === "" ||
-//           stateId === null ||
-//           stateId === undefined
-//         ) {
-//           failed.push({
-//             row: index + 2,
-//             data: row,
-//             message:
-//               "State ID is required",
-//           });
-
-//           continue;
-//         }
-
-
-//         stateId = Number(stateId);
-
-//         if (
-//           !Number.isInteger(
-//             stateId
-//           ) ||
-//           stateId <= 0
-//         ) {
-//           failed.push({
-//             row: index + 2,
-//             data: row,
-//             message:
-//               "State ID must be a positive integer",
-//           });
-
-//           continue;
-//         }
-
-
-//         // ==============================
-//         // Check state exists
-//         // ==============================
-
-//         const stateExists =
-//           await State.findOne({
-//             state_id: stateId,
-//           });
-
-//         if (!stateExists) {
-//           failed.push({
-//             row: index + 2,
-//             data: row,
-//             message:
-//               `State ID ${stateId} does not exist`,
-//           });
-
-//           continue;
-//         }
-
-
-//         // ==============================
-//         // Duplicate district name
-//         // in same state
-//         // ==============================
-
-//         const duplicateDistrict =
-//           await District.findOne({
-//             state_id: stateId,
-
-//             district_name: {
-//               $regex:
-//                 `^${escapeRegex(
-//                   districtName
-//                 )}$`,
-//               $options: "i",
-//             },
-//           });
-
-//         if (duplicateDistrict) {
-//           failed.push({
-//             row: index + 2,
-//             data: row,
-//             message:
-//               `District "${districtName}" already exists in state ${stateId}`,
-//           });
-
-//           continue;
-//         }
-
-
-//         // ==============================
-//         // Manual district ID
-//         // ==============================
-
-//         if (
-//           districtId !== "" &&
-//           districtId !== null &&
-//           districtId !== undefined
-//         ) {
-//           districtId =
-//             Number(districtId);
-
-//           if (
-//             !Number.isInteger(
-//               districtId
-//             ) ||
-//             districtId <= 0
-//           ) {
-//             failed.push({
-//               row: index + 2,
-//               data: row,
-//               message:
-//                 "District ID must be a positive integer",
-//             });
-
-//             continue;
-//           }
-
-
-//           const duplicateId =
-//             await District.findOne({
-//               district_id:
-//                 districtId,
-//             });
-
-//           if (duplicateId) {
-//             failed.push({
-//               row: index + 2,
-//               data: row,
-//               message:
-//                 `District ID ${districtId} already exists`,
-//             });
-
-//             continue;
-//           }
-
-//           await syncDistrictCounter(
-//             districtId
-//           );
-//         }
-
-//         // ==============================
-//         // Auto ID
-//         // ==============================
-
-//         else {
-//           districtId =
-//             await getNextAvailableDistrictId();
-//         }
-
-
-//         // ==============================
-//         // Save
-//         // ==============================
-
-//         const district =
-//           await District.create({
-//             district_id:
-//               districtId,
-
-//             district_name:
-//               districtName,
-
-//             state_id:
-//               stateId,
-//           });
-
-
-//         imported.push({
-//           row: index + 2,
-
-//           district_id:
-//             district.district_id,
-
-//           district_name:
-//             district.district_name,
-
-//           state_id:
-//             district.state_id,
-//         });
-
-//       } catch (rowError) {
-//         failed.push({
-//           row: index + 2,
-//           data: row,
-//           message:
-//             rowError.message,
-//         });
-//       }
-//     }
-
-
-//     return res.status(200).json({
-//       success: true,
-//       message:
-//         "District import completed",
-
-//       summary: {
-//         totalRows: rows.length,
-//         imported:
-//           imported.length,
-//         failed:
-//           failed.length,
-//       },
-
-//       imported,
-//       failed,
-//     });
-
-//   } catch (error) {
-//     console.error(
-//       "Import districts error:",
-//       error
-//     );
-
-//     return res.status(500).json({
-//       success: false,
-//       message:
-//         "Failed to import districts",
-//       error: error.message,
-//     });
-//   }
-// };
 export const importDistricts = async (req, res) => {
   try {
     if (!req.file) {
@@ -1047,11 +569,11 @@ export const importDistricts = async (req, res) => {
       {},
       {
         state_id: 1,
-      }
+      },
     ).lean();
 
     const validStateIds = new Set(
-      states.map((state) => Number(state.state_id))
+      states.map((state) => Number(state.state_id)),
     );
 
     // ==========================================
@@ -1063,25 +585,21 @@ export const importDistricts = async (req, res) => {
         district_id: 1,
         district_name: 1,
         state_id: 1,
-      }
+      },
     ).lean();
 
     // Existing district IDs
     const existingDistrictIds = new Set(
-      existingDistricts.map((district) =>
-        Number(district.district_id)
-      )
+      existingDistricts.map((district) => Number(district.district_id)),
     );
 
     // Existing district name + state combination
     const existingDistrictKeys = new Set(
       existingDistricts.map((district) => {
-        const name = String(district.district_name)
-          .trim()
-          .toLowerCase();
+        const name = String(district.district_name).trim().toLowerCase();
 
         return `${district.state_id}::${name}`;
-      })
+      }),
     );
 
     // ==========================================
@@ -1097,9 +615,8 @@ export const importDistricts = async (req, res) => {
       existingDistricts.length > 0
         ? Math.max(
             ...existingDistricts.map(
-              (district) =>
-                Number(district.district_id) || 0
-            )
+              (district) => Number(district.district_id) || 0,
+            ),
           )
         : 0;
 
@@ -1110,22 +627,12 @@ export const importDistricts = async (req, res) => {
       const row = rows[index];
 
       let districtId =
-        row.district_id ??
-        row["District ID"] ??
-        row["district id"] ??
-        "";
+        row.district_id ?? row["District ID"] ?? row["district id"] ?? "";
 
       let districtName =
-        row.district_name ??
-        row["District Name"] ??
-        row["district name"] ??
-        "";
+        row.district_name ?? row["District Name"] ?? row["district name"] ?? "";
 
-      let stateId =
-        row.state_id ??
-        row["State ID"] ??
-        row["state id"] ??
-        "";
+      let stateId = row.state_id ?? row["State ID"] ?? row["state id"] ?? "";
 
       districtName = String(districtName).trim();
 
@@ -1145,11 +652,7 @@ export const importDistricts = async (req, res) => {
       // ==========================================
       // STATE ID REQUIRED
       // ==========================================
-      if (
-        stateId === "" ||
-        stateId === null ||
-        stateId === undefined
-      ) {
+      if (stateId === "" || stateId === null || stateId === undefined) {
         failed.push({
           row: index + 2,
           data: row,
@@ -1184,11 +687,9 @@ export const importDistricts = async (req, res) => {
         continue;
       }
 
-      const normalizedDistrictName =
-        districtName.toLowerCase();
+      const normalizedDistrictName = districtName.toLowerCase();
 
-      const districtKey =
-        `${stateId}::${normalizedDistrictName}`;
+      const districtKey = `${stateId}::${normalizedDistrictName}`;
 
       // ==========================================
       // DUPLICATE DISTRICT IN DATABASE
@@ -1226,15 +727,11 @@ export const importDistricts = async (req, res) => {
       ) {
         districtId = Number(districtId);
 
-        if (
-          !Number.isInteger(districtId) ||
-          districtId <= 0
-        ) {
+        if (!Number.isInteger(districtId) || districtId <= 0) {
           failed.push({
             row: index + 2,
             data: row,
-            message:
-              "District ID must be a positive integer",
+            message: "District ID must be a positive integer",
           });
 
           continue;
@@ -1301,55 +798,39 @@ export const importDistricts = async (req, res) => {
     // ==========================================
     // BULK INSERT
     // ==========================================
-    const documents = validRows.map(
-      (item) => item.document
-    );
+    const documents = validRows.map((item) => item.document);
 
     let insertedDocs = [];
 
     if (documents.length > 0) {
-      insertedDocs = await District.insertMany(
-        documents,
-        {
-          ordered: false,
-        }
-      );
+      insertedDocs = await District.insertMany(documents, {
+        ordered: false,
+      });
     }
 
     // ==========================================
     // SYNC COUNTER ONLY ONCE
     // ==========================================
     if (insertedDocs.length > 0) {
-      const highestInsertedDistrictId =
-        Math.max(
-          ...insertedDocs.map(
-            (district) =>
-              Number(district.district_id)
-          )
-        );
-
-      await syncDistrictCounter(
-        highestInsertedDistrictId
+      const highestInsertedDistrictId = Math.max(
+        ...insertedDocs.map((district) => Number(district.district_id)),
       );
+
+      await syncDistrictCounter(highestInsertedDistrictId);
     }
 
     // ==========================================
     // PREPARE RESPONSE
     // ==========================================
-    const imported = insertedDocs.map(
-      (district, index) => ({
-        row: validRows[index]?.row,
+    const imported = insertedDocs.map((district, index) => ({
+      row: validRows[index]?.row,
 
-        district_id:
-          district.district_id,
+      district_id: district.district_id,
 
-        district_name:
-          district.district_name,
+      district_name: district.district_name,
 
-        state_id:
-          district.state_id,
-      })
-    );
+      state_id: district.state_id,
+    }));
 
     return res.status(200).json({
       success: true,
@@ -1365,10 +846,7 @@ export const importDistricts = async (req, res) => {
       failed,
     });
   } catch (error) {
-    console.error(
-      "Import districts error:",
-      error
-    );
+    console.error("Import districts error:", error);
 
     return res.status(500).json({
       success: false,
@@ -1378,43 +856,27 @@ export const importDistricts = async (req, res) => {
   }
 };
 
-
 // =====================================================
 // EXPORT DISTRICTS TO EXCEL
 // =====================================================
 
-export const exportDistricts = async (
-  req,
-  res
-) => {
+export const exportDistricts = async (req, res) => {
   try {
-    const districts =
-      await District.find()
-        .sort({
-          district_id: 1,
-        })
-        .lean();
+    const districts = await District.find()
+      .sort({
+        district_id: 1,
+      })
+      .lean();
 
+    const excelData = districts.map((district) => ({
+      district_id: district.district_id,
 
-    const excelData =
-      districts.map(
-        (district) => ({
-          district_id:
-            district.district_id,
+      district_name: district.district_name,
 
-          district_name:
-            district.district_name,
+      state_id: district.state_id,
+    }));
 
-          state_id:
-            district.state_id,
-        })
-      );
-
-
-    const worksheet =
-      XLSX.utils.json_to_sheet(
-        excelData
-      );
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
 
     worksheet["!cols"] = [
       {
@@ -1428,50 +890,32 @@ export const exportDistricts = async (
       },
     ];
 
+    const workbook = XLSX.utils.book_new();
 
-    const workbook =
-      XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Districts");
 
-
-    XLSX.utils.book_append_sheet(
-      workbook,
-      worksheet,
-      "Districts"
-    );
-
-
-    const buffer = XLSX.write(
-      workbook,
-      {
-        type: "buffer",
-        bookType: "xlsx",
-      }
-    );
-
+    const buffer = XLSX.write(workbook, {
+      type: "buffer",
+      bookType: "xlsx",
+    });
 
     res.setHeader(
       "Content-Disposition",
-      'attachment; filename="districts.xlsx"'
+      'attachment; filename="districts.xlsx"',
     );
 
     res.setHeader(
       "Content-Type",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     );
-
 
     return res.send(buffer);
-
   } catch (error) {
-    console.error(
-      "Export districts error:",
-      error
-    );
+    console.error("Export districts error:", error);
 
     return res.status(500).json({
       success: false,
-      message:
-        "Failed to export districts",
+      message: "Failed to export districts",
       error: error.message,
     });
   }
@@ -1479,10 +923,7 @@ export const exportDistricts = async (
 
 export const getDistrictsDropdown = async (req, res) => {
   try {
-    const {
-      state_id,
-      search = "",
-    } = req.query;
+    const { state_id, search = "" } = req.query;
 
     const filter = {};
 
@@ -1500,10 +941,7 @@ export const getDistrictsDropdown = async (req, res) => {
       const stateId = Number(state_id);
 
       // Validate state id
-      if (
-        !Number.isInteger(stateId) ||
-        stateId <= 0
-      ) {
+      if (!Number.isInteger(stateId) || stateId <= 0) {
         return res.status(400).json({
           success: false,
           message: "Valid state_id is required",
@@ -1546,9 +984,7 @@ export const getDistrictsDropdown = async (req, res) => {
     // ==========================================
 
     const districts = await District.find(filter)
-      .select(
-        "_id district_id district_name state_id"
-      )
+      .select("_id district_id district_name state_id")
       .sort({
         district_name: 1,
       })
@@ -1562,11 +998,7 @@ export const getDistrictsDropdown = async (req, res) => {
       ...new Set(
         districts
           .map((district) => district.state_id)
-          .filter(
-            (id) =>
-              id !== null &&
-              id !== undefined
-          )
+          .filter((id) => id !== null && id !== undefined),
       ),
     ];
 
@@ -1583,10 +1015,7 @@ export const getDistrictsDropdown = async (req, res) => {
     // ==========================================
 
     const stateMap = new Map(
-      states.map((state) => [
-        state.state_id,
-        state.state_name,
-      ])
+      states.map((state) => [state.state_id, state.state_name]),
     );
 
     // ==========================================
@@ -1596,8 +1025,7 @@ export const getDistrictsDropdown = async (req, res) => {
     const data = districts.map((district) => ({
       ...district,
 
-      state_name:
-        stateMap.get(district.state_id) || null,
+      state_name: stateMap.get(district.state_id) || null,
     }));
 
     // ==========================================
@@ -1613,10 +1041,7 @@ export const getDistrictsDropdown = async (req, res) => {
       total: data.length,
     });
   } catch (error) {
-    console.error(
-      "Get districts dropdown error:",
-      error
-    );
+    console.error("Get districts dropdown error:", error);
 
     return res.status(500).json({
       success: false,
@@ -1626,44 +1051,25 @@ export const getDistrictsDropdown = async (req, res) => {
   }
 };
 
-
 // =====================================================
 // NEXT AVAILABLE DISTRICT ID
 // =====================================================
 
-const getNextAvailableDistrictId =
-  async () => {
-    let districtId =
-      await getNextDistrictId();
+const getNextAvailableDistrictId = async () => {
+  let districtId = await getNextDistrictId();
 
-    let existing =
-      await District.exists({
-        district_id:
-          districtId,
-      });
+  let existing = await District.exists({
+    district_id: districtId,
+  });
 
-    while (existing) {
-      districtId =
-        await getNextDistrictId();
+  while (existing) {
+    districtId = await getNextDistrictId();
 
-      existing =
-        await District.exists({
-          district_id:
-            districtId,
-        });
-    }
+    existing = await District.exists({
+      district_id: districtId,
+    });
+  }
 
-    return districtId;
-  };
-
-
-// =====================================================
-// ESCAPE REGEX
-// =====================================================
-
-const escapeRegex = (value) => {
-  return String(value).replace(
-    /[.*+?^${}()|[\]\\]/g,
-    "\\$&"
-  );
+  return districtId;
 };
+
