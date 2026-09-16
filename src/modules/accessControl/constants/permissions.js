@@ -12,6 +12,10 @@ export const PERMISSIONS = {
 
   PRODUCT_MASTER_ACCESS: "productMaster.access",
 
+  // =========================
+  // CATEGORY
+  // =========================
+
   CATEGORY_ACCESS: "category.access",
   CATEGORY_TABLE: "category.table",
   CATEGORY_CREATE: "category.create",
@@ -20,6 +24,10 @@ export const PERMISSIONS = {
   CATEGORY_DELETE: "category.delete",
   CATEGORY_IMPORT: "category.import",
   CATEGORY_EXPORT: "category.export",
+
+  // =========================
+  // BRAND
+  // =========================
 
   BRAND_ACCESS: "brand.access",
   BRAND_TABLE: "brand.table",
@@ -30,6 +38,10 @@ export const PERMISSIONS = {
   BRAND_IMPORT: "brand.import",
   BRAND_EXPORT: "brand.export",
 
+  // =========================
+  // PRODUCT
+  // =========================
+
   PRODUCT_ACCESS: "product.access",
   PRODUCT_TABLE: "product.table",
   PRODUCT_CREATE: "product.create",
@@ -38,6 +50,10 @@ export const PERMISSIONS = {
   PRODUCT_DELETE: "product.delete",
   PRODUCT_IMPORT: "product.import",
   PRODUCT_EXPORT: "product.export",
+
+  // =========================
+  // PRODUCT TYPE
+  // =========================
 
   PRODUCT_TYPE_ACCESS: "product_type.access",
   PRODUCT_TYPE_TABLE: "product_type.table",
@@ -48,7 +64,15 @@ export const PERMISSIONS = {
   PRODUCT_TYPE_IMPORT: "product_type.import",
   PRODUCT_TYPE_EXPORT: "product_type.export",
 
+  // =========================
+  // ADDRESS
+  // =========================
+
   ADDRESS_ACCESS: "address.access",
+
+  // =========================
+  // STATE
+  // =========================
 
   STATE_ACCESS: "state.access",
   STATE_TABLE: "state.table",
@@ -59,6 +83,10 @@ export const PERMISSIONS = {
   STATE_IMPORT: "state.import",
   STATE_EXPORT: "state.export",
 
+  // =========================
+  // DISTRICT
+  // =========================
+
   DISTRICT_ACCESS: "district.access",
   DISTRICT_TABLE: "district.table",
   DISTRICT_CREATE: "district.create",
@@ -67,6 +95,10 @@ export const PERMISSIONS = {
   DISTRICT_DELETE: "district.delete",
   DISTRICT_IMPORT: "district.import",
   DISTRICT_EXPORT: "district.export",
+
+  // =========================
+  // CITY
+  // =========================
 
   CITY_ACCESS: "city.access",
   CITY_TABLE: "city.table",
@@ -77,6 +109,10 @@ export const PERMISSIONS = {
   CITY_IMPORT: "city.import",
   CITY_EXPORT: "city.export",
 
+  // =========================
+  // PINCODE
+  // =========================
+
   PINCODE_ACCESS: "pincode.access",
   PINCODE_TABLE: "pincode.table",
   PINCODE_CREATE: "pincode.create",
@@ -86,6 +122,10 @@ export const PERMISSIONS = {
   PINCODE_IMPORT: "pincode.import",
   PINCODE_EXPORT: "pincode.export",
 
+  // =========================
+  // AREA
+  // =========================
+
   AREA_ACCESS: "area.access",
   AREA_TABLE: "area.table",
   AREA_CREATE: "area.create",
@@ -94,6 +134,32 @@ export const PERMISSIONS = {
   AREA_DELETE: "area.delete",
   AREA_IMPORT: "area.import",
   AREA_EXPORT: "area.export",
+
+  // =========================
+  // REASON MASTER
+  // =========================
+
+  REASON_ACCESS: "reason.access",
+  REASON_TABLE: "reason.table",
+  REASON_CREATE: "reason.create",
+  REASON_VIEW: "reason.view",
+  REASON_UPDATE: "reason.update",
+  REASON_DELETE: "reason.delete",
+  // REASON_IMPORT: "reason.import",
+  // REASON_EXPORT: "reason.export",
+  REASON_ACTIVE: "reason.active",
+
+  // =========================
+  // DEALER MASTER
+  // =========================
+
+  DEALER_VIEW: "dealers.view",
+  DEAlER_TABLE: "dealers.table",
+  DEALER_CREATE: "dealers.create",
+  DEALER_UPDATE: "dealers.update",
+  DEALER_DELETE: "dealers.delete",
+  DEALER_PERFORMANCE_VIEW: "dealers.performance.view",
+  DEALER_CAPACITY_MANAGE: "dealers.capacity.manage",
 
   ITEM_ACCESS: "item.access",
 
@@ -137,13 +203,6 @@ export const PERMISSIONS = {
   COMPLAINT_CANCEL: "complaints.cancel",
   COMPLAINT_CLOSE: "complaints.close",
   COMPLAINT_VERIFY: "complaints.verify",
-
-  DEALER_VIEW: "dealers.view",
-  DEALER_CREATE: "dealers.create",
-  DEALER_UPDATE: "dealers.update",
-  DEALER_DELETE: "dealers.delete",
-  DEALER_PERFORMANCE_VIEW: "dealers.performance.view",
-  DEALER_CAPACITY_MANAGE: "dealers.capacity.manage",
 
   APPOINTMENT_VIEW: "appointments.view",
   APPOINTMENT_CREATE: "appointments.create",
@@ -248,7 +307,7 @@ export const PERMISSIONS = {
   ALLOCATION_HISTORY_VIEW: "allocation.history.view",
 }
 
-export const PERMISSION_LIST = [
+export const PERMISSION_LIST= [
   // {
   //   id: "P-001",
   //   key: PERMISSIONS.BRAND_ACCESS,
@@ -841,7 +900,73 @@ export const PERMISSION_LIST = [
     label: "Export Area",
   },
 
+  // =========================
+  // REASON MASTER
+  // =========================
 
+  {
+    id: "P-081",
+    key: PERMISSIONS.REASON_ACCESS,
+    module: "Reason",
+    action: "access",
+    label: "Access Reason Master",
+  },
+  {
+    id: "P-082",
+    key: PERMISSIONS.REASON_TABLE,
+    module: "Reason",
+    action: "table",
+    label: "View Reason Table",
+  },
+  {
+    id: "P-083",
+    key: PERMISSIONS.REASON_CREATE,
+    module: "Reason",
+    action: "create",
+    label: "Create Reason",
+  },
+  {
+    id: "P-084",
+    key: PERMISSIONS.REASON_VIEW,
+    module: "Reason",
+    action: "view",
+    label: "View Reason",
+  },
+  {
+    id: "P-085",
+    key: PERMISSIONS.REASON_UPDATE,
+    module: "Reason",
+    action: "update",
+    label: "Update Reason",
+  },
+  {
+    id: "P-086",
+    key: PERMISSIONS.REASON_DELETE,
+    module: "Reason",
+    action: "delete",
+    label: "Delete Reason",
+  },
+  // {
+  //   id: "P-087",
+  //   key: PERMISSIONS.REASON_IMPORT,
+  //   module: "Reason",
+  //   action: "import",
+  //   label: "Import Reason",
+  // },
+  // {
+  //   id: "P-088",
+  //   key: PERMISSIONS.REASON_EXPORT,
+  //   module: "Reason",
+  //   action: "export",
+  //   label: "Export Reason",
+  // },
+  {
+    id: "P-089",
+    key: PERMISSIONS.REASON_ACTIVE,
+    module: "Reason",
+    action: "active",
+    label: "Active Reason",
+  },
   // {
   //   id: "P-004",
   //   key: PERMISSIONS.CATEGORY_ACCESS,
@@ -857,6 +982,58 @@ export const PERMISSION_LIST = [
   //   action: "access",
   //   label: "Access Item Master",
   // },
+
+  // =========================
+  // DEALER MASTER
+  // =========================
+
+  {
+    id: "P-019",
+    key: PERMISSIONS.DEALER_VIEW,
+    module: "Dealers",
+    action: "view",
+    label: "View Dealers",
+  },
+  {
+    id: "P-019",
+    key: PERMISSIONS.DEAlER_TABLE,
+    module: "Dealers",
+    action: "table",
+    label: "View Dealers Table",
+  },
+
+  {
+    id: "P-020",
+    key: PERMISSIONS.DEALER_CREATE,
+    module: "Dealers",
+    action: "create",
+    label: "Create Dealers",
+  },
+
+  {
+    id: "P-021",
+    key: PERMISSIONS.DEALER_UPDATE,
+    module: "Dealers",
+    action: "update",
+    label: "Update Dealers",
+  },
+
+  {
+    id: "P-022",
+    key: PERMISSIONS.DEALER_DELETE,
+    module: "Dealers",
+    action: "delete",
+    label: "Delete Dealers",
+  },
+
+  {
+    id: "P-023",
+    key: PERMISSIONS.DEALER_PERFORMANCE_VIEW,
+    module: "Dealers",
+    action: "performance",
+    label: "View Performance",
+  },
+
   {
     id: "P-006",
     key: PERMISSIONS.APPOINTMENT_ACCESS,
@@ -1201,46 +1378,6 @@ export const PERMISSION_LIST = [
     module: "Complaints",
     action: "verify",
     label: "Verify Complaint",
-  },
-
-  {
-    id: "P-019",
-    key: PERMISSIONS.DEALER_VIEW,
-    module: "Dealers",
-    action: "view",
-    label: "View Dealers",
-  },
-
-  {
-    id: "P-020",
-    key: PERMISSIONS.DEALER_CREATE,
-    module: "Dealers",
-    action: "create",
-    label: "Create Dealers",
-  },
-
-  {
-    id: "P-021",
-    key: PERMISSIONS.DEALER_UPDATE,
-    module: "Dealers",
-    action: "update",
-    label: "Update Dealers",
-  },
-
-  {
-    id: "P-022",
-    key: PERMISSIONS.DEALER_DELETE,
-    module: "Dealers",
-    action: "delete",
-    label: "Delete Dealers",
-  },
-
-  {
-    id: "P-023",
-    key: PERMISSIONS.DEALER_PERFORMANCE_VIEW,
-    module: "Dealers",
-    action: "performance",
-    label: "View Performance",
   },
 
   {

@@ -89,14 +89,14 @@ const productCategorySchema = new mongoose.Schema(
       trim: true,
     },
 
-    description:{
+    description: {
       type: String,
-      trim:true
+      trim: true,
     },
-    rate:{
+    rate: {
       type: Number,
-      trim: true
-    }
+      trim: true,
+    },
   },
   {
     _id: false,
@@ -258,7 +258,7 @@ const dealerSchema = new mongoose.Schema(
       sparse: true,
       trim: true,
       uppercase: true,
-      index: true,
+      // index: true,
     },
 
     /* =========================
@@ -268,7 +268,10 @@ const dealerSchema = new mongoose.Schema(
     headCode: {
       type: String,
       required: true,
+      unique: true,
       trim: true,
+      uppercase: true,
+      index: true,
     },
 
     groupHead: {
@@ -482,6 +485,18 @@ const dealerSchema = new mongoose.Schema(
     /* =========================
        ACCOUNT
     ========================= */
+
+    /* =========================
+      BILLING
+    ========================= */
+
+    billingType: {
+      type: String,
+      enum: ["FIXED", "PARTIAL_PAYMENT", "PROFIT_SHARING"],
+      required: true,
+      default: "FIXED",
+      index: true,
+    },
 
     accountType: {
       type: String,

@@ -2,6 +2,8 @@ import Dealer from "../models/dealer.model.js";
 import User from "../../users/models/user.model.js";
 import Role from "../../accessControl/models/role.model.js";
 import Allocation from '../../allocation/model/allocation.model.js'
+import { syncDealerAllocation } from "../../allocation/services/allocateDealer.service.js";
+
 /* =========================================================
    HELPERS
 ========================================================= */
@@ -20,6 +22,27 @@ const parseJSON = (value, fallback = undefined) => {
   } catch (error) {
     return fallback;
   }
+};
+
+const generateHeadCode = async () => {
+  const lastDealer = await Dealer.findOne({
+    headCode: /^HEAD\d+$/,
+  })
+    .sort({ headCode: -1 })
+    .select("headCode")
+    .lean();
+
+  let nextNumber = 1;
+
+  if (lastDealer?.headCode) {
+    const match = lastDealer.headCode.match(/\d+$/);
+
+    if (match) {
+      nextNumber = Number(match[0]) + 1;
+    }
+  }
+
+  return `HEAD${String(nextNumber).padStart(4, "0")}`;
 };
 
 const parseNumber = (value, fallback = 0) => {
@@ -56,7 +79,7 @@ const getUploadedFiles = (files, fieldName) => {
   );
 };
 
-const buildAllocationRules = ({
+export const buildAllocationRules = ({
   dealer,
   productServices,
   combinedCapacity,
@@ -134,39 +157,79 @@ const buildAllocationRules = ({
   |--------------------------------------------------------------------------
   */
 
-  for (const individual of individualCapacities ?? []) {
-    const serviceProduct = productServices.find(
-      (item) =>
-        Number(item.productId) ===
-        Number(individual.productId),
+/*
+|--------------------------------------------------------------------------
+| INDIVIDUAL CAPACITY
+|--------------------------------------------------------------------------
+*/
+
+for (const individual of individualCapacities ?? []) {
+  const productId = Number(
+    individual.productId ??
+    individual.product_id,
+  );
+
+  const individualDailyCapacity = Number(
+    individual.capacity ??
+    individual.dailyCapacity ??
+    0,
+  );
+
+  console.log("INDIVIDUAL PRODUCT:", {
+    productId,
+    productName: individual.productName,
+    capacity: individual.capacity,
+    dailyCapacity: individual.dailyCapacity,
+    finalCapacity: individualDailyCapacity,
+  });
+
+  if (!productId) {
+    console.warn(
+      "Skipping individual capacity: productId missing",
+      individual,
     );
 
-    capacityRules.push({
-      capacityType: "INDIVIDUAL",
+    continue;
+  }
 
-      ruleName:
-        individual.productName ??
-        serviceProduct?.productName ??
-        "",
+  const serviceProduct = productServices.find(
+    (item) =>
+      Number(
+        item.productId ??
+        item.product_id,
+      ) === productId,
+  );
 
-      dailyCapacity: 0,
+  capacityRules.push({
+    capacityType: "INDIVIDUAL",
 
-      products: [
-        {
-          productId: Number(individual.productId),
+    ruleName:
+      individual.productName ??
+      serviceProduct?.productName ??
+      "",
 
-          productName:
-            individual.productName ??
-            serviceProduct?.productName ??
-            "",
+    // Individual capacity is stored
+    // at product level.
+    dailyCapacity: 0,
 
-          dailyCapacity: Number(
-            individual.capacity ?? 0,
-          ),
+    products: [
+      {
+        productId,
 
-          services:
-            serviceProduct?.categories?.map((category) => ({
-              categoryId: category.categoryId,
+        productName:
+          individual.productName ??
+          serviceProduct?.productName ??
+          "",
+
+        // IMPORTANT
+        dailyCapacity:
+          individualDailyCapacity,
+
+        services:
+          serviceProduct?.categories?.map(
+            (category) => ({
+              categoryId:
+                category.categoryId,
 
               category:
                 category.categoryName ??
@@ -174,17 +237,20 @@ const buildAllocationRules = ({
                 "",
 
               description:
-                category.description ?? "",
+                category.description ??
+                "",
 
               categoryDescription:
-                category.categoryDescription ?? "",
-            })) ?? [],
-        },
-      ],
+                category.categoryDescription ??
+                "",
+            }),
+          ) ?? [],
+      },
+    ],
 
-      status: "ACTIVE",
-    });
-  }
+    status: "ACTIVE",
+  });
+}
 
   /*
   |--------------------------------------------------------------------------
@@ -226,7 +292,7 @@ export const createDealer = async (req, res) => {
       panNumber,
       drivingLicenceNumber,
       technicianStatus,
-      headCode,
+      // headCode,
       groupHead,
       headName,
       grade,
@@ -244,6 +310,7 @@ export const createDealer = async (req, res) => {
       taxInputPayable,
       vat15Column,
       segment,
+      billingType,
       accountType,
       otherInfo,
       openingBalanceType,
@@ -349,6 +416,8 @@ export const createDealer = async (req, res) => {
 
       otherDocuments: getUploadedFiles(req.files, "documentUpload"),
     };
+
+    const headCode = await generateHeadCode();
 
     /* ===============================
        CREATE
@@ -867,6 +936,39 @@ export const updateDealer = async (req, res) => {
 
     await dealer.save();
 
+    /* ===============================
+   SYNC CURRENT ALLOCATION
+================================ */
+
+let allocation = null;
+
+const allocationRelatedChanged =
+  req.body.productServices !== undefined ||
+  req.body.combinedCapacity !== undefined ||
+  req.body.individualCapacities !== undefined ||
+  req.body.technicianStatus !== undefined ||
+  req.body.technicianCode !== undefined ||
+  req.body.technicianFirmName !== undefined ||
+  req.body.technicianName !== undefined;
+
+if (allocationRelatedChanged) {
+  allocation = await syncDealerAllocation({
+    dealer,
+
+    productServices:
+      dealer.productServices ?? [],
+
+    combinedCapacity:
+      dealer.combinedCapacity ?? {
+        products: [],
+        capacity: 0,
+      },
+
+    individualCapacities:
+      dealer.individualCapacities ?? [],
+  });
+}
+
     return res.status(200).json({
       success: true,
       message: "Dealer updated successfully",
@@ -930,6 +1032,7 @@ export const updateDealerStatus = async (req, res) => {
         status,
 
         technicianStatus: status === "SUSPENDED" ? "INACTIVE" : status,
+        
       },
       {
         new: true,
