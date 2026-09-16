@@ -14,11 +14,7 @@ import { dealerDocumentUpload } from "../middleware/dealerUpload.middleware.js";
 const router = express.Router();
 
 /* CREATE */
-router.post(
-  "/",
-  dealerDocumentUpload,
-  createDealer,
-);
+router.post("/", dealerDocumentUpload, createDealer);
 
 /* GET ALL */
 router.get("/", getDealers);
@@ -27,22 +23,12 @@ router.get("/", getDealers);
 router.get("/:id", getDealerById);
 
 /* UPDATE */
-router.put(
-  "/:id",
-  dealerDocumentUpload,
-  updateDealer,
-);
+router.put("/:id", dealerDocumentUpload, updateDealer);
 
 /* STATUS */
-router.patch(
-  "/:id/status",
-  updateDealerStatus,
-);
+router.patch("/:id/status", updateDealerStatus);
 
 /* DELETE */
-router.delete(
-  "/:id",
-  deleteDealer,
-);
+router.delete("/:id", deleteDealer);
 
 export default router;

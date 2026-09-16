@@ -576,6 +576,8 @@ export const lookupCustomerByPhone = async (req, res) => {
       .populate("brandId", "brandName")
 
       .populate("productTypeId", "product_id product_code product_type")
+      
+      .populate("allocatedDealerId", "headCode technicianName mobileNumber alternativeNumber")
 
       .sort({
         createdAt: -1,

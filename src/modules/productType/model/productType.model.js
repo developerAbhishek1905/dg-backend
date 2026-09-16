@@ -30,7 +30,6 @@ const productTypeSchema = new mongoose.Schema(
 productTypeSchema.index(
   {
     product_id: 1,
-    product_code: 1,
   },
   {
     unique: true,
@@ -38,14 +37,6 @@ productTypeSchema.index(
 );
 
 // Same product type cannot repeat inside same product
-productTypeSchema.index(
-  {
-    product_id: 1,
-    product_type: 1,
-  },
-  {
-    unique: true,
-  },
-);
+
 
 export default mongoose.model("ProductType", productTypeSchema);
