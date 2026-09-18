@@ -118,6 +118,7 @@ export const createClosureLedger = async ({ complaint, user }) => {
       );
     }
 
+    console.log(complaint)
     const ledger = await DealerLedger.create({
       dealerId: dealer._id,
 
@@ -132,8 +133,8 @@ export const createClosureLedger = async ({ complaint, user }) => {
       transactionType: "CLOSURE",
 
       billingType: "FIXED", 
-      customerAmount: complaint.billingReview.customerAmount,
-      profitAmount:complaint.billingReview.profitAmount,
+    //   customerAmount: complaint.billingReview.customerAmount,
+    //   profitAmount:complaint.billingReview.profitAmount,
 
       productId: complaint.productId,
 
