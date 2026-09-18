@@ -1,3 +1,5 @@
+import { closingStatuses, percentageMethods } from "../../billing/rules.js";
+import BillingDealer from "../../dealers/models/dealer.model.js";
 import mongoose from "mongoose";
 
 import Complaint from "../models/complaint.model.js";
@@ -160,12 +162,12 @@ export const createComplaint = async (req, res) => {
       });
     }
 
-    if (!faultReported?.trim()) {
-      return res.status(400).json({
-        success: false,
-        message: "Fault reported is required",
-      });
-    }
+    // if (!faultReported?.trim()) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: "Fault reported is required",
+    //   });
+    // }
 
     /*
     |--------------------------------------------------------------------------
@@ -912,6 +914,14 @@ export const updateComplaint = async (req, res) => {
     |--------------------------------------------------------------------------
     */
 
+    if (complaint.billingReview) {
+      return res.status(409).json({ message: "A complaint under billing review or already billed cannot be edited here." });
+    }
+    if (closingStatuses.includes(req.body.status)) {
+      const billingDealer = await BillingDealer.findById(complaint.allocatedDealerId || complaint.dealerId);
+      if (percentageMethods.includes(billingDealer?.billingType)) return res.status(409).json({ message: "Percentage billing requires DG verification before closure." });
+    }
+
     const allowedFields = [
       "customerName",
       "phone",
@@ -1164,7 +1174,8 @@ export const deleteComplaint = async (req, res) => {
       });
     }
 
-    await Complaint.findByIdAndDelete(id);
+    const deleted = await Complaint.findOneAndDelete({ _id: id, billingReview: { $exists: false } });
+    if (!deleted) return res.status(409).json({ message: "Complaints with billing reviews cannot be deleted" });
 
     return res.status(200).json({
       success: true,

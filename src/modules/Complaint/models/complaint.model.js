@@ -245,10 +245,11 @@ const complaintSchema = new mongoose.Schema(
 
     faultReported: {
       type: String,
-      required: true,
+    //   required: true,
       trim: true,
     },
 
+    
     categoryId: {
   type: mongoose.Schema.Types.ObjectId,
   ref: "Category",
@@ -435,6 +436,30 @@ pendingReason: {
     |--------------------------------------------------------------------------
     */
 
+    billingReview: {
+      type: new mongoose.Schema({
+        dealerId: { type: mongoose.Schema.Types.ObjectId, ref: "Dealer", required: true },
+        method: { type: String, enum: ["PARTIAL_PAYMENT", "PROFIT_SHARING"], required: true },
+        customerAmount: { type: Number, required: true, min: 0 },
+        profitAmount: { type: Number, required: true, min: 0 },
+        percentage: { type: Number, required: true, min: 0, max: 100 },
+        baseAmount: { type: Number, required: true, min: 0 },
+        charge: { type: Number, required: true, min: 0 },
+        status: { type: String, enum: ["PENDING", "IN_REVIEW", "VERIFIED", "REJECTED", "CORRECTION_REQUIRED"], required: true },
+        workSummary: String,
+        submittedAt: Date,
+        submittedBy: String,
+        reviewedAt: Date,
+        reviewedBy: String,
+        reviewerId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        remarks: String,
+        reason: String,
+        correctionCount: { type: Number, default: 0 },
+        revision: { type: Number, default: 1 },
+      }, { _id: false }),
+      default: undefined,
+    },
+
     closedAt: {
       type: Date,
       default: null,
@@ -465,6 +490,7 @@ warrantyEndDate: {
   },
   {
     timestamps: true,
+    optimisticConcurrency: true,
   },
 );
 

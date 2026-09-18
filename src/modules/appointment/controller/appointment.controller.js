@@ -1,8 +1,17 @@
+// import { closingStatuses, percentageMethods } from "../../billing/rules.js";
+// import BillingDealer from "../../dealers/models/dealer.model.js";
 import mongoose from "mongoose";
 import Complaint from "../../Complaint/models/complaint.model.js";
 import { createComplaintActivity } from "../../Complaint/services/complaintActivity.service.js";
 import { getStatusActivityData } from "../../Complaint/helpers/complaintActivity.helper.js";
 import ComplaintActivityLog from "../../Complaint/models/complaintActivityLog.model.js";
+import {
+  createClosureLedger,
+  createCancellationLedger,
+} from "../../dealerLedger/services/dealerBilling.service.js";
+import Dealer from "../../dealers/models/dealer.model.js";
+import DealerLedger from "../../dealerLedger/model/dealerLedger.model.js";
+
 /*
 |--------------------------------------------------------------------------
 | Get Appointment Complaints
@@ -169,9 +178,23 @@ export const getAppointmentComplaints = async (req, res) => {
         })
         .populate({
           path: "allocatedDealerId",
-          select:
-            "headCode technicianName technicianFirmName mobileNumber alternativeNumber email status",
+          select: `
+    headCode
+    technicianName
+    technicianFirmName
+    mobileNumber
+    alternativeNumber
+    email
+    status
+    billingType
+    billingPercentage
+  `,
         })
+        // .populate({
+        //   path: "allocatedDealerId",
+        //   select:
+        //     "headCode technicianName technicianFirmName mobileNumber alternativeNumber email status",
+        // })
         // .populate({
         //   path: "technicianId",
         //   select:
@@ -222,6 +245,10 @@ export const updateAppointmentStatus = async (req, res) => {
       appointmentTime,
       pendingReason,
       cancellationReason,
+
+      // Billing popup values
+      customerAmount,
+      profitAmount,
     } = req.body;
 
     const allowedStatuses = [
@@ -324,7 +351,371 @@ export const updateAppointmentStatus = async (req, res) => {
       });
     }
 
+    // if (complaint.billingReview) {
+    //   return res
+    //     .status(409)
+    //     .json({
+    //       message:
+    //         "This complaint has a billing review. Use DG verification to complete or return its closure.",
+    //     });
+    // }
+    // if (closingStatuses.includes(status)) {
+    //   const billingDealer = await BillingDealer.findById(complaint.allocatedDealerId || complaint.dealerId);
+    //   if (percentageMethods.includes(billingDealer?.billingType)) {
+    //     return res.status(409).json({ message: "Submit the billing amount for DG verification before closing this complaint." });
+    //   }
+    // }
+
     const previousStatus = complaint.status;
+
+    if (status === "CLOSE_ON_BILLING") {
+      // const dealer = await Dealer.findById(
+      //   complaint.allocatedDealerId || complaint.dealerId,
+      // );
+
+      // if (!dealer) {
+      //   return res.status(404).json({
+      //     success: false,
+      //     message: "Dealer not found",
+      //   });
+      // }
+
+      const dealerId = complaint.allocatedDealerId || complaint.dealerId;
+
+      if (!dealerId) {
+        return res.status(400).json({
+          success: false,
+          message: "Dealer is not assigned to this complaint",
+        });
+      }
+
+      const dealer = await Dealer.findById(dealerId);
+
+      if (!dealer) {
+        return res.status(404).json({
+          success: false,
+          message: "Dealer not found",
+        });
+      }
+
+      /*
+    |--------------------------------------------------------------------------
+    | FIXED
+    |--------------------------------------------------------------------------
+    */
+
+      if (dealer.billingType === "FIXED") {
+        const ledger = await createClosureLedger({
+          complaint,
+          user: req.user,
+        });
+
+        complaint.status = "CLOSED";
+        complaint.closedAt = new Date();
+
+        complaint.pendingReason = "";
+        complaint.cancellationReason = "";
+
+        await complaint.save();
+
+        /*
+      |--------------------------------------------------------------------------
+      | Activity
+      |--------------------------------------------------------------------------
+      */
+
+        await createComplaintActivity({
+          complaint,
+
+          activityType: "COMPLAINT_CLOSED",
+
+          previousStatus: complaint.status,
+
+          newStatus: "CLOSED",
+
+          title: "Complaint Closed",
+
+          description: "Complaint closed with fixed billing",
+
+          user: req.user,
+
+          metadata: {
+            billingType: dealer.billingType,
+
+            ledgerId: ledger?._id,
+          },
+        });
+
+        return res.status(200).json({
+          success: true,
+
+          message: "Complaint closed and ledger approved automatically",
+
+          data: complaint,
+
+          ledger,
+        });
+      }
+
+      /*
+    |--------------------------------------------------------------------------
+    | PARTIAL / PROFIT
+    |--------------------------------------------------------------------------
+    */
+
+      // if (["PARTIAL_PAYMENT", "PROFIT_SHARING"].includes(dealer.billingType)) {
+      //   if (!complaint.billingReview) {
+      //     return res.status(400).json({
+      //       success: false,
+      //       message: "Billing amount must be submitted before closing",
+      //       billingType: dealer.billingType,
+      //       requiresBillingReview: true,
+      //     });
+      //   }
+
+      //   const ledger = await createClosureLedger({
+      //     complaint,
+      //     user: req.user,
+      //   });
+
+      //   complaint.status = "CLOSE_ON_VERIFICATION";
+
+      //   await complaint.save();
+
+      //   return res.status(200).json({
+      //     success: true,
+      //     message: "Complaint submitted for DG billing verification",
+      //     data: complaint,
+      //     ledger,
+      //   });
+      // }
+
+      if (dealer.billingType === "PARTIAL_PAYMENT") {
+        const parsedCustomerAmount = Number(customerAmount);
+
+        if (
+          !Number.isFinite(parsedCustomerAmount) ||
+          parsedCustomerAmount <= 0
+        ) {
+          return res.status(400).json({
+            success: false,
+
+            message: "Customer amount is required for partial payment billing",
+
+            requiresBillingInput: true,
+
+            billingType: "PARTIAL_PAYMENT",
+
+            percentage: dealer.billingPercentage,
+          });
+        }
+
+        /*
+      |--------------------------------------------------------------------------
+      | Percentage from Dealer registration
+      |--------------------------------------------------------------------------
+      */
+
+        const percentage = Number(dealer.billingPercentage || 0);
+
+        if (percentage <= 0) {
+          return res.status(400).json({
+            success: false,
+            message: "Dealer billing percentage is not configured",
+          });
+        }
+
+        const charge = Number(
+          ((parsedCustomerAmount * percentage) / 100).toFixed(2),
+        );
+
+        complaint.billingReview = {
+          dealerId: dealer._id,
+
+          method: "PARTIAL_PAYMENT",
+
+          customerAmount: parsedCustomerAmount,
+
+          profitAmount: 0,
+
+          baseAmount: parsedCustomerAmount,
+
+          percentage,
+
+          charge,
+
+          status: "PENDING",
+
+          submittedAt: new Date(),
+
+          submittedBy: req.user?.name || "Dealer",
+        };
+
+        console.log("hkhkhdkhkhkdhkhkwhkhkhkhkjhk", complaint.billingReview);
+
+        /*
+      |--------------------------------------------------------------------------
+      | Create pending ledger
+      |--------------------------------------------------------------------------
+      */
+
+        /*
+      |--------------------------------------------------------------------------
+      | Waiting for DG
+      |--------------------------------------------------------------------------
+      */
+
+        complaint.status = "CLOSE_ON_VERIFICATION";
+
+        console.log("hkhkhdkhkhkdhkhkwhkhkhkhkjhk", complaint.billingReview);
+
+        console.log("complaint", complaint);
+
+        await complaint.save();
+
+        const ledger = await createClosureLedger({
+          complaint,
+          user: req.user,
+        });
+
+        return res.status(200).json({
+          success: true,
+
+          message: "Billing submitted for DG verification",
+
+          data: complaint,
+
+          ledger,
+        });
+      }
+
+      /*
+    |--------------------------------------------------------------------------
+    | PROFIT SHARING
+    |--------------------------------------------------------------------------
+    */
+
+      if (dealer.billingType === "PROFIT_SHARING") {
+        const parsedCustomerAmount = Number(customerAmount);
+
+        const parsedProfitAmount = Number(profitAmount);
+
+        if (
+          !Number.isFinite(parsedCustomerAmount) ||
+          parsedCustomerAmount <= 0
+        ) {
+          return res.status(400).json({
+            success: false,
+
+            message: "Customer amount is required for profit sharing",
+
+            requiresBillingInput: true,
+
+            billingType: "PROFIT_SHARING",
+
+            percentage: dealer.billingPercentage,
+          });
+        }
+
+        if (!Number.isFinite(parsedProfitAmount) || parsedProfitAmount <= 0) {
+          return res.status(400).json({
+            success: false,
+
+            message: "Profit amount is required for profit sharing",
+
+            requiresBillingInput: true,
+
+            billingType: "PROFIT_SHARING",
+
+            percentage: dealer.billingPercentage,
+          });
+        }
+
+        if (parsedProfitAmount > parsedCustomerAmount) {
+          return res.status(400).json({
+            success: false,
+            message: "Profit amount cannot be greater than customer amount",
+          });
+        }
+
+        /*
+      |--------------------------------------------------------------------------
+      | Percentage from Dealer
+      |--------------------------------------------------------------------------
+      */
+
+        const percentage = Number(dealer.billingPercentage || 0);
+
+        if (percentage <= 0) {
+          return res.status(400).json({
+            success: false,
+            message: "Dealer billing percentage is not configured",
+          });
+        }
+
+        /*
+      |--------------------------------------------------------------------------
+      | Calculate charge on PROFIT
+      |--------------------------------------------------------------------------
+      */
+
+        const charge = Number(
+          ((parsedProfitAmount * percentage) / 100).toFixed(2),
+        );
+
+        complaint.billingReview = {
+          dealerId: dealer._id,
+
+          method: "PROFIT_SHARING",
+
+          customerAmount: parsedCustomerAmount,
+
+          profitAmount: parsedProfitAmount,
+
+          baseAmount: parsedProfitAmount,
+
+          percentage,
+
+          charge,
+
+          status: "PENDING",
+
+          submittedAt: new Date(),
+
+          submittedBy: req.user?.name || "Dealer",
+        };
+
+        /*
+      |--------------------------------------------------------------------------
+      | Create pending ledger
+      |--------------------------------------------------------------------------
+      */
+        console.log("complaint", complaint);
+        const ledger = await createClosureLedger({
+          complaint,
+          user: req.user,
+        });
+
+        complaint.status = "CLOSE_ON_VERIFICATION";
+
+        await complaint.save();
+
+        return res.status(200).json({
+          success: true,
+
+          message: "Profit sharing billing submitted for DG verification",
+
+          data: complaint,
+
+          ledger,
+        });
+      }
+
+      return res.status(400).json({
+        success: false,
+        message: `Unsupported dealer billing type: ${dealer.billingType}`,
+      });
+    }
 
     complaint.status = status;
 
@@ -344,13 +735,11 @@ export const updateAppointmentStatus = async (req, res) => {
       complaint.cancellationReason = cancellationReason;
     }
 
-    await complaint.save();
-
     /*
-    |--------------------------------------------------------------------------
-    | ACTIVITY
-    |--------------------------------------------------------------------------
-    */
+      |--------------------------------------------------------------------------
+      | ACTIVITY
+      |--------------------------------------------------------------------------
+      */
 
     const activity = getStatusActivityData({
       status,
@@ -385,11 +774,13 @@ export const updateAppointmentStatus = async (req, res) => {
       },
     });
 
+    // await complaint.save();
+
     /*
-    |--------------------------------------------------------------------------
-    | APPOINTMENT SCHEDULED
-    |--------------------------------------------------------------------------
-    */
+      |--------------------------------------------------------------------------
+      | APPOINTMENT SCHEDULED
+      |--------------------------------------------------------------------------
+      */
 
     if (status === "APPOINTMENT_SCHEDULED" || status === "RESCHEDULED") {
       if (!appointmentDate || !appointmentTime) {
@@ -435,10 +826,10 @@ export const updateAppointmentStatus = async (req, res) => {
     }
 
     /*
-    |--------------------------------------------------------------------------
-    | PENDING
-    |--------------------------------------------------------------------------
-    */
+      |--------------------------------------------------------------------------
+      | PENDING
+      |--------------------------------------------------------------------------
+      */
 
     if (status === "PENDING_ON_CALL") {
       if (!pendingReason) {
@@ -456,38 +847,77 @@ export const updateAppointmentStatus = async (req, res) => {
     }
 
     /*
-    |--------------------------------------------------------------------------
-    | CANCELLED
-    |--------------------------------------------------------------------------
-    */
+      |--------------------------------------------------------------------------
+      | CANCELLED
+      |--------------------------------------------------------------------------
+      */
 
-    if (status === "CANCELLED") {
-      if (!cancellationReason) {
-        return res.status(400).json({
-          success: false,
-          message: "Cancellation reason is required",
-        });
-      }
+    // if (status === "CANCELLED") {
+    //   if (!cancellationReason) {
+    //     return res.status(400).json({
+    //       success: false,
+    //       message: "Cancellation reason is required",
+    //     });
+    //   }
 
-      if (!allowedCancellationReasons.includes(cancellationReason)) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid cancellation reason",
-        });
-      }
+    //   if (!allowedCancellationReasons.includes(cancellationReason)) {
+    //     return res.status(400).json({
+    //       success: false,
+    //       message: "Invalid cancellation reason",
+    //     });
+    //   }
 
-      complaint.cancellationReason = cancellationReason;
+    //   complaint.cancellationReason = cancellationReason;
 
-      complaint.cancelledAt = new Date();
+    //   complaint.cancelledAt = new Date();
 
-      complaint.pendingReason = "";
-    }
+    //   complaint.pendingReason = "";
+    // }
+
+    const cancellationStatuses = [
+  "CANCEL_ON_CALL",
+  "CANCEL_ON_VISIT",
+  "CANCELLED",
+];
+
+const isCancellation =
+  cancellationStatuses.includes(status);
+
+if (isCancellation) {
+  /*
+  |--------------------------------------------------------------------------
+  | Validate cancellation reason
+  |--------------------------------------------------------------------------
+  */
+
+  if (!cancellationReason) {
+    return res.status(400).json({
+      success: false,
+      message: "Cancellation reason is required",
+    });
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Update complaint cancellation data
+  |--------------------------------------------------------------------------
+  */
+
+  complaint.cancellationReason =
+    cancellationReason;
+
+  complaint.cancelledAt =
+    new Date();
+
+  complaint.pendingReason =
+    "";
+}
 
     /*
-    |--------------------------------------------------------------------------
-    | CLOSED
-    |--------------------------------------------------------------------------
-    */
+      |--------------------------------------------------------------------------
+      | CLOSED
+      |--------------------------------------------------------------------------
+      */
 
     if (status === "CLOSED") {
       complaint.closedAt = new Date();
@@ -501,11 +931,101 @@ export const updateAppointmentStatus = async (req, res) => {
 
     await complaint.save();
 
+    /*
+|--------------------------------------------------------------------------
+| Cancellation Billing
+|--------------------------------------------------------------------------
+*/
+
+    // let cancellationLedger = null;
+
+    // const cancellationStatuses = [
+    //   "CANCEL_ON_CALL",
+    //   "CANCEL_ON_VISIT",
+    //   "CANCELLED",
+    // ];
+
+    // if (cancellationStatuses.includes(status)) {
+    //   cancellationLedger = await createCancellationLedger({
+    //     complaint,
+    //     user: req.user,
+    //   });
+    // }
+
+
+
+// if (
+//   cancellationStatuses.includes(
+//     status,
+//   )
+// ) {
+//   if (!cancellationReason) {
+//     return res.status(400).json({
+//       success: false,
+//       message:
+//         "Cancellation reason is required",
+//     });
+//   }
+
+//   complaint.cancellationReason =
+//     cancellationReason;
+
+//   complaint.cancelledAt =
+//     new Date();
+
+//   complaint.pendingReason =
+//     "";
+// }
+
+let cancellationLedger = null;
+
+if (isCancellation) {
+  console.log(
+    "Creating cancellation ledger...",
+  );
+
+  console.log(
+    "Complaint:",
+    complaint.complaintNumber,
+  );
+
+  console.log(
+    "Dealer:",
+    complaint.allocatedDealerId ||
+      complaint.dealerId,
+  );
+
+  cancellationLedger =
+    await createCancellationLedger({
+      complaint,
+      user: req.user,
+    });
+
+  console.log(
+    "Cancellation ledger:",
+    cancellationLedger,
+  );
+}
+
     return res.status(200).json({
       success: true,
-      message: "Complaint status updated successfully",
+
+      message: cancellationLedger
+        ? "Complaint cancelled and cancellation ledger created"
+        : "Complaint status updated successfully",
+
       data: complaint,
+
+      ...(cancellationLedger && {
+        ledger: cancellationLedger,
+      }),
     });
+
+    // return res.status(200).json({
+    //   success: true,
+    //   message: "Complaint status updated successfully",
+    //   data: complaint,
+    // });
   } catch (error) {
     console.error("UPDATE STATUS ERROR:", error);
 
@@ -731,12 +1251,7 @@ export const getComplaintActivityByComplaintId = async (req, res) => {
   }
 };
 
-const getComplaintsByStatuses = async ({
-  req,
-  res,
-  statuses,
-  label,
-}) => {
+const getComplaintsByStatuses = async ({ req, res, statuses, label }) => {
   try {
     const {
       search = "",
@@ -749,22 +1264,11 @@ const getComplaintsByStatuses = async ({
       endDate,
     } = req.query;
 
-    const pageNumber = Math.max(
-      Number(page) || 1,
-      1,
-    );
+    const pageNumber = Math.max(Number(page) || 1, 1);
 
-    const limitNumber = Math.min(
-      Math.max(
-        Number(limit) || 10,
-        1,
-      ),
-      100,
-    );
+    const limitNumber = Math.min(Math.max(Number(limit) || 10, 1), 100);
 
-    const skip =
-      (pageNumber - 1) *
-      limitNumber;
+    const skip = (pageNumber - 1) * limitNumber;
 
     const filter = {
       status: {
@@ -779,8 +1283,7 @@ const getComplaintsByStatuses = async ({
     */
 
     if (dealerId) {
-      filter.allocatedDealerId =
-        dealerId;
+      filter.allocatedDealerId = dealerId;
     }
 
     /*
@@ -789,25 +1292,15 @@ const getComplaintsByStatuses = async ({
     |--------------------------------------------------------------------------
     */
 
-    if (
-      startDate ||
-      endDate
-    ) {
-      filter.complaintDateTime =
-        {};
+    if (startDate || endDate) {
+      filter.complaintDateTime = {};
 
       if (startDate) {
-        filter.complaintDateTime.$gte =
-          new Date(
-            `${startDate}T00:00:00.000Z`,
-          );
+        filter.complaintDateTime.$gte = new Date(`${startDate}T00:00:00.000Z`);
       }
 
       if (endDate) {
-        filter.complaintDateTime.$lte =
-          new Date(
-            `${endDate}T23:59:59.999Z`,
-          );
+        filter.complaintDateTime.$lte = new Date(`${endDate}T23:59:59.999Z`);
       }
     }
 
@@ -818,16 +1311,12 @@ const getComplaintsByStatuses = async ({
     */
 
     if (search.trim()) {
-      const safeSearch =
-        escapeRegex(
-          search.trim(),
-        );
+      const safeSearch = escapeRegex(search.trim());
 
       filter.$or = [
         {
           complaintNumber: {
-            $regex:
-              safeSearch,
+            $regex: safeSearch,
 
             $options: "i",
           },
@@ -835,8 +1324,7 @@ const getComplaintsByStatuses = async ({
 
         {
           customerName: {
-            $regex:
-              safeSearch,
+            $regex: safeSearch,
 
             $options: "i",
           },
@@ -844,8 +1332,7 @@ const getComplaintsByStatuses = async ({
 
         {
           phone: {
-            $regex:
-              safeSearch,
+            $regex: safeSearch,
 
             $options: "i",
           },
@@ -853,8 +1340,7 @@ const getComplaintsByStatuses = async ({
 
         {
           productName: {
-            $regex:
-              safeSearch,
+            $regex: safeSearch,
 
             $options: "i",
           },
@@ -862,8 +1348,7 @@ const getComplaintsByStatuses = async ({
 
         {
           category: {
-            $regex:
-              safeSearch,
+            $regex: safeSearch,
 
             $options: "i",
           },
@@ -871,76 +1356,50 @@ const getComplaintsByStatuses = async ({
       ];
     }
 
-    const [
-      complaints,
-      total,
-    ] = await Promise.all([
-      Complaint.find(
-        filter,
-      )
+    const [complaints, total] = await Promise.all([
+      Complaint.find(filter)
         .populate(
           "allocatedDealerId",
           "technicianCode technicianFirmName technicianName mobileNumber status",
         )
-        .populate(
-          "customerId",
-          "customerCode name phone alternatePhone email",
-        )
+        .populate("customerId", "customerCode name phone alternatePhone email")
         .sort({
           updatedAt: -1,
         })
         .skip(skip)
-        .limit(
-          limitNumber,
-        )
+        .limit(limitNumber)
         .lean(),
 
-      Complaint.countDocuments(
-        filter,
-      ),
+      Complaint.countDocuments(filter),
     ]);
 
-    return res
-      .status(200)
-      .json({
-        success: true,
+    return res.status(200).json({
+      success: true,
 
-        message: `${label} complaints fetched successfully`,
+      message: `${label} complaints fetched successfully`,
 
-        data:
-          complaints,
+      data: complaints,
 
-        pagination: {
-          total,
+      pagination: {
+        total,
 
-          page:
-            pageNumber,
+        page: pageNumber,
 
-          limit:
-            limitNumber,
+        limit: limitNumber,
 
-          totalPages:
-            Math.ceil(
-              total /
-                limitNumber,
-            ),
-        },
-      });
+        totalPages: Math.ceil(total / limitNumber),
+      },
+    });
   } catch (error) {
-    console.error(
-      error,
-    );
+    console.error(error);
 
-    return res
-      .status(500)
-      .json({
-        success: false,
+    return res.status(500).json({
+      success: false,
 
-        message: `Failed to fetch ${label} complaints`,
+      message: `Failed to fetch ${label} complaints`,
 
-        error:
-          error.message,
-      });
+      error: error.message,
+    });
   }
 };
 
@@ -950,20 +1409,16 @@ const getComplaintsByStatuses = async ({
 |--------------------------------------------------------------------------
 */
 
-export const getCancelledComplaints =
-  async (req, res) => {
-    return getComplaintsByStatuses({
-      req,
-      res,
+export const getCancelledComplaints = async (req, res) => {
+  return getComplaintsByStatuses({
+    req,
+    res,
 
-      statuses: [
-        "CANCEL_ON_CALL",
-        "CANCEL_ON_VISIT",
-      ],
+    statuses: ["CANCEL_ON_CALL", "CANCEL_ON_VISIT"],
 
-      label: "cancelled",
-    });
-  };
+    label: "cancelled",
+  });
+};
 
 /*
 |--------------------------------------------------------------------------
@@ -971,20 +1426,16 @@ export const getCancelledComplaints =
 |--------------------------------------------------------------------------
 */
 
-export const getPendingComplaints =
-  async (req, res) => {
-    return getComplaintsByStatuses({
-      req,
-      res,
+export const getPendingComplaints = async (req, res) => {
+  return getComplaintsByStatuses({
+    req,
+    res,
 
-      statuses: [
-        "PENDING_ON_CALL",
-        "PENDING_ON_VISIT",
-      ],
+    statuses: ["PENDING_ON_CALL", "PENDING_ON_VISIT"],
 
-      label: "pending",
-    });
-  };
+    label: "pending",
+  });
+};
 
 /*
 |--------------------------------------------------------------------------
@@ -992,17 +1443,121 @@ export const getPendingComplaints =
 |--------------------------------------------------------------------------
 */
 
-export const getClosedComplaints =
-  async (req, res) => {
-    return getComplaintsByStatuses({
-      req,
-      res,
+export const getClosedComplaints = async (req, res) => {
+  return getComplaintsByStatuses({
+    req,
+    res,
 
-      statuses: [
-        "CLOSE_ON_BILLING",
-        "CLOSED",
-      ],
+    statuses: ["CLOSE_ON_BILLING", "CLOSED"],
 
-      label: "closed",
+    label: "closed",
+  });
+};
+
+export const approveDealerBilling = async (req, res) => {
+  try {
+    const { complaintId } = req.params;
+
+    const ledger = await DealerLedger.findOne({
+      complaintId,
+      transactionType: "CLOSURE",
+      status: "PENDING",
     });
-  };
+
+    if (!ledger) {
+      return res.status(404).json({
+        success: false,
+        message: "Pending billing ledger not found",
+      });
+    }
+
+    const complaint = await Complaint.findById(complaintId);
+
+    if (!complaint) {
+      return res.status(404).json({
+        success: false,
+        message: "Complaint not found",
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Approve Ledger
+    |--------------------------------------------------------------------------
+    */
+
+    ledger.status = "APPROVED";
+
+    ledger.remarks = req.body.remarks || "Billing approved by DG";
+
+    await ledger.save();
+
+    /*
+    |--------------------------------------------------------------------------
+    | Approve billing review
+    |--------------------------------------------------------------------------
+    */
+
+    if (complaint.billingReview) {
+      complaint.billingReview.status = "VERIFIED";
+
+      complaint.billingReview.reviewedAt = new Date();
+
+      complaint.billingReview.reviewerId =
+        req.user?._id || req.user?.id || null;
+
+      complaint.billingReview.reviewedBy = req.user?.name || "DG";
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Close Complaint
+    |--------------------------------------------------------------------------
+    */
+
+    complaint.status = "CLOSED";
+    complaint.closedAt = new Date();
+
+    await complaint.save();
+
+    await createComplaintActivity({
+      complaint,
+
+      activityType: "COMPLAINT_CLOSED",
+
+      previousStatus, // ✅ original status
+
+      newStatus: "CLOSED",
+
+      title: "Complaint Closed",
+
+      description: "Complaint closed with fixed billing",
+
+      user: req.user,
+
+      metadata: {
+        billingType: dealer.billingType,
+        ledgerId: ledger?._id,
+      },
+    });
+
+    return res.status(200).json({
+      success: true,
+
+      message: "Billing approved and complaint closed successfully",
+
+      data: {
+        complaint,
+        ledger,
+      },
+    });
+  } catch (error) {
+    console.error("APPROVE BILLING ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to approve billing",
+      error: error.message,
+    });
+  }
+};

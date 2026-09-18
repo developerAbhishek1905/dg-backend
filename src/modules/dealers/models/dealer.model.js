@@ -498,6 +498,10 @@ const dealerSchema = new mongoose.Schema(
       index: true,
     },
 
+    billingPercentage: { type: Number, min: 0, max: 100, default: 0 },
+    cancellationBillingEnabled: { type: Boolean, default: false },
+    cancellationCharge: { type: Number, min: 0, default: 0 },
+
     accountType: {
       type: String,
       enum: [

@@ -1,3 +1,4 @@
+import { verificationRouter, ledgerRouter } from "./modules/billing/routes.js";
 import express from "express";
 import cors from "cors";
 import path from "path";
@@ -21,6 +22,9 @@ import complaintRoutes from "./modules/Complaint/routes/complaint.routes.js"
 import { testWhatsApp } from "./services/smartpingWhatsapp.service.js";
 import appointmentRoutes from "./modules/appointment/router/appointment.route.js";
 import reasonRoutes from "./modules/reason/routes/reason.routes.js";
+import dealerLedgerRoutes from "./modules/dealerLedger/routes/dealerLadger.route.js"
+
+
 const app = express();
 
 app.use(
@@ -66,6 +70,7 @@ app.use("/api/v1/brands", brandRoutes);
 app.use("/api/v1/reasons", reasonRoutes);
 app.use("/api/v1/products", productRoutes);
 app.use("/api/v1/product-types", productTypeRoutes);
+
 app.use(
   "/api/v1/customers",
   customerRoutes,
@@ -86,6 +91,13 @@ app.post(
 app.use(
   "/api/v1/appointments",
   appointmentRoutes,
+);
+
+app.use("/api/v1/verification", verificationRouter);
+app.use("/api/v1/ledger", ledgerRouter);
+app.use(
+  "/api/v1/dealer-ledger",
+  dealerLedgerRoutes,
 );
 
 export default app;

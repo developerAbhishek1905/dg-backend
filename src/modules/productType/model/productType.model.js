@@ -5,7 +5,7 @@ const productTypeSchema = new mongoose.Schema(
     product_id: {
       type: Number,
       required: true,
-      index: true,
+    //   index: true,
     },
 
     product_code: {

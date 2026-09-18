@@ -1,9 +1,11 @@
+import BillingComplaint from "../../Complaint/models/complaint.model.js";
+import { parseDealerBilling } from "../helpers/dealerBilling.js";
 import Dealer from "../models/dealer.model.js";
 import User from "../../users/models/user.model.js";
 import Role from "../../accessControl/models/role.model.js";
-import Allocation from '../../allocation/model/allocation.model.js'
+import Allocation from "../../allocation/model/allocation.model.js";
 import { syncDealerAllocation } from "../../allocation/services/allocateDealer.service.js";
-
+import DealerLedger from "../../dealerLedger/model/dealerLedger.model.js";
 /* =========================================================
    HELPERS
 ========================================================= */
@@ -97,41 +99,34 @@ export const buildAllocationRules = ({
     combinedCapacity?.products?.length &&
     Number(combinedCapacity.capacity) > 0
   ) {
-    const combinedProducts =
-      combinedCapacity.products.map((capacityProduct) => {
+    const combinedProducts = combinedCapacity.products.map(
+      (capacityProduct) => {
         const serviceProduct = productServices.find(
           (item) =>
-            Number(item.productId) ===
-            Number(capacityProduct.productId),
+            Number(item.productId) === Number(capacityProduct.productId),
         );
 
         return {
           productId: Number(capacityProduct.productId),
 
           productName:
-            capacityProduct.productName ??
-            serviceProduct?.productName ??
-            "",
+            capacityProduct.productName ?? serviceProduct?.productName ?? "",
 
           services:
             serviceProduct?.categories?.map((category) => ({
               categoryId: category.categoryId,
 
-              category:
-                category.categoryName ??
-                category.category ??
-                "",
+              category: category.categoryName ?? category.category ?? "",
 
-              description:
-                category.description ?? "",
+              description: category.description ?? "",
 
-              categoryDescription:
-                category.categoryDescription ?? "",
+              categoryDescription: category.categoryDescription ?? "",
             })) ?? [],
 
           dailyCapacity: 0,
         };
-      });
+      },
+    );
 
     capacityRules.push({
       capacityType: "COMBINED",
@@ -141,9 +136,7 @@ export const buildAllocationRules = ({
         .filter(Boolean)
         .join(" + "),
 
-      dailyCapacity: Number(
-        combinedCapacity.capacity ?? 0,
-      ),
+      dailyCapacity: Number(combinedCapacity.capacity ?? 0),
 
       products: combinedProducts,
 
@@ -157,100 +150,75 @@ export const buildAllocationRules = ({
   |--------------------------------------------------------------------------
   */
 
-/*
+  /*
 |--------------------------------------------------------------------------
 | INDIVIDUAL CAPACITY
 |--------------------------------------------------------------------------
 */
 
-for (const individual of individualCapacities ?? []) {
-  const productId = Number(
-    individual.productId ??
-    individual.product_id,
-  );
+  for (const individual of individualCapacities ?? []) {
+    const productId = Number(individual.productId ?? individual.product_id);
 
-  const individualDailyCapacity = Number(
-    individual.capacity ??
-    individual.dailyCapacity ??
-    0,
-  );
-
-  console.log("INDIVIDUAL PRODUCT:", {
-    productId,
-    productName: individual.productName,
-    capacity: individual.capacity,
-    dailyCapacity: individual.dailyCapacity,
-    finalCapacity: individualDailyCapacity,
-  });
-
-  if (!productId) {
-    console.warn(
-      "Skipping individual capacity: productId missing",
-      individual,
+    const individualDailyCapacity = Number(
+      individual.capacity ?? individual.dailyCapacity ?? 0,
     );
 
-    continue;
+    console.log("INDIVIDUAL PRODUCT:", {
+      productId,
+      productName: individual.productName,
+      capacity: individual.capacity,
+      dailyCapacity: individual.dailyCapacity,
+      finalCapacity: individualDailyCapacity,
+    });
+
+    if (!productId) {
+      console.warn(
+        "Skipping individual capacity: productId missing",
+        individual,
+      );
+
+      continue;
+    }
+
+    const serviceProduct = productServices.find(
+      (item) => Number(item.productId ?? item.product_id) === productId,
+    );
+
+    capacityRules.push({
+      capacityType: "INDIVIDUAL",
+
+      ruleName: individual.productName ?? serviceProduct?.productName ?? "",
+
+      // Individual capacity is stored
+      // at product level.
+      dailyCapacity: 0,
+
+      products: [
+        {
+          productId,
+
+          productName:
+            individual.productName ?? serviceProduct?.productName ?? "",
+
+          // IMPORTANT
+          dailyCapacity: individualDailyCapacity,
+
+          services:
+            serviceProduct?.categories?.map((category) => ({
+              categoryId: category.categoryId,
+
+              category: category.categoryName ?? category.category ?? "",
+
+              description: category.description ?? "",
+
+              categoryDescription: category.categoryDescription ?? "",
+            })) ?? [],
+        },
+      ],
+
+      status: "ACTIVE",
+    });
   }
-
-  const serviceProduct = productServices.find(
-    (item) =>
-      Number(
-        item.productId ??
-        item.product_id,
-      ) === productId,
-  );
-
-  capacityRules.push({
-    capacityType: "INDIVIDUAL",
-
-    ruleName:
-      individual.productName ??
-      serviceProduct?.productName ??
-      "",
-
-    // Individual capacity is stored
-    // at product level.
-    dailyCapacity: 0,
-
-    products: [
-      {
-        productId,
-
-        productName:
-          individual.productName ??
-          serviceProduct?.productName ??
-          "",
-
-        // IMPORTANT
-        dailyCapacity:
-          individualDailyCapacity,
-
-        services:
-          serviceProduct?.categories?.map(
-            (category) => ({
-              categoryId:
-                category.categoryId,
-
-              category:
-                category.categoryName ??
-                category.category ??
-                "",
-
-              description:
-                category.description ??
-                "",
-
-              categoryDescription:
-                category.categoryDescription ??
-                "",
-            }),
-          ) ?? [],
-      },
-    ],
-
-    status: "ACTIVE",
-  });
-}
 
   /*
   |--------------------------------------------------------------------------
@@ -259,14 +227,10 @@ for (const individual of individualCapacities ?? []) {
   */
 
   const cityId =
-    dealer.businessAddress?.cityId ??
-    dealer.residentialAddress?.cityId ??
-    null;
+    dealer.businessAddress?.cityId ?? dealer.residentialAddress?.cityId ?? null;
 
   const cityName =
-    dealer.businessAddress?.city ??
-    dealer.residentialAddress?.city ??
-    "";
+    dealer.businessAddress?.city ?? dealer.residentialAddress?.city ?? "";
 
   return [
     {
@@ -283,6 +247,12 @@ for (const individual of individualCapacities ?? []) {
 
 export const createDealer = async (req, res) => {
   try {
+    let billing;
+    try {
+      billing = parseDealerBilling(req.body);
+    } catch (error) {
+      return res.status(400).json({ success: false, message: error.message });
+    }
     const {
       technicianCode,
       technicianFirmName,
@@ -310,14 +280,14 @@ export const createDealer = async (req, res) => {
       taxInputPayable,
       vat15Column,
       segment,
-      billingType,
       accountType,
       otherInfo,
+      openingBalance,
       openingBalanceType,
     } = req.body;
 
-    console.log(req.body)
-    console.log(req.files)
+    console.log(req.body);
+    console.log(req.files);
 
     /* ===============================
        REQUIRED LOGIN FIELDS
@@ -419,11 +389,15 @@ export const createDealer = async (req, res) => {
 
     const headCode = await generateHeadCode();
 
+//     const openingBalance = parseNumber(req.body.openingBalance);
+// const openingBalanceType = req.body.openingBalanceType || "DR";
+
     /* ===============================
        CREATE
     =============================== */
 
     const dealer = await Dealer.create({
+      ...billing,
       technicianCode: technicianCode || undefined,
       technicianFirmName,
       technicianName,
@@ -476,6 +450,46 @@ export const createDealer = async (req, res) => {
     });
 
     /* ===============================
+   CREATE OPENING BALANCE LEDGER
+================================ */
+
+let openingLedgerEntry = null;
+
+if (openingBalance > 0) {
+  openingLedgerEntry = await DealerLedger.create({
+    dealerId: dealer._id,
+
+    dealerCode:
+      dealer.dealerCode ||
+      dealer.technicianCode ||
+      dealer.headCode,
+
+    dealerName:
+      dealer.technicianFirmName ||
+      dealer.technicianName,
+
+    transactionType: "OPENING_BALANCE",
+
+    billingType: "OPENING_BALANCE",
+
+    entryType:
+      openingBalanceType === "DR"
+        ? "DEBIT"
+        : "CREDIT",
+
+    amount: openingBalance,
+
+    description: "Dealer opening balance",
+
+    remarks: `Opening balance created during dealer creation (${openingBalanceType})`,
+
+    status: "APPROVED",
+
+    billingDate: new Date(),
+  });
+}
+
+    /* ===============================
        FIND DEALER ROLE
     =============================== */
 
@@ -511,61 +525,44 @@ export const createDealer = async (req, res) => {
    CREATE INITIAL ALLOCATION
 =============================== */
 
-const now = new Date();
+    const now = new Date();
 
-const allocationMonth = now.getMonth() + 1;
+    const allocationMonth = now.getMonth() + 1;
 
-const allocationYear = now.getFullYear();
+    const allocationYear = now.getFullYear();
 
-const from = new Date(
-  allocationYear,
-  allocationMonth - 1,
-  1,
-);
+    const from = new Date(allocationYear, allocationMonth - 1, 1);
 
-const to = new Date(
-  allocationYear,
-  allocationMonth,
-  0,
-  23,
-  59,
-  59,
-  999,
-);
+    const to = new Date(allocationYear, allocationMonth, 0, 23, 59, 59, 999);
 
-const allocationRules = buildAllocationRules({
-  dealer,
-  productServices,
-  combinedCapacity,
-  individualCapacities,
-});
+    const allocationRules = buildAllocationRules({
+      dealer,
+      productServices,
+      combinedCapacity,
+      individualCapacities,
+    });
 
-const allocation = await Allocation.create({
-  dealerId: dealer._id,
+    const allocation = await Allocation.create({
+      dealerId: dealer._id,
 
-  dealerCode: dealer.technicianCode,
+      dealerCode: dealer.technicianCode,
 
-  dealerName:
-    dealer.technicianFirmName ||
-    dealer.technicianName,
+      dealerName: dealer.technicianFirmName || dealer.technicianName,
 
-  allocationMonth,
+      allocationMonth,
 
-  allocationYear,
+      allocationYear,
 
-  average_amount: 0,
+      average_amount: 0,
 
-  from,
+      from,
 
-  to,
+      to,
 
-  rules: allocationRules,
+      rules: allocationRules,
 
-  status:
-    dealer.status === "ACTIVE"
-      ? "ACTIVE"
-      : "INACTIVE",
-});
+      status: dealer.status === "ACTIVE" ? "ACTIVE" : "INACTIVE",
+    });
 
     return res.status(201).json({
       success: true,
@@ -711,14 +708,29 @@ export const updateDealer = async (req, res) => {
   try {
     const dealer = await Dealer.findById(req.params.id);
 
-    console.log(req.body)
-    console.log(req.files)
+    console.log(req.body);
+    console.log(req.files);
 
     if (!dealer) {
       return res.status(404).json({
         success: false,
         message: "Dealer not found",
       });
+    }
+
+    // Validate billing before changing the dealer or related records.
+    const billingFields = [
+      "billingType",
+      "billingPercentage",
+      "cancellationBillingEnabled",
+      "cancellationCharge",
+    ];
+    if (billingFields.some((field) => req.body[field] !== undefined)) {
+      try {
+        Object.assign(dealer, parseDealerBilling(req.body, dealer));
+      } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+      }
     }
 
     /* ===============================
@@ -940,34 +952,31 @@ export const updateDealer = async (req, res) => {
    SYNC CURRENT ALLOCATION
 ================================ */
 
-let allocation = null;
+    let allocation = null;
 
-const allocationRelatedChanged =
-  req.body.productServices !== undefined ||
-  req.body.combinedCapacity !== undefined ||
-  req.body.individualCapacities !== undefined ||
-  req.body.technicianStatus !== undefined ||
-  req.body.technicianCode !== undefined ||
-  req.body.technicianFirmName !== undefined ||
-  req.body.technicianName !== undefined;
+    const allocationRelatedChanged =
+      req.body.productServices !== undefined ||
+      req.body.combinedCapacity !== undefined ||
+      req.body.individualCapacities !== undefined ||
+      req.body.technicianStatus !== undefined ||
+      req.body.technicianCode !== undefined ||
+      req.body.technicianFirmName !== undefined ||
+      req.body.technicianName !== undefined;
 
-if (allocationRelatedChanged) {
-  allocation = await syncDealerAllocation({
-    dealer,
+    if (allocationRelatedChanged) {
+      allocation = await syncDealerAllocation({
+        dealer,
 
-    productServices:
-      dealer.productServices ?? [],
+        productServices: dealer.productServices ?? [],
 
-    combinedCapacity:
-      dealer.combinedCapacity ?? {
-        products: [],
-        capacity: 0,
-      },
+        combinedCapacity: dealer.combinedCapacity ?? {
+          products: [],
+          capacity: 0,
+        },
 
-    individualCapacities:
-      dealer.individualCapacities ?? [],
-  });
-}
+        individualCapacities: dealer.individualCapacities ?? [],
+      });
+    }
 
     return res.status(200).json({
       success: true,
@@ -990,6 +999,15 @@ if (allocationRelatedChanged) {
 
 export const deleteDealer = async (req, res) => {
   try {
+    if (
+      await BillingComplaint.exists({ "billingReview.dealerId": req.params.id })
+    )
+      return res
+        .status(409)
+        .json({
+          message:
+            "Dealers with billing reviews or ledger entries cannot be deleted",
+        });
     const dealer = await Dealer.findByIdAndDelete(req.params.id);
 
     if (!dealer) {
@@ -1032,7 +1050,6 @@ export const updateDealerStatus = async (req, res) => {
         status,
 
         technicianStatus: status === "SUSPENDED" ? "INACTIVE" : status,
-        
       },
       {
         new: true,
