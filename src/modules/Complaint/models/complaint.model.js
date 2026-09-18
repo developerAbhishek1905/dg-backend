@@ -440,8 +440,8 @@ pendingReason: {
       type: new mongoose.Schema({
         dealerId: { type: mongoose.Schema.Types.ObjectId, ref: "Dealer", required: true },
         method: { type: String, enum: ["PARTIAL_PAYMENT", "PROFIT_SHARING"], required: true },
-        customerAmount: { type: Number, required: true, min: 0 },
-        profitAmount: { type: Number, required: true, min: 0 },
+        customerAmount: { type: Number, min: 0 },
+        profitAmount: { type: Number, min: 0 },
         percentage: { type: Number, required: true, min: 0, max: 100 },
         baseAmount: { type: Number, required: true, min: 0 },
         charge: { type: Number, required: true, min: 0 },
