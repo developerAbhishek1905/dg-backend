@@ -6,7 +6,11 @@ import {
   getComplaintById,
   updateComplaint,
   deleteComplaint,
+  suspendComplaint,
+  getEligibleDealersForComplaint,
+  assignDealerToComplaint
 } from "../controllers/complaint.controller.js";
+import { protect } from "../../auth/middleware/auth.middleware.js";
 
 
 const router =
@@ -14,33 +18,49 @@ const router =
 
 
 router.post(
-  "/",
+  "/",protect,
   createComplaint,
 );
 
 
 router.get(
-  "/",
+  "/",protect,
   getComplaints,
 );
 
 
 router.get(
-  "/:id",
+  "/:id",protect,
   getComplaintById,
 );
 
 
 router.put(
-  "/:id",
+  "/:id",protect,
   updateComplaint,
 );
 
 
 router.delete(
-  "/:id",
+  "/:id",protect,
   deleteComplaint,
 );
 
+router.patch(
+  "/:id/suspend",protect
+  ,
+  suspendComplaint
+);
+
+
+router.get(
+  "/:complaintId/eligible-dealers",
+  getEligibleDealersForComplaint,
+);
+
+router.patch(
+  "/:complaintId/assign-dealer",
+  assignDealerToComplaint,
+);
 
 export default router;

@@ -4,13 +4,15 @@ import mongoose from "mongoose";
 
 import Complaint from "../models/complaint.model.js";
 import Customer from "../../Customer/models/customer.model.js";
+import Dealer from "../../dealers/models/dealer.model.js"
 import { getIsWarranty } from "../../../helper/warranty.util.js";
 import { allocateDealerForComplaint } from "../../allocation/services/allocateDealer.service.js";
 import { sendComplaintAllocationNotifications } from "../../../services/complaintWhatsapp.service.js";
 import { createComplaintActivity } from "../services/complaintActivity.service.js";
+import { escapeRegex } from "../../../helper/escapeRegex.js";
 // import { sendComplaintAllocationNotifications } from "../../../services/complaintNotification.service.js";
 // import { sendComplaintWhatsAppNotifications } from "../../../services/complaintWhatsapp.service.js";
- 
+
 /*
 |--------------------------------------------------------------------------
 | Complaint Number Generator
@@ -28,9 +30,7 @@ export const generateCustomerCode = async () => {
   let nextNumber = 1;
 
   if (lastCustomer?.customerCode) {
-    const lastNumber = Number(
-      lastCustomer.customerCode.replace("CUST", ""),
-    );
+    const lastNumber = Number(lastCustomer.customerCode.replace("CUST", ""));
 
     nextNumber = lastNumber + 1;
   }
@@ -200,61 +200,57 @@ export const createComplaint = async (req, res) => {
     |--------------------------------------------------------------------------
     */
 
-if (!customer) {
-  const customerCode = await generateCustomerCode();
+    if (!customer) {
+      const customerCode = await generateCustomerCode();
 
-  customer = await Customer.create({
-    customerCode,
+      customer = await Customer.create({
+        customerCode,
 
-    name: customerName.trim(),
+        name: customerName.trim(),
 
-    phone: phone.trim(),
+        phone: phone.trim(),
 
-    alternatePhone: alternatePhone?.trim() || "",
+        alternatePhone: alternatePhone?.trim() || "",
 
-    email: email?.trim()?.toLowerCase() || "",
+        email: email?.trim()?.toLowerCase() || "",
 
-    address: {
-      addressLine: address?.addressLine?.trim() || "",
+        address: {
+          addressLine: address?.addressLine?.trim() || "",
 
-      stateId:
-        address?.stateId !== undefined &&
-        address?.stateId !== null
-          ? Number(address.stateId)
-          : null,
+          stateId:
+            address?.stateId !== undefined && address?.stateId !== null
+              ? Number(address.stateId)
+              : null,
 
-      state: address?.state?.trim() || "",
+          state: address?.state?.trim() || "",
 
-      districtId:
-        address?.districtId !== undefined &&
-        address?.districtId !== null
-          ? Number(address.districtId)
-          : null,
+          districtId:
+            address?.districtId !== undefined && address?.districtId !== null
+              ? Number(address.districtId)
+              : null,
 
-      district: address?.district?.trim() || "",
+          district: address?.district?.trim() || "",
 
-      cityId:
-        address?.cityId !== undefined &&
-        address?.cityId !== null
-          ? Number(address.cityId)
-          : null,
+          cityId:
+            address?.cityId !== undefined && address?.cityId !== null
+              ? Number(address.cityId)
+              : null,
 
-      city: address?.city?.trim() || "",
+          city: address?.city?.trim() || "",
 
-      pincodeId:
-        address?.pincodeId !== undefined &&
-        address?.pincodeId !== null
-          ? Number(address.pincodeId)
-          : null,
+          pincodeId:
+            address?.pincodeId !== undefined && address?.pincodeId !== null
+              ? Number(address.pincodeId)
+              : null,
 
-      pinCode: address?.pinCode?.trim() || "",
-    },
+          pinCode: address?.pinCode?.trim() || "",
+        },
 
-    contactInfo: contactInfo?.trim() || "",
+        contactInfo: contactInfo?.trim() || "",
 
-    status: "ACTIVE",
-  });
-}
+        status: "ACTIVE",
+      });
+    }
 
     /*
     |--------------------------------------------------------------------------
@@ -306,6 +302,7 @@ if (!customer) {
     let dealerAllocation = null;
 
     if (address?.cityId && productId && (categoryId || category)) {
+      console.log("sdbfkdnfkdnvkdnfk",productId)
       dealerAllocation = await allocateDealerForComplaint({
         cityId: Number(address.cityId),
 
@@ -383,6 +380,7 @@ if (!customer) {
         productId !== undefined && productId !== null && productId !== ""
           ? Number(productId)
           : null,
+      // productId,
       productName: productName.trim(),
 
       /*
@@ -430,67 +428,64 @@ if (!customer) {
     });
 
     await createComplaintActivity({
-  complaint,
+      complaint,
 
-  activityType: "COMPLAINT_CREATED",
+      activityType: "COMPLAINT_CREATED",
 
-  previousStatus: null,
+      previousStatus: null,
 
-  newStatus: complaint.status,
+      newStatus: complaint.status,
 
-  title: "Complaint Created",
+      title: "Complaint Created",
 
-  description: `Complaint ${complaint.complaintNumber} created successfully`,
+      description: `Complaint ${complaint.complaintNumber} created successfully`,
 
-  user: req.user,
+      user: req.user,
 
-  metadata: {
-    customerId: complaint.customerId,
-    customerName: complaint.customerName,
-    phone: complaint.phone,
+      metadata: {
+        customerId: complaint.customerId,
+        customerName: complaint.customerName,
+        phone: complaint.phone,
 
-    productId: complaint.productId,
-    productName: complaint.productName,
+        productId: complaint.productId,
+        productName: complaint.productName,
 
-    categoryId: complaint.categoryId,
-    category: complaint.category,
+        categoryId: complaint.categoryId,
+        category: complaint.category,
 
-    priority: complaint.priority,
-    complaintType: complaint.complaintType,
-  },
-});
+        priority: complaint.priority,
+        complaintType: complaint.complaintType,
+      },
+    });
 
-if (dealerAllocation?.dealerId) {
-  await createComplaintActivity({
-    complaint,
+    if (dealerAllocation?.dealerId) {
+      await createComplaintActivity({
+        complaint,
 
-    activityType: "DEALER_ALLOCATED",
+        activityType: "DEALER_ALLOCATED",
 
-    previousStatus: "REGISTERED",
-    newStatus: "ALLOCATED",
+        previousStatus: "REGISTERED",
+        newStatus: "ALLOCATED",
 
-    title: "Dealer Allocated",
+        title: "Dealer Allocated",
 
-    description:
-      "Complaint automatically allocated to dealer",
+        description: "Complaint automatically allocated to dealer",
 
-    dealerId: dealerAllocation.dealerId,
+        dealerId: dealerAllocation.dealerId,
 
-    user: req.user,
+        user: req.user,
 
-    metadata: {
-      allocationId:
-        dealerAllocation.allocationId,
+        metadata: {
+          allocationId: dealerAllocation.allocationId,
 
-      allocationRuleId:
-        dealerAllocation.capacityRuleId,
+          allocationRuleId: dealerAllocation.capacityRuleId,
 
-      allocationType: "AUTO",
+          allocationType: "AUTO",
 
-      allocatedAt: complaint.allocatedAt,
-    },
-  });
-}
+          allocatedAt: complaint.allocatedAt,
+        },
+      });
+    }
 
     /*
 |--------------------------------------------------------------------------
@@ -498,43 +493,39 @@ if (dealerAllocation?.dealerId) {
 |--------------------------------------------------------------------------
 */
 
-// if (dealerAllocation?.dealerId) {
-//   try {
-//     await sendComplaintAllocationNotifications({
-//       complaint,
-//       dealerId:
-//         dealerAllocation.dealerId,
-//     });
-//   } catch (error) {
-//     /*
-//      * Do NOT fail complaint creation
-//      * because WhatsApp failed.
-//      */
-//     console.error(
-//       "WhatsApp notification failed:",
-//       error,
-//     );
-//   }
-// }
+    // if (dealerAllocation?.dealerId) {
+    //   try {
+    //     await sendComplaintAllocationNotifications({
+    //       complaint,
+    //       dealerId:
+    //         dealerAllocation.dealerId,
+    //     });
+    //   } catch (error) {
+    //     /*
+    //      * Do NOT fail complaint creation
+    //      * because WhatsApp failed.
+    //      */
+    //     console.error(
+    //       "WhatsApp notification failed:",
+    //       error,
+    //     );
+    //   }
+    // }
 
-/*
+    /*
 |--------------------------------------------------------------------------
 | WHATSAPP NOTIFICATIONS
 |--------------------------------------------------------------------------
 */
 
-if (dealerAllocation?.dealerId) {
-  sendComplaintAllocationNotifications({
-    complaint,
-    dealerId:
-      dealerAllocation.dealerId,
-  }).catch((error) => {
-    console.error(
-      "WhatsApp notification error:",
-      error,
-    );
-  });
-}
+    if (dealerAllocation?.dealerId) {
+      sendComplaintAllocationNotifications({
+        complaint,
+        dealerId: dealerAllocation.dealerId,
+      }).catch((error) => {
+        console.error("WhatsApp notification error:", error);
+      });
+    }
 
     const populatedComplaint = await Complaint.findById(complaint._id)
       .populate(
@@ -743,13 +734,14 @@ export const getComplaints = async (req, res) => {
         )
         .populate(
           "categoryId",
-          "customerCode name phone alternatePhone email address",
+          "product_name category description",
         )
+        .populate("allocatedDealerId", "technicianName technicianFirmName")
 
         .populate("parentComplaintId", "complaintNumber complaintType status")
 
         .populate("brandId", "brandName")
-
+        // .populate("productId","product_name category description")
         .populate("productTypeId", "product_id product_code product_type")
 
         .sort({
@@ -845,7 +837,7 @@ export const getComplaintById = async (req, res) => {
 
       .populate(
         "allocatedDealerId",
-        "technicianCode technicianFirmName technicianName mobileNumber rating status",
+        " headCode technicianFirmName technicianName mobileNumber rating status",
       )
 
       .lean();
@@ -915,11 +907,24 @@ export const updateComplaint = async (req, res) => {
     */
 
     if (complaint.billingReview) {
-      return res.status(409).json({ message: "A complaint under billing review or already billed cannot be edited here." });
+      return res
+        .status(409)
+        .json({
+          message:
+            "A complaint under billing review or already billed cannot be edited here.",
+        });
     }
     if (closingStatuses.includes(req.body.status)) {
-      const billingDealer = await BillingDealer.findById(complaint.allocatedDealerId || complaint.dealerId);
-      if (percentageMethods.includes(billingDealer?.billingType)) return res.status(409).json({ message: "Percentage billing requires DG verification before closure." });
+      const billingDealer = await BillingDealer.findById(
+        complaint.allocatedDealerId || complaint.dealerId,
+      );
+      if (percentageMethods.includes(billingDealer?.billingType))
+        return res
+          .status(409)
+          .json({
+            message:
+              "Percentage billing requires DG verification before closure.",
+          });
     }
 
     const allowedFields = [
@@ -1174,8 +1179,14 @@ export const deleteComplaint = async (req, res) => {
       });
     }
 
-    const deleted = await Complaint.findOneAndDelete({ _id: id, billingReview: { $exists: false } });
-    if (!deleted) return res.status(409).json({ message: "Complaints with billing reviews cannot be deleted" });
+    const deleted = await Complaint.findOneAndDelete({
+      _id: id,
+      billingReview: { $exists: false },
+    });
+    if (!deleted)
+      return res
+        .status(409)
+        .json({ message: "Complaints with billing reviews cannot be deleted" });
 
     return res.status(200).json({
       success: true,
@@ -1190,6 +1201,554 @@ export const deleteComplaint = async (req, res) => {
 
       message: "Failed to delete complaint",
 
+      error: error.message,
+    });
+  }
+};
+
+export const suspendComplaint = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason = "" } = req.body;
+
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid complaint ID",
+      });
+    }
+
+    const complaint = await Complaint.findById(id);
+
+    if (!complaint) {
+      return res.status(404).json({
+        success: false,
+        message: "Complaint not found",
+      });
+    }
+
+    if (complaint.status === "SUSPENDED") {
+      return res.status(400).json({
+        success: false,
+        message: "Complaint is already suspended",
+      });
+    }
+
+    if (["CLOSED", "CANCELLED"].includes(complaint.status)) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot suspend a ${complaint.status.toLowerCase()} complaint`,
+      });
+    }
+
+    complaint.status = "SUSPENDED";
+    complaint.suspendedAt = new Date();
+    complaint.suspendedBy = req.user?.id || null;
+    complaint.suspensionReason = reason.trim();
+
+    await complaint.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Complaint suspended successfully",
+      data: complaint,
+    });
+  } catch (error) {
+    console.error("Suspend complaint error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to suspend complaint",
+      error: error.message,
+    });
+  }
+};
+
+export const getEligibleDealersForComplaint = async (req, res) => {
+  try {
+    const { complaintId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(complaintId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid complaint ID",
+      });
+    }
+
+    /* =========================================
+       GET COMPLAINT
+    ========================================= */
+
+    const complaint = await Complaint.findById(complaintId).lean();
+
+    if (!complaint) {
+      return res.status(404).json({
+        success: false,
+        message: "Complaint not found",
+      });
+    }
+
+    const cityId = Number(complaint.address?.cityId);
+    const productId = Number(complaint.productId);
+
+    const categoryId = complaint.categoryId
+      ? String(complaint.categoryId)
+      : null;
+
+    const categoryName = complaint.category?.trim();
+
+    /* =========================================
+       VALIDATE COMPLAINT DATA
+    ========================================= */
+
+    if (!cityId) {
+      return res.status(400).json({
+        success: false,
+        message: "Complaint city is missing",
+      });
+    }
+
+    if (!productId) {
+      return res.status(400).json({
+        success: false,
+        message: "Complaint product is missing",
+      });
+    }
+
+    if (!categoryId && !categoryName) {
+      return res.status(400).json({
+        success: false,
+        message: "Complaint category is missing",
+      });
+    }
+
+    /* =========================================
+       BUILD CATEGORY MATCH
+    ========================================= */
+
+    const categoryMatch = [];
+
+    if (categoryId) {
+      categoryMatch.push({
+        "productServices.categories.categoryId":
+          categoryId,
+      });
+    }
+
+    if (categoryName) {
+      categoryMatch.push({
+        "productServices.categories.categoryName": {
+          $regex: `^${escapeRegex(categoryName)}$`,
+          $options: "i",
+        },
+      });
+    }
+
+    /* =========================================
+       FIND ELIGIBLE DEALERS
+
+       1. Active dealer
+       2. Active technician
+       3. Not deactivated
+       4. Same complaint city
+       5. Same product
+       6. Same service/category
+    ========================================= */
+
+    const dealers = await Dealer.find({
+      status: "ACTIVE",
+
+      technicianStatus: "ACTIVE",
+
+      accountDeactivated: false,
+
+      "businessAddress.cityId": cityId,
+
+      productServices: {
+        $elemMatch: {
+          productId,
+
+          categories: {
+            $elemMatch: {
+              $or: [
+                ...(categoryId
+                  ? [
+                      {
+                        categoryId,
+                      },
+                    ]
+                  : []),
+
+                ...(categoryName
+                  ? [
+                      {
+                        categoryName: {
+                          $regex: `^${escapeRegex(
+                            categoryName,
+                          )}$`,
+                          $options: "i",
+                        },
+                      },
+                    ]
+                  : []),
+              ],
+            },
+          },
+        },
+      },
+    })
+      .select(
+        `
+          dealerCode
+          technicianCode
+          technicianFirmName
+          technicianName
+          mobileNumber
+          alternativeNumber
+          email
+          technicianStatus
+          businessAddress
+          rating
+          status
+          productServices
+          combinedCapacity
+          individualCapacities
+        `,
+      )
+      .sort({
+        rating: -1,
+        technicianName: 1,
+      })
+      .lean();
+
+    /* =========================================
+       FORMAT RESPONSE
+    ========================================= */
+
+    const eligibleDealers = dealers.map((dealer) => {
+      const service = dealer.productServices?.find(
+        (item) =>
+          Number(item.productId) === productId,
+      );
+
+      const matchedCategory =
+        service?.categories?.find((item) => {
+          if (
+            categoryId &&
+            String(item.categoryId) === categoryId
+          ) {
+            return true;
+          }
+
+          return (
+            categoryName &&
+            item.categoryName
+              ?.trim()
+              .toLowerCase() ===
+              categoryName.toLowerCase()
+          );
+        });
+
+      return {
+        _id: dealer._id,
+
+        dealerCode: dealer.dealerCode || "",
+
+        technicianCode:
+          dealer.technicianCode || "",
+
+        technicianFirmName:
+          dealer.technicianFirmName,
+
+        technicianName:
+          dealer.technicianName,
+
+        mobileNumber:
+          dealer.mobileNumber,
+
+        alternativeNumber:
+          dealer.alternativeNumber,
+
+        email: dealer.email,
+
+        rating: dealer.rating || 0,
+
+        status: dealer.status,
+
+        cityId:
+          dealer.businessAddress?.cityId,
+
+        city:
+          dealer.businessAddress?.city,
+
+        matchedService: {
+          productId,
+          productName:
+            service?.productName ||
+            complaint.productName,
+
+          categoryId:
+            matchedCategory?.categoryId ||
+            categoryId,
+
+          categoryName:
+            matchedCategory?.categoryName ||
+            categoryName,
+
+          description:
+            matchedCategory?.description || "",
+
+          rate:
+            matchedCategory?.rate || 0,
+        },
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+
+      message: "Eligible dealers fetched successfully",
+
+      filters: {
+        cityId,
+        city: complaint.address?.city,
+
+        productId,
+        productName: complaint.productName,
+
+        categoryId,
+        category: categoryName,
+      },
+
+      total: eligibleDealers.length,
+
+      data: eligibleDealers,
+    });
+  } catch (error) {
+    console.error(
+      "Get eligible dealers error:",
+      error,
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch eligible dealers",
+      error: error.message,
+    });
+  }
+};
+
+export const assignDealerToComplaint = async (
+  req,
+  res,
+) => {
+  try {
+    const { complaintId } = req.params;
+    const { dealerId } = req.body;
+
+    if (
+      !mongoose.Types.ObjectId.isValid(
+        complaintId,
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid complaint ID",
+      });
+    }
+
+    if (
+      !dealerId ||
+      !mongoose.Types.ObjectId.isValid(
+        dealerId,
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid dealer ID is required",
+      });
+    }
+
+    /* =========================================
+       COMPLAINT
+    ========================================= */
+
+    const complaint =
+      await Complaint.findById(complaintId);
+
+    if (!complaint) {
+      return res.status(404).json({
+        success: false,
+        message: "Complaint not found",
+      });
+    }
+
+    /* =========================================
+       DEALER
+    ========================================= */
+
+    const dealer =
+      await Dealer.findById(dealerId);
+
+    if (!dealer) {
+      return res.status(404).json({
+        success: false,
+        message: "Dealer not found",
+      });
+    }
+
+    if (dealer.status !== "ACTIVE") {
+      return res.status(400).json({
+        success: false,
+        message: "Dealer is not active",
+      });
+    }
+
+    if (
+      dealer.technicianStatus !== "ACTIVE"
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Technician is not active",
+      });
+    }
+
+    /* =========================================
+       VERIFY CITY
+    ========================================= */
+
+    const complaintCityId = Number(
+      complaint.address?.cityId,
+    );
+
+    const dealerCityId = Number(
+      dealer.businessAddress?.cityId,
+    );
+
+    if (
+      !complaintCityId ||
+      complaintCityId !== dealerCityId
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Dealer does not serve complaint city",
+      });
+    }
+
+    /* =========================================
+       VERIFY PRODUCT + CATEGORY
+    ========================================= */
+
+    const complaintProductId = Number(
+      complaint.productId,
+    );
+
+    const complaintCategoryId =
+      complaint.categoryId
+        ? String(complaint.categoryId)
+        : "";
+
+    const complaintCategory =
+      complaint.category?.trim().toLowerCase();
+
+    const service =
+      dealer.productServices?.find(
+        (item) =>
+          Number(item.productId) ===
+          complaintProductId,
+      );
+
+    if (!service) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Dealer does not provide this product service",
+      });
+    }
+
+    const categoryMatched =
+      service.categories?.some(
+        (item) => {
+          const idMatched =
+            complaintCategoryId &&
+            String(item.categoryId) ===
+              complaintCategoryId;
+
+          const nameMatched =
+            complaintCategory &&
+            item.categoryName
+              ?.trim()
+              .toLowerCase() ===
+              complaintCategory;
+
+          return idMatched || nameMatched;
+        },
+      );
+
+    if (!categoryMatched) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Dealer does not provide this complaint service",
+      });
+    }
+
+    /* =========================================
+       ASSIGN / REASSIGN
+    ========================================= */
+
+    complaint.allocatedDealerId =
+      dealer._id;
+
+    complaint.dealerId = dealer._id;
+
+    complaint.dealerName =
+      dealer.technicianFirmName;
+
+    complaint.technicianName =
+      dealer.technicianName;
+
+    complaint.allocatedAt = new Date();
+
+    complaint.status = "ALLOCATED";
+
+    await complaint.save();
+
+    /* =========================================
+       POPULATE
+    ========================================= */
+
+    await complaint.populate(
+      "allocatedDealerId",
+      `
+        dealerCode
+        technicianCode
+        technicianFirmName
+        technicianName
+        mobileNumber
+        rating
+        status
+        technicianStatus
+        businessAddress
+      `,
+    );
+
+    return res.status(200).json({
+      success: true,
+      message:
+        "Dealer assigned successfully",
+      data: complaint,
+    });
+  } catch (error) {
+    console.error(
+      "Assign dealer error:",
+      error,
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to assign dealer",
       error: error.message,
     });
   }

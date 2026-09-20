@@ -179,7 +179,14 @@ const complaintSchema = new mongoose.Schema(
     |--------------------------------------------------------------------------
     */
 
-    productId: {
+    // productId: {
+    //   type: mongoose.Schema.Types.ObjectId,
+    //   ref: "Product",
+    //   default: null,
+    //   index: true,
+    // },
+
+        productId: {
       type: Number,
       default: null,
       index: true,
@@ -245,17 +252,16 @@ const complaintSchema = new mongoose.Schema(
 
     faultReported: {
       type: String,
-    //   required: true,
+      //   required: true,
       trim: true,
     },
 
-    
     categoryId: {
-  type: mongoose.Schema.Types.ObjectId,
-  ref: "Category",
-  default: null,
-  index: true,
-},
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Category",
+      default: null,
+      index: true,
+    },
 
     category: {
       type: String,
@@ -344,7 +350,7 @@ const complaintSchema = new mongoose.Schema(
         "PENDING_ON_VISIT",
         "CLOSE_ON_VERIFICATION",
         "REOPEN",
-
+        "SUSPENDED",
 
         "PENDING",
         "WORK_IN_PROGRESS",
@@ -391,44 +397,61 @@ const complaintSchema = new mongoose.Schema(
     },
 
     allocatedDealerId: {
-  type: mongoose.Schema.Types.ObjectId,
-  ref: "Dealer",
-  default: null,
-},
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Dealer",
+      default: null,
+    },
 
-allocationId: {
-  type: mongoose.Schema.Types.ObjectId,
-  ref: "Allocation",
-  default: null,
-},
+    allocationId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Allocation",
+      default: null,
+    },
 
-allocationRuleId: {
-  type: mongoose.Schema.Types.ObjectId,
-  default: null,
-},
+    allocationRuleId: {
+      type: mongoose.Schema.Types.ObjectId,
+      default: null,
+    },
 
-allocatedAt: {
-  type: Date,
-  default: null,
-},
+    allocatedAt: {
+      type: Date,
+      default: null,
+    },
 
-appointmentDate: {
-  type: Date,
-  default: null,
-  index: true,
-},
+    appointmentDate: {
+      type: Date,
+      default: null,
+      index: true,
+    },
 
-appointmentTime: {
-  type: String,
-  trim: true,
-  default: "",
-},
+    appointmentTime: {
+      type: String,
+      trim: true,
+      default: "",
+    },
 
-pendingReason: {
-  type: String,
-  trim: true,
-  default: "",
-},
+    pendingReason: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    suspendedAt: {
+      type: Date,
+      default: null,
+    },
+
+    suspendedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+
+    suspensionReason: {
+      type: String,
+      trim: true,
+      default: "",
+    },
 
     /*
     |--------------------------------------------------------------------------
@@ -437,26 +460,47 @@ pendingReason: {
     */
 
     billingReview: {
-      type: new mongoose.Schema({
-        dealerId: { type: mongoose.Schema.Types.ObjectId, ref: "Dealer", required: true },
-        method: { type: String, enum: ["PARTIAL_PAYMENT", "PROFIT_SHARING"], required: true },
-        customerAmount: { type: Number, min: 0 },
-        profitAmount: { type: Number, min: 0 },
-        percentage: { type: Number, required: true, min: 0, max: 100 },
-        baseAmount: { type: Number, required: true, min: 0 },
-        charge: { type: Number, required: true, min: 0 },
-        status: { type: String, enum: ["PENDING", "IN_REVIEW", "VERIFIED", "REJECTED", "CORRECTION_REQUIRED"], required: true },
-        workSummary: String,
-        submittedAt: Date,
-        submittedBy: String,
-        reviewedAt: Date,
-        reviewedBy: String,
-        reviewerId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
-        remarks: String,
-        reason: String,
-        correctionCount: { type: Number, default: 0 },
-        revision: { type: Number, default: 1 },
-      }, { _id: false }),
+      type: new mongoose.Schema(
+        {
+          dealerId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Dealer",
+            required: true,
+          },
+          method: {
+            type: String,
+            enum: ["PARTIAL_PAYMENT", "PROFIT_SHARING"],
+            required: true,
+          },
+          customerAmount: { type: Number, min: 0 },
+          profitAmount: { type: Number, min: 0 },
+          percentage: { type: Number, required: true, min: 0, max: 100 },
+          baseAmount: { type: Number, required: true, min: 0 },
+          charge: { type: Number, required: true, min: 0 },
+          status: {
+            type: String,
+            enum: [
+              "PENDING",
+              "IN_REVIEW",
+              "VERIFIED",
+              "REJECTED",
+              "CORRECTION_REQUIRED",
+            ],
+            required: true,
+          },
+          workSummary: String,
+          submittedAt: Date,
+          submittedBy: String,
+          reviewedAt: Date,
+          reviewedBy: String,
+          reviewerId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+          remarks: String,
+          reason: String,
+          correctionCount: { type: Number, default: 0 },
+          revision: { type: Number, default: 1 },
+        },
+        { _id: false },
+      ),
       default: undefined,
     },
 
@@ -466,16 +510,16 @@ pendingReason: {
     },
 
     warrantyStartDate: {
-  type: Date,
-  default: null,
-  index: true,
-},
+      type: Date,
+      default: null,
+      index: true,
+    },
 
-warrantyEndDate: {
-  type: Date,
-  default: null,
-  index: true,
-},
+    warrantyEndDate: {
+      type: Date,
+      default: null,
+      index: true,
+    },
 
     cancelledAt: {
       type: Date,

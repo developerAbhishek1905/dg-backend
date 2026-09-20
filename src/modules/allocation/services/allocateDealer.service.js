@@ -277,6 +277,10 @@ export const allocateDealerForComplaint = async ({
 
   const today = getTodayKey();
 
+  console.log("gggggggggg" ,  cityId,
+  productId,
+  categoryId,
+  category,)
   /*
     |--------------------------------------------------------------------------
     | STEP 1
@@ -337,6 +341,8 @@ export const allocateDealerForComplaint = async ({
     */
 
   const candidates = [];
+
+
 
   for (const allocation of allocations) {
     /*
@@ -527,6 +533,7 @@ export const allocateDealerForComplaint = async ({
     |--------------------------------------------------------------------------
     */
 
+      console.log("candidates",candidates)
   const availableCandidates = candidates.filter(
     (candidate) => candidate.usedCapacity < candidate.dailyCapacity,
   );
