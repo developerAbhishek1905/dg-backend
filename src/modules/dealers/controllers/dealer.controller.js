@@ -569,8 +569,6 @@ export const createDealer = async (req, res) => {
    CREATE INITIAL ALLOCATION
 =============================== */
 
-
-
     const allocationMonth = now.getMonth() + 1;
 
     const allocationYear = now.getFullYear();
@@ -719,22 +717,11 @@ export const createDealer = async (req, res) => {
 
 export const getDealers = async (req, res) => {
   try {
-    const {
-      page = 1,
-      limit = 10,
-      search = "",
-      status = "",
-    } = req.query;
+    const { page = 1, limit = 10, search = "", status = "" } = req.query;
 
-    const currentPage = Math.max(
-      Number(page) || 1,
-      1,
-    );
+    const currentPage = Math.max(Number(page) || 1, 1);
 
-    const pageLimit = Math.max(
-      Number(limit) || 10,
-      1,
-    );
+    const pageLimit = Math.max(Number(limit) || 10, 1);
 
     const filter = {};
 
@@ -755,9 +742,7 @@ export const getDealers = async (req, res) => {
       ];
     }
 
-    const total = await Dealer.countDocuments(
-      filter,
-    );
+    const total = await Dealer.countDocuments(filter);
 
     const dealers = await Dealer.find(filter)
       .sort({
@@ -771,33 +756,24 @@ export const getDealers = async (req, res) => {
     // Calculate leave statuses
     // -------------------------------------
 
-    const normalizedDealers = dealers.map(
-      (dealer) => {
-        const leaves = (
-          dealer.leaves ?? []
-        ).map((leave) => ({
-          ...leave,
-          status: getLeaveStatus(leave),
-        }));
+    const normalizedDealers = dealers.map((dealer) => {
+      const leaves = (dealer.leaves ?? []).map((leave) => ({
+        ...leave,
+        status: getLeaveStatus(leave),
+      }));
 
-        const isOnLeave = leaves.some(
-          (leave) =>
-            leave.status === "ACTIVE",
-        );
+      const isOnLeave = leaves.some((leave) => leave.status === "ACTIVE");
 
-        return {
-          ...dealer,
+      return {
+        ...dealer,
 
-          leaves,
+        leaves,
 
-          isOnLeave,
+        isOnLeave,
 
-          effectiveStatus: isOnLeave
-            ? "LEAVE"
-            : dealer.status,
-        };
-      },
-    );
+        effectiveStatus: isOnLeave ? "LEAVE" : dealer.status,
+      };
+    });
 
     return res.status(200).json({
       success: true,
@@ -808,16 +784,11 @@ export const getDealers = async (req, res) => {
         page: currentPage,
         limit: pageLimit,
         total,
-        totalPages: Math.ceil(
-          total / pageLimit,
-        ),
+        totalPages: Math.ceil(total / pageLimit),
       },
     });
   } catch (error) {
-    console.error(
-      "Get Dealers Error:",
-      error,
-    );
+    console.error("Get Dealers Error:", error);
 
     return res.status(500).json({
       success: false,
@@ -854,9 +825,7 @@ export const getDealers = async (req, res) => {
 
 export const getDealerById = async (req, res) => {
   try {
-    const dealer = await Dealer.findById(
-      req.params.id,
-    ).lean();
+    const dealer = await Dealer.findById(req.params.id).lean();
 
     if (!dealer) {
       return res.status(404).json({
@@ -865,18 +834,14 @@ export const getDealerById = async (req, res) => {
       });
     }
 
-    const leaves = (dealer.leaves ?? []).map(
-      (leave) => ({
-        ...leave,
+    const leaves = (dealer.leaves ?? []).map((leave) => ({
+      ...leave,
 
-        // Calculate current status
-        status: getLeaveStatus(leave),
-      }),
-    );
+      // Calculate current status
+      status: getLeaveStatus(leave),
+    }));
 
-    const onLeave = leaves.some(
-      (leave) => leave.status === "ACTIVE",
-    );
+    const onLeave = leaves.some((leave) => leave.status === "ACTIVE");
 
     return res.status(200).json({
       success: true,
@@ -890,16 +855,11 @@ export const getDealerById = async (req, res) => {
         isOnLeave: onLeave,
 
         // Optional display status
-        effectiveStatus: onLeave
-          ? "LEAVE"
-          : dealer.status,
+        effectiveStatus: onLeave ? "LEAVE" : dealer.status,
       },
     });
   } catch (error) {
-    console.error(
-      "Get Dealer By ID Error:",
-      error,
-    );
+    console.error("Get Dealer By ID Error:", error);
 
     return res.status(500).json({
       success: false,
@@ -1188,25 +1148,25 @@ export const updateDealer = async (req, res) => {
    DATE OF JOINING
 ================================ */
 
-    if (req.body.dateOfJoining !== undefined) {
-      if (!req.body.dateOfJoining) {
-        return res.status(400).json({
-          success: false,
-          message: "Date of joining is required",
-        });
-      }
+    // if (req.body.dateOfJoining !== undefined) {
+    //   // if (!req.body.dateOfJoining) {
+    //   //   return res.status(400).json({
+    //   //     success: false,
+    //   //     message: "Date of joining is required",
+    //   //   });
+    //   // }
 
-      const joiningDate = new Date(req.body.dateOfJoining);
+    //   // const joiningDate = new Date(req.body.dateOfJoining);
 
-      if (Number.isNaN(joiningDate.getTime())) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid date of joining",
-        });
-      }
+    //   // if (Number.isNaN(joiningDate.getTime())) {
+    //   //   return res.status(400).json({
+    //   //     success: false,
+    //   //     message: "Invalid date of joining",
+    //   //   });
+    //   // }
 
-      dealer.dateOfJoining = joiningDate;
-    }
+    //   dealer.dateOfJoining = joiningDate || now;
+    // }
 
     /* ===============================
    DATE OF LEAVING
@@ -1345,6 +1305,17 @@ export const updateDealer = async (req, res) => {
     // }
 
     await dealer.save();
+
+    await User.updateMany(
+      {
+        dealerId: dealer._id,
+      },
+      {
+        $inc: {
+          tokenVersion: 1,
+        },
+      },
+    );
 
     /* ===============================
    SYNC CURRENT ALLOCATION
@@ -1570,10 +1541,7 @@ export const registerDealerLeave = async (req, res) => {
     const fromDate = new Date(from);
     const toDate = new Date(to);
 
-    if (
-      Number.isNaN(fromDate.getTime()) ||
-      Number.isNaN(toDate.getTime())
-    ) {
+    if (Number.isNaN(fromDate.getTime()) || Number.isNaN(toDate.getTime())) {
       return res.status(400).json({
         success: false,
         message: "Invalid leave dates",
@@ -1583,8 +1551,7 @@ export const registerDealerLeave = async (req, res) => {
     if (toDate < fromDate) {
       return res.status(400).json({
         success: false,
-        message:
-          "Leave end date cannot be before start date",
+        message: "Leave end date cannot be before start date",
       });
     }
 
@@ -1600,8 +1567,7 @@ export const registerDealerLeave = async (req, res) => {
     if (dealer.status === "SUSPENDED") {
       return res.status(400).json({
         success: false,
-        message:
-          "Suspended dealer cannot register leave",
+        message: "Suspended dealer cannot register leave",
       });
     }
 
@@ -1609,27 +1575,21 @@ export const registerDealerLeave = async (req, res) => {
     // Check overlapping leave
     // -------------------------------------
 
-    const hasOverlap = (dealer.leaves ?? []).some(
-      (leave) => {
-        if (leave.status === "CANCELLED") {
-          return false;
-        }
+    const hasOverlap = (dealer.leaves ?? []).some((leave) => {
+      if (leave.status === "CANCELLED") {
+        return false;
+      }
 
-        const existingFrom = new Date(leave.from);
-        const existingTo = new Date(leave.to);
+      const existingFrom = new Date(leave.from);
+      const existingTo = new Date(leave.to);
 
-        return (
-          fromDate <= existingTo &&
-          toDate >= existingFrom
-        );
-      },
-    );
+      return fromDate <= existingTo && toDate >= existingFrom;
+    });
 
     if (hasOverlap) {
       return res.status(400).json({
         success: false,
-        message:
-          "Dealer already has leave during this period",
+        message: "Dealer already has leave during this period",
       });
     }
 
@@ -1657,28 +1617,17 @@ export const registerDealerLeave = async (req, res) => {
       data: {
         dealer,
         leave: {
-          ...dealer.leaves[
-            dealer.leaves.length - 1
-          ].toObject(),
-          status: getLeaveStatus(
-            dealer.leaves[
-              dealer.leaves.length - 1
-            ],
-          ),
+          ...dealer.leaves[dealer.leaves.length - 1].toObject(),
+          status: getLeaveStatus(dealer.leaves[dealer.leaves.length - 1]),
         },
       },
     });
   } catch (error) {
-    console.error(
-      "Register Dealer Leave Error:",
-      error,
-    );
+    console.error("Register Dealer Leave Error:", error);
 
     return res.status(500).json({
       success: false,
-      message:
-        error.message ||
-        "Failed to register dealer leave",
+      message: error.message || "Failed to register dealer leave",
     });
   }
 };
@@ -1819,6 +1768,17 @@ export const suspendDealer = async (req, res) => {
     dealer.suspensionReason = reason || "";
 
     await dealer.save();
+
+    await User.updateMany(
+  {
+    dealerId: dealer._id,
+  },
+  {
+    $inc: {
+      tokenVersion: 1,
+    },
+  },
+);
 
     await syncDealerAllocation({
       dealer,

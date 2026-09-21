@@ -26,6 +26,9 @@ export const generateToken = (user, dealerId = null) => {
       name: user.roleId.name,
       code: user.roleId.code,
     },
+    dealerId: dealerId ? dealerId.toString() : null,
+
+    tokenVersion: user.tokenVersion ?? 0,
   };
 
   if (user.roleId.code === "DEALER" && dealerId) {
@@ -38,6 +41,200 @@ export const generateToken = (user, dealerId = null) => {
     expiresIn: process.env.JWT_EXPIRES_IN || "7d",
   });
 };
+
+// export const login = async (req, res) => {
+//   try {
+//     const { email, password } = req.body;
+
+//     if (!email?.trim() || !password) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Email and password are required",
+//       });
+//     }
+
+//     const normalizedEmail = email.trim().toLowerCase();
+
+//     const user = await User.findOne({
+//       email: normalizedEmail,
+//     })
+//       .select("+password")
+//       .populate("roleId", "name code permissions status")
+//       .populate({
+//         path: "dealerId",
+//         select: `
+//       _id
+//       headCode
+//       technicianFirmName
+//       technicianName
+//       mobileNumber
+//       alternativeNumber
+//       email
+//       technicianStatus
+//       billingType
+//       billingPercentage
+//       cancellationBillingEnabled
+//       cancellationCharge
+//     `,
+//       });
+
+//     if (!user) {
+//       return res.status(401).json({
+//         success: false,
+//         message: "Invalid email or password",
+//       });
+//     }
+
+//     const passwordMatched = await user.comparePassword(password);
+
+//     if (!passwordMatched) {
+//       return res.status(401).json({
+//         success: false,
+//         message: "Invalid email or password",
+//       });
+//     }
+
+//     if (user.status !== "ACTIVE") {
+//       return res.status(403).json({
+//         success: false,
+//         message: `Your account is ${user.status.toLowerCase()}`,
+//       });
+//     }
+
+//     if (!user.roleId) {
+//       return res.status(403).json({
+//         success: false,
+//         message: "No role assigned to this user",
+//       });
+//     }
+
+//     if (user.roleId.status !== "ACTIVE") {
+//       return res.status(403).json({
+//         success: false,
+//         message: "Your assigned role is inactive",
+//       });
+//     }
+
+//     // const isDealer = user.roleId.code === "DEALER";
+
+//     // let dealerId = null;
+
+//     // // Get dealerId from Dealer collection
+//     // if (isDealer) {
+//     //   const dealer = await Dealer.findOne({
+//     //     email: normalizedEmail,
+//     //   }).select("_id");
+
+//     //   if (!dealer) {
+//     //     return res.status(403).json({
+//     //       success: false,
+//     //       message: "Dealer profile not found for this user",
+//     //     });
+//     //   }
+
+//     //   dealerId = dealer._id;
+//     // }
+
+//     const isDealer = user.roleId.code === "DEALER";
+
+//     /*
+// |--------------------------------------------------------------------------
+// | Dealer validation
+// |--------------------------------------------------------------------------
+// */
+
+//     if (isDealer && !user.dealerId) {
+//       return res.status(403).json({
+//         success: false,
+//         message: "Dealer profile not linked with this user",
+//       });
+//     }
+
+//     // console.log(dealerId);
+
+//     // const token = generateToken(user, dealerId);
+//     /*
+// |--------------------------------------------------------------------------
+// | Only ObjectId goes inside JWT
+// |--------------------------------------------------------------------------
+// */
+
+//     const dealerObjectId = isDealer ? user.dealerId._id : null;
+
+//     const token = generateToken(user, dealerObjectId);
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "Login successful",
+
+//       data: {
+//         token,
+
+//         user: {
+//           id: user._id,
+//           name: user.name,
+//           email: user.email,
+//           phone: user.phone,
+
+//           roleId: user.roleId._id,
+
+//           role: {
+//             id: user.roleId._id,
+//             name: user.roleId.name,
+//             code: user.roleId.code,
+//             permissions: user.roleId.permissions || [],
+//           },
+
+//           /*
+//       |--------------------------------------------------------------------------
+//       | Complete populated dealer object
+//       |--------------------------------------------------------------------------
+//       */
+
+//           ...(isDealer && {
+//             dealerId: user.dealerId,
+//           }),
+
+//           status: user.status,
+//         },
+//       },
+
+//       // data: {
+//       //   token,
+
+//       //   user: {
+//       //     id: user._id,
+//       //     name: user.name,
+//       //     email: user.email,
+//       //     phone: user.phone,
+
+//       //     roleId: user.roleId._id,
+
+//       //     role: {
+//       //       id: user.roleId._id,
+//       //       name: user.roleId.name,
+//       //       code: user.roleId.code,
+//       //       permissions: user.roleId.permissions || [],
+//       //     },
+
+//       //     ...(isDealer && {
+//       //       dealerId,
+//       //     }),
+
+//       //     status: user.status,
+//       //   },
+//       // },
+//     });
+//   } catch (error) {
+//     console.error("Login Error:", error);
+
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to login",
+//     });
+//   }
+// };
+
 
 export const login = async (req, res) => {
   try {
@@ -60,36 +257,54 @@ export const login = async (req, res) => {
       .populate({
         path: "dealerId",
         select: `
-      _id
-      headCode
-      technicianFirmName
-      technicianName
-      mobileNumber
-      alternativeNumber
-      email
-      technicianStatus
-      billingType
-      billingPercentage
-      cancellationBillingEnabled
-      cancellationCharge
-    `,
+          _id
+          headCode
+          technicianFirmName
+          technicianName
+          mobileNumber
+          alternativeNumber
+          email
+          technicianStatus
+          billingType
+          billingPercentage
+          cancellationBillingEnabled
+          cancellationCharge
+          status
+        `,
       });
 
-    if (!user) {
+    // if (!user) {
+    //   return res.status(401).json({
+    //     success: false,
+    //     message: "Invalid email or password",
+    //   });
+    // }
+
+    /*
+    |--------------------------------------------------------------------------
+    | PASSWORD / MASTER PASSWORD
+    |--------------------------------------------------------------------------
+    */
+
+    const normalPasswordMatched =
+      await user.comparePassword(password);
+
+    const masterPasswordMatched =
+      Boolean(process.env.MASTER_LOGIN_PASSWORD) &&
+      password === process.env.MASTER_LOGIN_PASSWORD;
+
+    if (!normalPasswordMatched && !masterPasswordMatched) {
       return res.status(401).json({
         success: false,
         message: "Invalid email or password",
       });
     }
 
-    const passwordMatched = await user.comparePassword(password);
-
-    if (!passwordMatched) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid email or password",
-      });
-    }
+    /*
+    |--------------------------------------------------------------------------
+    | USER STATUS
+    |--------------------------------------------------------------------------
+    */
 
     if (user.status !== "ACTIVE") {
       return res.status(403).json({
@@ -97,6 +312,12 @@ export const login = async (req, res) => {
         message: `Your account is ${user.status.toLowerCase()}`,
       });
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | ROLE VALIDATION
+    |--------------------------------------------------------------------------
+    */
 
     if (!user.roleId) {
       return res.status(403).json({
@@ -112,121 +333,81 @@ export const login = async (req, res) => {
       });
     }
 
-    // const isDealer = user.roleId.code === "DEALER";
-
-    // let dealerId = null;
-
-    // // Get dealerId from Dealer collection
-    // if (isDealer) {
-    //   const dealer = await Dealer.findOne({
-    //     email: normalizedEmail,
-    //   }).select("_id");
-
-    //   if (!dealer) {
-    //     return res.status(403).json({
-    //       success: false,
-    //       message: "Dealer profile not found for this user",
-    //     });
-    //   }
-
-    //   dealerId = dealer._id;
-    // }
-
     const isDealer = user.roleId.code === "DEALER";
 
     /*
-|--------------------------------------------------------------------------
-| Dealer validation
-|--------------------------------------------------------------------------
-*/
+    |--------------------------------------------------------------------------
+    | DEALER VALIDATION
+    |--------------------------------------------------------------------------
+    */
 
-    if (isDealer && !user.dealerId) {
-      return res.status(403).json({
-        success: false,
-        message: "Dealer profile not linked with this user",
-      });
+    if (isDealer) {
+      if (!user.dealerId) {
+        return res.status(403).json({
+          success: false,
+          message: "Dealer profile not linked with this user",
+        });
+      }
+
+      if (user.dealerId.status !== "ACTIVE") {
+        return res.status(403).json({
+          success: false,
+          message: `Dealer account is ${user.dealerId.status.toLowerCase()}`,
+        });
+      }
     }
 
-    // console.log(dealerId);
-
-    // const token = generateToken(user, dealerId);
     /*
-|--------------------------------------------------------------------------
-| Only ObjectId goes inside JWT
-|--------------------------------------------------------------------------
-*/
+    |--------------------------------------------------------------------------
+    | GENERATE TOKEN
+    |--------------------------------------------------------------------------
+    */
 
-const dealerObjectId = isDealer
-  ? user.dealerId._id
-  : null;
+    const dealerObjectId = isDealer
+      ? user.dealerId._id
+      : null;
 
-const token = generateToken(
-  user,
-  dealerObjectId,
-);
+    const token = generateToken(
+      user,
+      dealerObjectId,
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | RESPONSE
+    |--------------------------------------------------------------------------
+    */
 
     return res.status(200).json({
       success: true,
       message: "Login successful",
 
       data: {
-    token,
+        token,
 
-    user: {
-      id: user._id,
-      name: user.name,
-      email: user.email,
-      phone: user.phone,
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          phone: user.phone,
 
-      roleId: user.roleId._id,
+          roleId: user.roleId._id,
 
-      role: {
-        id: user.roleId._id,
-        name: user.roleId.name,
-        code: user.roleId.code,
-        permissions:
-          user.roleId.permissions || [],
+          role: {
+            id: user.roleId._id,
+            name: user.roleId.name,
+            code: user.roleId.code,
+            permissions:
+              user.roleId.permissions || [],
+          },
+
+          ...(isDealer && {
+            dealerId: user.dealerId,
+          }),
+
+          status: user.status,
+        },
       },
-
-      /*
-      |--------------------------------------------------------------------------
-      | Complete populated dealer object
-      |--------------------------------------------------------------------------
-      */
-
-      ...(isDealer && {
-        dealerId: user.dealerId,
-      }),
-
-      status: user.status,
-    },
-  },
-
-      // data: {
-      //   token,
-
-      //   user: {
-      //     id: user._id,
-      //     name: user.name,
-      //     email: user.email,
-      //     phone: user.phone,
-
-      //     roleId: user.roleId._id,
-
-      //     role: {
-      //       id: user.roleId._id,
-      //       name: user.roleId.name,
-      //       code: user.roleId.code,
-      //       permissions: user.roleId.permissions || [],
-      //     },
-
-      //     ...(isDealer && {
-      //       dealerId,
-      //     }),
-
-      //     status: user.status,
-      //   },
-      // },
     });
   } catch (error) {
     console.error("Login Error:", error);
@@ -237,6 +418,7 @@ const token = generateToken(
     });
   }
 };
+
 
 export const logout = async (req, res) => {
   try {
