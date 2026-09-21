@@ -2,9 +2,7 @@ import Allocation from "../model/allocation.model.js";
 import Dealer from "../../dealers/models/dealer.model.js";
 import DailyCapacityUsage from "../model/dailyCapacityUsage.model.js";
 import { buildAllocationRules } from "../../dealers/controllers/dealer.controller.js";
-
-
-
+import { canDealerReceiveComplaint } from "../../dealers/helpers/dealerAvailability.js";
 
 //----------
 
@@ -85,10 +83,7 @@ export const syncDealerAllocation = async ({
   | today's DailyCapacityUsage will point to old rule IDs.
   */
 
-  preserveCapacityRuleIds(
-    allocation.rules ?? [],
-    newRules,
-  );
+  preserveCapacityRuleIds(allocation.rules ?? [], newRules);
 
   /*
   |--------------------------------------------------------------------------
@@ -96,20 +91,14 @@ export const syncDealerAllocation = async ({
   |--------------------------------------------------------------------------
   */
 
-  allocation.dealerCode =
-    dealer.technicianCode || dealer.dealerCode || "";
+  allocation.dealerCode = dealer.technicianCode || dealer.dealerCode || "";
 
   allocation.dealerName =
-    dealer.technicianFirmName ||
-    dealer.technicianName ||
-    "";
+    dealer.technicianFirmName || dealer.technicianName || "";
 
   allocation.rules = newRules;
 
-  allocation.status =
-    dealer.status === "ACTIVE"
-      ? "ACTIVE"
-      : "INACTIVE";
+  allocation.status = dealer.status === "ACTIVE" ? "ACTIVE" : "INACTIVE";
 
   await allocation.save();
 
@@ -179,73 +168,48 @@ export const syncDealerAllocation = async ({
 | product IDs are used as identity.
 */
 
-const preserveCapacityRuleIds = (
-  oldCityRules,
-  newCityRules,
-) => {
+const preserveCapacityRuleIds = (oldCityRules, newCityRules) => {
   for (const newCityRule of newCityRules) {
     const oldCityRule = oldCityRules.find(
-      (item) =>
-        Number(item.cityId) ===
-        Number(newCityRule.cityId),
+      (item) => Number(item.cityId) === Number(newCityRule.cityId),
     );
 
     if (!oldCityRule) {
       continue;
     }
 
-    for (const newCapacityRule of
-      newCityRule.capacityRules ?? []) {
-      const matchingOldRule =
-        oldCityRule.capacityRules?.find(
-          (oldCapacityRule) =>
-            isSameCapacityRule(
-              oldCapacityRule,
-              newCapacityRule,
-            ),
-        );
+    for (const newCapacityRule of newCityRule.capacityRules ?? []) {
+      const matchingOldRule = oldCityRule.capacityRules?.find(
+        (oldCapacityRule) =>
+          isSameCapacityRule(oldCapacityRule, newCapacityRule),
+      );
 
       if (matchingOldRule?._id) {
-        newCapacityRule._id =
-          matchingOldRule._id;
+        newCapacityRule._id = matchingOldRule._id;
       }
     }
   }
 };
 
-const isSameCapacityRule = (
-  oldRule,
-  newRule,
-) => {
-  if (
-    oldRule.capacityType !==
-    newRule.capacityType
-  ) {
+const isSameCapacityRule = (oldRule, newRule) => {
+  if (oldRule.capacityType !== newRule.capacityType) {
     return false;
   }
 
-  const oldProductIds = (
-    oldRule.products ?? []
-  )
+  const oldProductIds = (oldRule.products ?? [])
     .map((item) => Number(item.productId))
     .sort((a, b) => a - b);
 
-  const newProductIds = (
-    newRule.products ?? []
-  )
+  const newProductIds = (newRule.products ?? [])
     .map((item) => Number(item.productId))
     .sort((a, b) => a - b);
 
-  if (
-    oldProductIds.length !==
-    newProductIds.length
-  ) {
+  if (oldProductIds.length !== newProductIds.length) {
     return false;
   }
 
   return oldProductIds.every(
-    (productId, index) =>
-      productId === newProductIds[index],
+    (productId, index) => productId === newProductIds[index],
   );
 };
 
@@ -277,10 +241,7 @@ export const allocateDealerForComplaint = async ({
 
   const today = getTodayKey();
 
-  console.log("gggggggggg" ,  cityId,
-  productId,
-  categoryId,
-  category,)
+  console.log("gggggggggg", cityId, productId, categoryId, category);
   /*
     |--------------------------------------------------------------------------
     | STEP 1
@@ -319,18 +280,20 @@ export const allocateDealerForComplaint = async ({
 
   const dealerIds = allocations.map((allocation) => allocation.dealerId);
 
-  const activeDealers = await Dealer.find({
+  const dealers = await Dealer.find({
     _id: {
       $in: dealerIds,
     },
-
-    status: "ACTIVE",
   })
-    .select("_id")
+    .select(
+      "_id status dateOfJoining dateOfLeaving rejoiningDates leaveFrom leaveTo",
+    )
     .lean();
 
   const activeDealerIds = new Set(
-    activeDealers.map((dealer) => String(dealer._id)),
+    dealers
+      .filter((dealer) => canDealerReceiveComplaint(dealer, now))
+      .map((dealer) => String(dealer._id)),
   );
 
   /*
@@ -341,8 +304,6 @@ export const allocateDealerForComplaint = async ({
     */
 
   const candidates = [];
-
-
 
   for (const allocation of allocations) {
     /*
@@ -533,7 +494,7 @@ export const allocateDealerForComplaint = async ({
     |--------------------------------------------------------------------------
     */
 
-      console.log("candidates",candidates)
+  console.log("candidates", candidates);
   const availableCandidates = candidates.filter(
     (candidate) => candidate.usedCapacity < candidate.dailyCapacity,
   );

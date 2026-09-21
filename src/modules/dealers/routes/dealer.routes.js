@@ -7,15 +7,25 @@ import {
   updateDealer,
   deleteDealer,
   updateDealerStatus,
+  registerDealerLeave,
+  updateDealerRating,
+  rejoinDealer,
+  suspendDealer,
 } from "../controllers/dealer.controller.js";
 
 import { dealerDocumentUpload } from "../middleware/dealerUpload.middleware.js";
+import { protect } from "../../auth/middleware/auth.middleware.js";
 
 const router = express.Router();
 
 /* CREATE */
 router.post("/", dealerDocumentUpload, createDealer);
 
+router.post("/:id/leave", protect, registerDealerLeave);
+router.post("/:id/rejoin", protect, rejoinDealer);
+
+router.patch("/:id/rating", updateDealerRating);
+router.patch("/:id/suspend", suspendDealer);
 /* GET ALL */
 router.get("/", getDealers);
 

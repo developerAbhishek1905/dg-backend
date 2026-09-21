@@ -6,6 +6,8 @@ import Role from "../../accessControl/models/role.model.js";
 import Allocation from "../../allocation/model/allocation.model.js";
 import { syncDealerAllocation } from "../../allocation/services/allocateDealer.service.js";
 import DealerLedger from "../../dealerLedger/model/dealerLedger.model.js";
+import { getLeaveStatus } from "../helpers/dealerLeave.utils.js";
+
 /* =========================================================
    HELPERS
 ========================================================= */
@@ -284,6 +286,8 @@ export const createDealer = async (req, res) => {
       otherInfo,
       openingBalance,
       openingBalanceType,
+      dateOfJoining,
+      dateOfLeaving,
     } = req.body;
 
     console.log(req.body);
@@ -389,8 +393,45 @@ export const createDealer = async (req, res) => {
 
     const headCode = await generateHeadCode();
 
-//     const openingBalance = parseNumber(req.body.openingBalance);
-// const openingBalanceType = req.body.openingBalanceType || "DR";
+    //     const openingBalance = parseNumber(req.body.openingBalance);
+    // const openingBalanceType = req.body.openingBalanceType || "DR";
+
+    const now = new Date();
+
+    const joiningDate = dateOfJoining ? new Date(dateOfJoining) : now;
+
+    const leavingDate = dateOfLeaving ? new Date(dateOfLeaving) : null;
+
+    if (Number.isNaN(joiningDate.getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid date of joining",
+      });
+    }
+
+    if (leavingDate && Number.isNaN(leavingDate.getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid date of leaving",
+      });
+    }
+
+    if (leavingDate && leavingDate < joiningDate) {
+      return res.status(400).json({
+        success: false,
+        message: "Date of leaving cannot be before date of joining",
+      });
+    }
+
+    let finalStatus = technicianStatus || "ACTIVE";
+
+    if (joiningDate > now) {
+      finalStatus = "INACTIVE";
+    }
+
+    if (leavingDate && leavingDate <= now) {
+      finalStatus = "INACTIVE";
+    }
 
     /* ===============================
        CREATE
@@ -446,48 +487,50 @@ export const createDealer = async (req, res) => {
       },
       individualCapacities,
       documents,
-      status: technicianStatus || "ACTIVE",
+      technicianStatus: finalStatus === "ACTIVE" ? "ACTIVE" : "INACTIVE",
+
+      status: finalStatus,
+
+      dateOfJoining: joiningDate,
+      dateOfLeaving: leavingDate,
+      // status: technicianStatus || "ACTIVE",
+      // dateOfJoining: dateOfJoining ? new Date(dateOfJoining) : new Date(),
+
+      // dateOfLeaving: dateOfLeaving ? new Date(dateOfLeaving) : null,
     });
 
     /* ===============================
    CREATE OPENING BALANCE LEDGER
 ================================ */
 
-let openingLedgerEntry = null;
+    let openingLedgerEntry = null;
 
-if (openingBalance > 0) {
-  openingLedgerEntry = await DealerLedger.create({
-    dealerId: dealer._id,
+    if (openingBalance > 0) {
+      openingLedgerEntry = await DealerLedger.create({
+        dealerId: dealer._id,
 
-    dealerCode:
-      dealer.dealerCode ||
-      dealer.technicianCode ||
-      dealer.headCode,
+        dealerCode:
+          dealer.dealerCode || dealer.technicianCode || dealer.headCode,
 
-    dealerName:
-      dealer.technicianFirmName ||
-      dealer.technicianName,
+        dealerName: dealer.technicianFirmName || dealer.technicianName,
 
-    transactionType: "OPENING_BALANCE",
+        transactionType: "OPENING_BALANCE",
 
-    billingType: "OPENING_BALANCE",
+        billingType: "OPENING_BALANCE",
 
-    entryType:
-      openingBalanceType === "DR"
-        ? "DEBIT"
-        : "CREDIT",
+        entryType: openingBalanceType === "DR" ? "DEBIT" : "CREDIT",
 
-    amount: openingBalance,
+        amount: openingBalance,
 
-    description: "Dealer opening balance",
+        description: "Dealer opening balance",
 
-    remarks: `Opening balance created during dealer creation (${openingBalanceType})`,
+        remarks: `Opening balance created during dealer creation (${openingBalanceType})`,
 
-    status: "APPROVED",
+        status: "APPROVED",
 
-    billingDate: new Date(),
-  });
-}
+        billingDate: new Date(),
+      });
+    }
 
     /* ===============================
        FIND DEALER ROLE
@@ -517,15 +560,16 @@ if (openingBalance > 0) {
       roleId: dealerRole?._id ?? null,
 
       dealerId: dealer._id,
+      status: finalStatus === "ACTIVE" ? "ACTIVE" : "INACTIVE",
 
-      status: technicianStatus === "INACTIVE" ? "INACTIVE" : "ACTIVE",
+      // status: technicianStatus === "INACTIVE" ? "INACTIVE" : "ACTIVE",
     });
 
     /* ===============================
    CREATE INITIAL ALLOCATION
 =============================== */
 
-    const now = new Date();
+
 
     const allocationMonth = now.getMonth() + 1;
 
@@ -603,13 +647,94 @@ if (openingBalance > 0) {
    GET ALL DEALERS
 ========================================================= */
 
+// export const getDealers = async (req, res) => {
+//   try {
+//     const { page = 1, limit = 10, search = "", status = "" } = req.query;
+
+//     const currentPage = Math.max(Number(page) || 1, 1);
+
+//     const pageLimit = Math.max(Number(limit) || 10, 1);
+
+//     const filter = {};
+
+//     if (status) {
+//       filter.status = status;
+//     }
+
+//     if (search) {
+//       const regex = new RegExp(search, "i");
+
+//       filter.$or = [
+//         {
+//           technicianFirmName: regex,
+//         },
+//         {
+//           technicianName: regex,
+//         },
+//         {
+//           technicianCode: regex,
+//         },
+//         {
+//           mobileNumber: regex,
+//         },
+//         {
+//           email: regex,
+//         },
+//         {
+//           gstNumber: regex,
+//         },
+//       ];
+//     }
+
+//     const total = await Dealer.countDocuments(filter);
+
+//     const dealers = await Dealer.find(filter)
+//       .sort({
+//         createdAt: -1,
+//       })
+//       .skip((currentPage - 1) * pageLimit)
+//       .limit(pageLimit);
+
+//     return res.status(200).json({
+//       success: true,
+
+//       data: dealers,
+
+//       pagination: {
+//         page: currentPage,
+//         limit: pageLimit,
+//         total,
+//         totalPages: Math.ceil(total / pageLimit),
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Get Dealers Error:", error);
+
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to fetch dealers",
+//     });
+//   }
+// };
+
 export const getDealers = async (req, res) => {
   try {
-    const { page = 1, limit = 10, search = "", status = "" } = req.query;
+    const {
+      page = 1,
+      limit = 10,
+      search = "",
+      status = "",
+    } = req.query;
 
-    const currentPage = Math.max(Number(page) || 1, 1);
+    const currentPage = Math.max(
+      Number(page) || 1,
+      1,
+    );
 
-    const pageLimit = Math.max(Number(limit) || 10, 1);
+    const pageLimit = Math.max(
+      Number(limit) || 10,
+      1,
+    );
 
     const filter = {};
 
@@ -621,50 +746,78 @@ export const getDealers = async (req, res) => {
       const regex = new RegExp(search, "i");
 
       filter.$or = [
-        {
-          technicianFirmName: regex,
-        },
-        {
-          technicianName: regex,
-        },
-        {
-          technicianCode: regex,
-        },
-        {
-          mobileNumber: regex,
-        },
-        {
-          email: regex,
-        },
-        {
-          gstNumber: regex,
-        },
+        { technicianFirmName: regex },
+        { technicianName: regex },
+        { technicianCode: regex },
+        { mobileNumber: regex },
+        { email: regex },
+        { gstNumber: regex },
       ];
     }
 
-    const total = await Dealer.countDocuments(filter);
+    const total = await Dealer.countDocuments(
+      filter,
+    );
 
     const dealers = await Dealer.find(filter)
       .sort({
         createdAt: -1,
       })
       .skip((currentPage - 1) * pageLimit)
-      .limit(pageLimit);
+      .limit(pageLimit)
+      .lean();
+
+    // -------------------------------------
+    // Calculate leave statuses
+    // -------------------------------------
+
+    const normalizedDealers = dealers.map(
+      (dealer) => {
+        const leaves = (
+          dealer.leaves ?? []
+        ).map((leave) => ({
+          ...leave,
+          status: getLeaveStatus(leave),
+        }));
+
+        const isOnLeave = leaves.some(
+          (leave) =>
+            leave.status === "ACTIVE",
+        );
+
+        return {
+          ...dealer,
+
+          leaves,
+
+          isOnLeave,
+
+          effectiveStatus: isOnLeave
+            ? "LEAVE"
+            : dealer.status,
+        };
+      },
+    );
 
     return res.status(200).json({
       success: true,
 
-      data: dealers,
+      data: normalizedDealers,
 
       pagination: {
         page: currentPage,
         limit: pageLimit,
         total,
-        totalPages: Math.ceil(total / pageLimit),
+        totalPages: Math.ceil(
+          total / pageLimit,
+        ),
       },
     });
   } catch (error) {
-    console.error("Get Dealers Error:", error);
+    console.error(
+      "Get Dealers Error:",
+      error,
+    );
 
     return res.status(500).json({
       success: false,
@@ -672,14 +825,38 @@ export const getDealers = async (req, res) => {
     });
   }
 };
-
 /* =========================================================
    GET DEALER BY ID
 ========================================================= */
 
+// export const getDealerById = async (req, res) => {
+//   try {
+//     const dealer = await Dealer.findById(req.params.id);
+
+//     if (!dealer) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Dealer not found",
+//       });
+//     }
+
+//     return res.status(200).json({
+//       success: true,
+//       data: dealer,
+//     });
+//   } catch (error) {
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to fetch dealer",
+//     });
+//   }
+// };
+
 export const getDealerById = async (req, res) => {
   try {
-    const dealer = await Dealer.findById(req.params.id);
+    const dealer = await Dealer.findById(
+      req.params.id,
+    ).lean();
 
     if (!dealer) {
       return res.status(404).json({
@@ -688,18 +865,48 @@ export const getDealerById = async (req, res) => {
       });
     }
 
+    const leaves = (dealer.leaves ?? []).map(
+      (leave) => ({
+        ...leave,
+
+        // Calculate current status
+        status: getLeaveStatus(leave),
+      }),
+    );
+
+    const onLeave = leaves.some(
+      (leave) => leave.status === "ACTIVE",
+    );
+
     return res.status(200).json({
       success: true,
-      data: dealer,
+
+      data: {
+        ...dealer,
+
+        leaves,
+
+        // Useful for frontend
+        isOnLeave: onLeave,
+
+        // Optional display status
+        effectiveStatus: onLeave
+          ? "LEAVE"
+          : dealer.status,
+      },
     });
   } catch (error) {
+    console.error(
+      "Get Dealer By ID Error:",
+      error,
+    );
+
     return res.status(500).json({
       success: false,
       message: "Failed to fetch dealer",
     });
   }
 };
-
 /* =========================================================
    UPDATE DEALER
 ========================================================= */
@@ -825,12 +1032,20 @@ export const updateDealer = async (req, res) => {
        NUMBER FIELDS
     =============================== */
 
+    // const numberFields = [
+    //   "gstRate",
+    //   "reverseChargeLimit",
+    //   "creditDays",
+    //   "creditLimit",
+    //   "rating",
+    //   "openingBalance",
+    // ];
+
     const numberFields = [
       "gstRate",
       "reverseChargeLimit",
       "creditDays",
       "creditLimit",
-      "rating",
       "openingBalance",
     ];
 
@@ -943,8 +1158,191 @@ export const updateDealer = async (req, res) => {
     }
 
     if (req.body.technicianStatus) {
-      dealer.status = req.body.technicianStatus;
+      const requestedStatus = req.body.technicianStatus;
+
+      const leavingDate = dealer.dateOfLeaving
+        ? new Date(dealer.dateOfLeaving)
+        : null;
+
+      const hasAlreadyLeft = leavingDate && leavingDate <= new Date();
+
+      if (hasAlreadyLeft && requestedStatus === "ACTIVE") {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Dealer has already left. Use the rejoin action to activate this dealer.",
+        });
+      }
+
+      if (!["LEAVE", "SUSPENDED"].includes(dealer.status)) {
+        dealer.status = requestedStatus;
+      }
     }
+    /* ===============================
+   DEALER LIFECYCLE
+=============================== */
+
+    const now = new Date();
+
+    /* ===============================
+   DATE OF JOINING
+================================ */
+
+    if (req.body.dateOfJoining !== undefined) {
+      if (!req.body.dateOfJoining) {
+        return res.status(400).json({
+          success: false,
+          message: "Date of joining is required",
+        });
+      }
+
+      const joiningDate = new Date(req.body.dateOfJoining);
+
+      if (Number.isNaN(joiningDate.getTime())) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid date of joining",
+        });
+      }
+
+      dealer.dateOfJoining = joiningDate;
+    }
+
+    /* ===============================
+   DATE OF LEAVING
+================================ */
+
+    if (req.body.dateOfLeaving !== undefined) {
+      if (req.body.dateOfLeaving) {
+        const leavingDate = new Date(req.body.dateOfLeaving);
+
+        if (Number.isNaN(leavingDate.getTime())) {
+          return res.status(400).json({
+            success: false,
+            message: "Invalid date of leaving",
+          });
+        }
+
+        const joiningDate = dealer.dateOfJoining
+          ? new Date(dealer.dateOfJoining)
+          : null;
+
+        if (joiningDate && leavingDate < joiningDate) {
+          return res.status(400).json({
+            success: false,
+            message: "Date of leaving cannot be before date of joining",
+          });
+        }
+
+        dealer.dateOfLeaving = leavingDate;
+
+        if (leavingDate <= now) {
+          dealer.status = "INACTIVE";
+          dealer.technicianStatus = "INACTIVE";
+        }
+      } else {
+        dealer.dateOfLeaving = null;
+      }
+    }
+    /*
+|--------------------------------------------------------------------------
+| REJOIN DEALER
+|--------------------------------------------------------------------------
+*/
+
+    // if (req.body.rejoiningDate) {
+    //   const rejoiningDate = new Date(req.body.rejoiningDate);
+
+    //   if (Number.isNaN(rejoiningDate.getTime())) {
+    //     return res.status(400).json({
+    //       success: false,
+    //       message: "Invalid rejoining date",
+    //     });
+    //   }
+
+    //   /*
+    //    * Store every rejoining date.
+    //    */
+    //   dealer.rejoiningDates ??= [];
+
+    //   const alreadyExists = dealer.rejoiningDates.some(
+    //     (date) => new Date(date).getTime() === rejoiningDate.getTime(),
+    //   );
+
+    //   if (!alreadyExists) {
+    //     dealer.rejoiningDates.push(rejoiningDate);
+    //   }
+
+    //   dealer.lastRejoiningDate = rejoiningDate;
+
+    //   /*
+    //    * Activate immediately only when
+    //    * rejoining date has arrived.
+    //    */
+    //   if (rejoiningDate <= now) {
+    //     dealer.status = "ACTIVE";
+    //     dealer.technicianStatus = "ACTIVE";
+
+    //     dealer.dateOfLeaving = null;
+    //   }
+    // }
+
+    /*
+|--------------------------------------------------------------------------
+| LEAVE
+|--------------------------------------------------------------------------
+*/
+
+    // if (req.body.leaveFrom !== undefined) {
+    //   dealer.leaveFrom = req.body.leaveFrom
+    //     ? new Date(req.body.leaveFrom)
+    //     : null;
+    // }
+
+    // if (req.body.leaveTo !== undefined) {
+    //   dealer.leaveTo = req.body.leaveTo ? new Date(req.body.leaveTo) : null;
+    // }
+
+    // if (
+    //   dealer.leaveFrom &&
+    //   now >= new Date(dealer.leaveFrom) &&
+    //   (!dealer.leaveTo || now <= new Date(dealer.leaveTo))
+    // ) {
+    //   dealer.status = "LEAVE";
+    // }
+
+    /*
+|--------------------------------------------------------------------------
+| SUSPEND
+|--------------------------------------------------------------------------
+*/
+
+    // if (req.body.status === "SUSPENDED") {
+    //   dealer.status = "SUSPENDED";
+
+    //   dealer.suspendedAt = now;
+
+    //   dealer.suspensionReason = req.body.suspensionReason || "";
+    // }
+
+    /*
+|--------------------------------------------------------------------------
+| RATING
+|--------------------------------------------------------------------------
+*/
+
+    // if (req.body.rating !== undefined) {
+    //   const rating = Number(req.body.rating);
+
+    //   if (Number.isNaN(rating) || rating < 0 || rating > 5) {
+    //     return res.status(400).json({
+    //       success: false,
+    //       message: "Rating must be between 0 and 5",
+    //     });
+    //   }
+
+    //   dealer.rating = rating;
+    // }
 
     await dealer.save();
 
@@ -961,7 +1359,9 @@ export const updateDealer = async (req, res) => {
       req.body.technicianStatus !== undefined ||
       req.body.technicianCode !== undefined ||
       req.body.technicianFirmName !== undefined ||
-      req.body.technicianName !== undefined;
+      req.body.technicianName !== undefined ||
+      req.body.dateOfJoining !== undefined ||
+      req.body.dateOfLeaving !== undefined;
 
     if (allocationRelatedChanged) {
       allocation = await syncDealerAllocation({
@@ -1002,12 +1402,10 @@ export const deleteDealer = async (req, res) => {
     if (
       await BillingComplaint.exists({ "billingReview.dealerId": req.params.id })
     )
-      return res
-        .status(409)
-        .json({
-          message:
-            "Dealers with billing reviews or ledger entries cannot be deleted",
-        });
+      return res.status(409).json({
+        message:
+          "Dealers with billing reviews or ledger entries cannot be deleted",
+      });
     const dealer = await Dealer.findByIdAndDelete(req.params.id);
 
     if (!dealer) {
@@ -1073,6 +1471,374 @@ export const updateDealerStatus = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to update dealer status",
+    });
+  }
+};
+
+// export const registerDealerLeave = async (req, res) => {
+//   try {
+//     const { from, to, reason } = req.body;
+
+//     if (!from || !to) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Leave from and to dates are required",
+//       });
+//     }
+
+//     const fromDate = new Date(from);
+//     const toDate = new Date(to);
+
+//     if (Number.isNaN(fromDate.getTime()) || Number.isNaN(toDate.getTime())) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid leave dates",
+//       });
+//     }
+
+//     if (toDate < fromDate) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Leave end date cannot be before start date",
+//       });
+//     }
+
+//     const dealer = await Dealer.findById(req.params.id);
+
+//     if (!dealer) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Dealer not found",
+//       });
+//     }
+
+//     if (dealer.status === "SUSPENDED") {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Suspended dealer cannot register leave",
+//       });
+//     }
+
+//     dealer.leaves.push({
+//       from: fromDate,
+//       to: toDate,
+//       reason: reason || "",
+//       status:
+//         fromDate <= new Date() && toDate >= new Date() ? "ACTIVE" : "SCHEDULED",
+//     });
+
+//     if (fromDate <= new Date() && toDate >= new Date()) {
+//       dealer.status = "LEAVE";
+//     }
+
+//     await dealer.save();
+
+//     await syncDealerAllocation({
+//       dealer,
+//       productServices: dealer.productServices ?? [],
+//       combinedCapacity: dealer.combinedCapacity ?? {
+//         products: [],
+//         capacity: 0,
+//       },
+//       individualCapacities: dealer.individualCapacities ?? [],
+//     });
+
+//     return res.json({
+//       success: true,
+//       message: "Dealer leave registered successfully",
+//       data: dealer,
+//     });
+//   } catch (error) {
+//     return res.status(500).json({
+//       success: false,
+//       message: error.message,
+//     });
+//   }
+// };
+
+export const registerDealerLeave = async (req, res) => {
+  try {
+    const { from, to, reason } = req.body;
+
+    if (!from || !to) {
+      return res.status(400).json({
+        success: false,
+        message: "Leave from and to dates are required",
+      });
+    }
+
+    const fromDate = new Date(from);
+    const toDate = new Date(to);
+
+    if (
+      Number.isNaN(fromDate.getTime()) ||
+      Number.isNaN(toDate.getTime())
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid leave dates",
+      });
+    }
+
+    if (toDate < fromDate) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Leave end date cannot be before start date",
+      });
+    }
+
+    const dealer = await Dealer.findById(req.params.id);
+
+    if (!dealer) {
+      return res.status(404).json({
+        success: false,
+        message: "Dealer not found",
+      });
+    }
+
+    if (dealer.status === "SUSPENDED") {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Suspended dealer cannot register leave",
+      });
+    }
+
+    // -------------------------------------
+    // Check overlapping leave
+    // -------------------------------------
+
+    const hasOverlap = (dealer.leaves ?? []).some(
+      (leave) => {
+        if (leave.status === "CANCELLED") {
+          return false;
+        }
+
+        const existingFrom = new Date(leave.from);
+        const existingTo = new Date(leave.to);
+
+        return (
+          fromDate <= existingTo &&
+          toDate >= existingFrom
+        );
+      },
+    );
+
+    if (hasOverlap) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Dealer already has leave during this period",
+      });
+    }
+
+    // -------------------------------------
+    // Create leave
+    // -------------------------------------
+
+    const leave = {
+      from: fromDate,
+      to: toDate,
+      reason: reason?.trim() || "",
+      status: "SCHEDULED",
+    };
+
+    leave.status = getLeaveStatus(leave);
+
+    dealer.leaves.push(leave);
+
+    await dealer.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Dealer leave registered successfully",
+
+      data: {
+        dealer,
+        leave: {
+          ...dealer.leaves[
+            dealer.leaves.length - 1
+          ].toObject(),
+          status: getLeaveStatus(
+            dealer.leaves[
+              dealer.leaves.length - 1
+            ],
+          ),
+        },
+      },
+    });
+  } catch (error) {
+    console.error(
+      "Register Dealer Leave Error:",
+      error,
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        error.message ||
+        "Failed to register dealer leave",
+    });
+  }
+};
+export const rejoinDealer = async (req, res) => {
+  try {
+    const { rejoiningDate } = req.body;
+
+    if (!rejoiningDate) {
+      return res.status(400).json({
+        success: false,
+        message: "Rejoining date is required",
+      });
+    }
+
+    const dealer = await Dealer.findById(req.params.id);
+
+    if (!dealer) {
+      return res.status(404).json({
+        success: false,
+        message: "Dealer not found",
+      });
+    }
+
+    const date = new Date(rejoiningDate);
+
+    if (Number.isNaN(date.getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid rejoining date",
+      });
+    }
+
+    if (dealer.dateOfLeaving && date <= new Date(dealer.dateOfLeaving)) {
+      return res.status(400).json({
+        success: false,
+        message: "Rejoining date must be after date of leaving",
+      });
+    }
+
+    dealer.rejoiningDates ??= [];
+
+    dealer.rejoiningDates.push(date);
+
+    if (date <= new Date()) {
+      dealer.status = "ACTIVE";
+      dealer.technicianStatus = "ACTIVE";
+
+      // Keep old leaving date for history.
+      // Do NOT clear dateOfLeaving.
+    }
+
+    await dealer.save();
+
+    await syncDealerAllocation({
+      dealer,
+      productServices: dealer.productServices ?? [],
+      combinedCapacity: dealer.combinedCapacity ?? {
+        products: [],
+        capacity: 0,
+      },
+      individualCapacities: dealer.individualCapacities ?? [],
+    });
+
+    return res.json({
+      success: true,
+      message: "Dealer rejoined successfully",
+      data: dealer,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+export const updateDealerRating = async (req, res) => {
+  try {
+    const { rating } = req.body;
+
+    const value = Number(rating);
+
+    if (Number.isNaN(value) || value < 0 || value > 5) {
+      return res.status(400).json({
+        success: false,
+        message: "Rating must be between 0 and 5",
+      });
+    }
+
+    const dealer = await Dealer.findByIdAndUpdate(
+      req.params.id,
+      {
+        $set: {
+          rating: value,
+        },
+      },
+      {
+        new: true,
+        runValidators: true,
+      },
+    );
+
+    if (!dealer) {
+      return res.status(404).json({
+        success: false,
+        message: "Dealer not found",
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: "Dealer rating updated successfully",
+      data: dealer,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+export const suspendDealer = async (req, res) => {
+  try {
+    const { reason } = req.body;
+
+    const dealer = await Dealer.findById(req.params.id);
+
+    if (!dealer) {
+      return res.status(404).json({
+        success: false,
+        message: "Dealer not found",
+      });
+    }
+
+    dealer.status = "SUSPENDED";
+    dealer.suspendedAt = new Date();
+    dealer.suspensionReason = reason || "";
+
+    await dealer.save();
+
+    await syncDealerAllocation({
+      dealer,
+      productServices: dealer.productServices ?? [],
+      combinedCapacity: dealer.combinedCapacity ?? {
+        products: [],
+        capacity: 0,
+      },
+      individualCapacities: dealer.individualCapacities ?? [],
+    });
+
+    return res.json({
+      success: true,
+      message: "Dealer suspended successfully",
+      data: dealer,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
     });
   }
 };

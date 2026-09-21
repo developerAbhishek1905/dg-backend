@@ -4,6 +4,69 @@ import { type } from "node:os";
 const { Schema } = mongoose;
 
 //  ADDRESS
+const dealerLeaveSchema = new mongoose.Schema(
+  {
+    from: {
+      type: Date,
+      required: true,
+    },
+
+    to: {
+      type: Date,
+      required: true,
+    },
+
+    reason: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    status: {
+      type: String,
+      enum: ["SCHEDULED", "ACTIVE", "COMPLETED", "CANCELLED"],
+      default: "SCHEDULED",
+    },
+  },
+  {
+    timestamps: true,
+  },
+);
+
+const dealerStatusHistorySchema = new mongoose.Schema(
+  {
+    status: {
+      type: String,
+      enum: ["ACTIVE", "INACTIVE", "SUSPENDED", "LEAVE"],
+      required: true,
+    },
+
+    from: {
+      type: Date,
+      required: true,
+    },
+
+    to: {
+      type: Date,
+      default: null,
+    },
+
+    reason: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    remarks: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+  },
+  {
+    _id: true,
+  },
+);
 
 const addressSchema = new mongoose.Schema(
   {
@@ -604,12 +667,64 @@ const dealerSchema = new mongoose.Schema(
        STATUS
     ========================= */
 
-    status: {
-      type: String,
-      enum: ["ACTIVE", "INACTIVE", "SUSPENDED"],
-      default: "ACTIVE",
-      index: true,
-    },
+dateOfJoining: {
+  type: Date,
+  default: Date.now,
+  index: true,
+},
+
+dateOfLeaving: {
+  type: Date,
+  default: null,
+  index: true,
+},
+
+lastRejoiningDate: {
+  type: Date,
+  default: null,
+},
+
+rejoiningDates: {
+  type: [Date],
+  default: [],
+},
+leaves: {
+  type: [dealerLeaveSchema],
+  default: [],
+},
+
+// leaveFrom: {
+//   type: Date,
+//   default: null,
+// },
+
+// leaveTo: {
+//   type: Date,
+//   default: null,
+// },
+
+suspendedAt: {
+  type: Date,
+  default: null,
+},
+
+suspensionReason: {
+  type: String,
+  trim: true,
+  default: "",
+},
+
+statusHistory: {
+  type: [dealerStatusHistorySchema],
+  default: [],
+},
+
+status: {
+  type: String,
+  enum: ["ACTIVE", "INACTIVE", "SUSPENDED", "LEAVE"],
+  default: "ACTIVE",
+  index: true,
+},
   },
   {
     timestamps: true,
