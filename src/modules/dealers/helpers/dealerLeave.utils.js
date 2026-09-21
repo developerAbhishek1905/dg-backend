@@ -22,11 +22,45 @@ export const getLeaveStatus = (leave, now = new Date()) => {
   return "ACTIVE";
 };
 
+// export const isDealerOnLeave = (
+//   dealer,
+//   now = new Date(),
+// ) => {
+//   return (dealer.leaves ?? []).some((leave) => {
+//     return getLeaveStatus(leave, now) === "ACTIVE";
+//   });
+// };
+
 export const isDealerOnLeave = (
   dealer,
   now = new Date(),
 ) => {
-  return (dealer.leaves ?? []).some((leave) => {
-    return getLeaveStatus(leave, now) === "ACTIVE";
+  if (!dealer?.leaves?.length) {
+    return false;
+  }
+
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+
+  return dealer.leaves.some((leave) => {
+    // Cancelled leave should not block allocation
+    if (leave.status === "CANCELLED") {
+      return false;
+    }
+
+    const from = new Date(leave.from);
+    const to = new Date(leave.to);
+
+    if (
+      Number.isNaN(from.getTime()) ||
+      Number.isNaN(to.getTime())
+    ) {
+      return false;
+    }
+
+    from.setHours(0, 0, 0, 0);
+    to.setHours(23, 59, 59, 999);
+
+    return today >= from && today <= to;
   });
 };

@@ -3,6 +3,7 @@ import Dealer from "../../dealers/models/dealer.model.js";
 import DailyCapacityUsage from "../model/dailyCapacityUsage.model.js";
 import { buildAllocationRules } from "../../dealers/controllers/dealer.controller.js";
 import { canDealerReceiveComplaint } from "../../dealers/helpers/dealerAvailability.js";
+import { isDealerOnLeave } from "../../dealers/helpers/dealerLeave.utils.js";
 
 //----------
 
@@ -286,7 +287,7 @@ export const allocateDealerForComplaint = async ({
     },
   })
     .select(
-      "_id status dateOfJoining dateOfLeaving rejoiningDates leaveFrom leaveTo",
+      "_id status dateOfJoining dateOfLeaving rejoiningDates leaves ",
     )
     .lean();
 
