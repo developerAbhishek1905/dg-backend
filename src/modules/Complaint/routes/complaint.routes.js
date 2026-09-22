@@ -8,59 +8,26 @@ import {
   deleteComplaint,
   suspendComplaint,
   getEligibleDealersForComplaint,
-  assignDealerToComplaint
+  assignDealerToComplaint,
 } from "../controllers/complaint.controller.js";
 import { protect } from "../../auth/middleware/auth.middleware.js";
 
+const router = express.Router();
 
-const router =
-  express.Router();
+router.post("/", protect, createComplaint);
 
+router.get("/", protect, getComplaints);
 
-router.post(
-  "/",protect,
-  createComplaint,
-);
+router.get("/:id", protect, getComplaintById);
 
+router.put("/:id", protect, updateComplaint);
 
-router.get(
-  "/",protect,
-  getComplaints,
-);
+router.delete("/:id", protect, deleteComplaint);
 
+router.patch("/:id/suspend", protect, suspendComplaint);
 
-router.get(
-  "/:id",protect,
-  getComplaintById,
-);
+router.get("/:complaintId/eligible-dealers",protect, getEligibleDealersForComplaint);
 
-
-router.put(
-  "/:id",protect,
-  updateComplaint,
-);
-
-
-router.delete(
-  "/:id",protect,
-  deleteComplaint,
-);
-
-router.patch(
-  "/:id/suspend",protect
-  ,
-  suspendComplaint
-);
-
-
-router.get(
-  "/:complaintId/eligible-dealers",
-  getEligibleDealersForComplaint,
-);
-
-router.patch(
-  "/:complaintId/assign-dealer",
-  assignDealerToComplaint,
-);
+router.patch("/:complaintId/assign-dealer",protect, assignDealerToComplaint);
 
 export default router;

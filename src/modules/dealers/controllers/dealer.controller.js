@@ -1631,6 +1631,7 @@ export const registerDealerLeave = async (req, res) => {
     });
   }
 };
+
 export const rejoinDealer = async (req, res) => {
   try {
     const { rejoiningDate } = req.body;
@@ -1799,6 +1800,112 @@ export const suspendDealer = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: error.message,
+    });
+  }
+};
+
+export const getDealerDropdown = async (req, res) => {
+  try {
+    const {
+      search = "",
+      cityId,
+      limit = 50,
+    } = req.query;
+
+    const filter = {
+      status: "ACTIVE",
+    };
+
+    /*
+    |--------------------------------------------------------------------------
+    | City Filter
+    |--------------------------------------------------------------------------
+    */
+
+    if (cityId) {
+      const numericCityId = Number(cityId);
+
+      if (!Number.isNaN(numericCityId)) {
+        filter["businessAddress.cityId"] = numericCityId;
+      }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Search
+    |--------------------------------------------------------------------------
+    */
+
+    if (search?.trim()) {
+      const escapedSearch = search
+        .trim()
+        .replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+      const regex = new RegExp(escapedSearch, "i");
+
+      filter.$or = [
+        { dealerCode: regex },
+        { technicianCode: regex },
+        { technicianName: regex },
+        { technicianFirmName: regex },
+        { mobileNumber: regex },
+        { "businessAddress.city": regex },
+      ];
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Get Dealers
+    |--------------------------------------------------------------------------
+    */
+
+    const dealers = await Dealer.find(filter)
+      .select(
+        "_id dealerCode technicianCode technicianName technicianFirmName mobileNumber businessAddress status",
+      )
+      .sort({
+        technicianFirmName: 1,
+      })
+      .limit(Math.min(Number(limit) || 50, 100))
+      .lean();
+
+    /*
+    |--------------------------------------------------------------------------
+    | Dropdown Response
+    |--------------------------------------------------------------------------
+    */
+
+    const data = dealers.map((dealer) => ({
+      value: dealer._id,
+
+      label: `${dealer.technicianFirmName} - ${dealer.technicianName}`,
+
+      dealerCode: dealer.dealerCode || "",
+
+      technicianCode: dealer.technicianCode || "",
+
+      technicianName: dealer.technicianName || "",
+
+      technicianFirmName: dealer.technicianFirmName || "",
+
+      mobileNumber: dealer.mobileNumber || "",
+
+      cityId: dealer.businessAddress?.cityId ?? null,
+
+      city: dealer.businessAddress?.city || "",
+    }));
+
+    return res.status(200).json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    console.error("Get dealer dropdown error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch dealer dropdown",
+      error: error.message,
     });
   }
 };

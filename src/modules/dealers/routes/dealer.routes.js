@@ -11,6 +11,7 @@ import {
   updateDealerRating,
   rejoinDealer,
   suspendDealer,
+  getDealerDropdown,
 } from "../controllers/dealer.controller.js";
 
 import { dealerDocumentUpload } from "../middleware/dealerUpload.middleware.js";
@@ -26,6 +27,11 @@ router.post("/:id/rejoin", protect, rejoinDealer);
 
 router.patch("/:id/rating", updateDealerRating);
 router.patch("/:id/suspend", suspendDealer);
+router.get(
+  "/dropdown",
+  // protect,
+  getDealerDropdown,
+);
 /* GET ALL */
 router.get("/", getDealers);
 

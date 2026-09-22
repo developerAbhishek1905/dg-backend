@@ -186,7 +186,7 @@ const complaintSchema = new mongoose.Schema(
     //   index: true,
     // },
 
-        productId: {
+    productId: {
       type: Number,
       default: null,
       index: true,
@@ -530,6 +530,13 @@ const complaintSchema = new mongoose.Schema(
       type: String,
       trim: true,
       default: "",
+    },
+
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      index: true,
     },
   },
   {
