@@ -1530,7 +1530,31 @@ export const suspendComplaint = async (req, res) => {
       });
     }
 
-    if (["CLOSED", "CANCELLED"].includes(complaint.status)) {
+    if (
+      [
+        "CLOSED",
+        "CANCELLED",
+        "ALLOCATED",
+        "APPOINTMENT_SCHEDULED",
+        "PENDING_ON_CALL",
+        "CANCEL_ON_CALL",
+        "RESCHEDULED",
+        "VISITED",
+        "CLOSE_ON_BILLING",
+        "CANCEL_ON_VISIT",
+        "PENDING_ON_VISIT",
+        "CLOSE_ON_VERIFICATION",
+        "REOPEN",
+        "SUSPENDED",
+
+        "PENDING",
+        "WORK_IN_PROGRESS",
+        "WORK_COMPLETED",
+        "DG_VERIFICATION",
+        "CLOSED",
+        "CANCELLED",
+      ].includes(complaint.status)
+    ) {
       return res.status(400).json({
         success: false,
         message: `Cannot suspend a ${complaint.status.toLowerCase()} complaint`,
