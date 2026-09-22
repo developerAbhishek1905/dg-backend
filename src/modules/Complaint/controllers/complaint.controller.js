@@ -118,6 +118,7 @@ export const createComplaint = async (req, res) => {
 
       subject,
       description,
+      additionalInfo,
     } = req.body;
 
     if (!phone?.trim()) {
@@ -320,7 +321,6 @@ export const createComplaint = async (req, res) => {
     |--------------------------------------------------------------------------
     */
 
-    
     const complaint = await Complaint.create({
       complaintNumber,
       complaintDateTime: new Date(),
@@ -425,6 +425,9 @@ export const createComplaint = async (req, res) => {
       allocatedAt: dealerAllocation ? new Date() : null,
       status: dealerAllocation ? "ALLOCATED" : "REGISTERED",
       createdBy: req.user.id,
+      additionalInfo: Array.isArray(additionalInfo)
+        ? additionalInfo.map((item) => String(item).trim()).filter(Boolean)
+        : [],
 
       // status: "REGISTERED",
     });
@@ -559,7 +562,7 @@ export const createComplaint = async (req, res) => {
     if (error.code === 11000) {
       return res.status(409).json({
         success: false,
-        message: "Duplicate complaint/customer data",
+        message: error,
       });
     }
 
@@ -931,66 +934,64 @@ export const getComplaints = async (req, res) => {
     |
     */
 
-if (search.trim()) {
-  const escapedSearch = search
-    .trim()
-    .replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (search.trim()) {
+      const escapedSearch = search
+        .trim()
+        .replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-  const regex = new RegExp(escapedSearch, "i");
+      const regex = new RegExp(escapedSearch, "i");
 
-  /*
-   * Search matching dealers also
-   */
-  const matchingDealers = await Dealer.find({
-    $or: [
-      { technicianName: regex },
-      { technicianFirmName: regex },
-      { "businessAddress.city": regex },
-      { "residentialAddress.city": regex },
-    ],
-  })
-    .select("_id")
-    .lean();
+      /*
+       * Search matching dealers also
+       */
+      const matchingDealers = await Dealer.find({
+        $or: [
+          { technicianName: regex },
+          { technicianFirmName: regex },
+          { "businessAddress.city": regex },
+          { "residentialAddress.city": regex },
+        ],
+      })
+        .select("_id")
+        .lean();
 
-  const matchingDealerIds = matchingDealers.map(
-    (dealer) => dealer._id,
-  );
+      const matchingDealerIds = matchingDealers.map((dealer) => dealer._id);
 
-  filter.$or = [
-    // Complaint
-    { complaintNumber: regex },
+      filter.$or = [
+        // Complaint
+        { complaintNumber: regex },
 
-    // Customer
-    { customerName: regex },
-    { phone: regex },
-    { alternatePhone: regex },
+        // Customer
+        { customerName: regex },
+        { phone: regex },
+        { alternatePhone: regex },
 
-    // Product
-    { brand: regex },
-    { productName: regex },
-    { productType: regex },
-    { faultReported: regex },
-    { category: regex },
+        // Product
+        { brand: regex },
+        { productName: regex },
+        { productType: regex },
+        { faultReported: regex },
+        { category: regex },
 
-    // Address / City
-    // { "address.addressLine": regex },  
-    { "address.city": regex },
-    { "address.district": regex },
-    { "address.state": regex },
-    { "address.pinCode": regex },
+        // Address / City
+        // { "address.addressLine": regex },
+        { "address.city": regex },
+        { "address.district": regex },
+        { "address.state": regex },
+        { "address.pinCode": regex },
 
-    // Allocated Dealer
-    ...(matchingDealerIds.length > 0
-      ? [
-          {
-            allocatedDealerId: {
-              $in: matchingDealerIds,
-            },
-          },
-        ]
-      : []),
-  ];
-}
+        // Allocated Dealer
+        ...(matchingDealerIds.length > 0
+          ? [
+              {
+                allocatedDealerId: {
+                  $in: matchingDealerIds,
+                },
+              },
+            ]
+          : []),
+      ];
+    }
 
     /*
     |--------------------------------------------------------------------------
@@ -1016,30 +1017,15 @@ if (search.trim()) {
           "customerId",
           "customerCode name phone alternatePhone email address",
         )
-        .populate(
-          "categoryId",
-          "product_name category description",
-        )
+        .populate("categoryId", "product_name category description")
         .populate(
           "allocatedDealerId",
           "dealerCode technicianCode technicianName technicianFirmName mobileNumber businessAddress residentialAddress",
         )
-        .populate(
-          "parentComplaintId",
-          "complaintNumber complaintType status",
-        )
-        .populate(
-          "brandId",
-          "brandName",
-        )
-        .populate(
-          "productTypeId",
-          "product_id product_code product_type",
-        )
-        .populate(
-          "createdBy",
-          "name email",
-        )
+        .populate("parentComplaintId", "complaintNumber complaintType status")
+        .populate("brandId", "brandName")
+        .populate("productTypeId", "product_id product_code product_type")
+        .populate("createdBy", "name email")
         .sort({
           complaintDateTime: -1,
         })
@@ -1268,6 +1254,25 @@ export const updateComplaint = async (req, res) => {
         complaint[field] = req.body[field];
       }
     });
+
+    /*
+    |--------------------------------------------------------------------------
+    | Additional Information
+    |--------------------------------------------------------------------------
+    */
+
+    if (req.body.additionalInfo !== undefined) {
+      if (!Array.isArray(req.body.additionalInfo)) {
+        return res.status(400).json({
+          success: false,
+          message: "additionalInfo must be an array",
+        });
+      }
+
+      complaint.additionalInfo = req.body.additionalInfo
+        .map((item) => String(item).trim())
+        .filter(Boolean);
+    }
 
     /*
     |--------------------------------------------------------------------------

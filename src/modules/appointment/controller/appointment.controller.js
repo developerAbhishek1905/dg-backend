@@ -410,7 +410,8 @@ export const updateAppointmentStatus = async (req, res) => {
           user: req.user,
         });
 
-        complaint.status = "CLOSED";
+        complaint.status = "CLOSE_ON_BILLING";
+        console.log(complaint.status)
         complaint.closedAt = new Date();
 
         complaint.pendingReason = "";
@@ -431,7 +432,7 @@ export const updateAppointmentStatus = async (req, res) => {
 
           previousStatus: complaint.status,
 
-          newStatus: "CLOSED",
+          newStatus: "CLOSE_ON_BILLING",
 
           title: "Complaint Closed",
 
@@ -875,43 +876,39 @@ export const updateAppointmentStatus = async (req, res) => {
     // }
 
     const cancellationStatuses = [
-  "CANCEL_ON_CALL",
-  "CANCEL_ON_VISIT",
-  "CANCELLED",
-];
+      "CANCEL_ON_CALL",
+      "CANCEL_ON_VISIT",
+      "CANCELLED",
+    ];
 
-const isCancellation =
-  cancellationStatuses.includes(status);
+    const isCancellation = cancellationStatuses.includes(status);
 
-if (isCancellation) {
-  /*
+    if (isCancellation) {
+      /*
   |--------------------------------------------------------------------------
   | Validate cancellation reason
   |--------------------------------------------------------------------------
   */
 
-  if (!cancellationReason) {
-    return res.status(400).json({
-      success: false,
-      message: "Cancellation reason is required",
-    });
-  }
+      if (!cancellationReason) {
+        return res.status(400).json({
+          success: false,
+          message: "Cancellation reason is required",
+        });
+      }
 
-  /*
+      /*
   |--------------------------------------------------------------------------
   | Update complaint cancellation data
   |--------------------------------------------------------------------------
   */
 
-  complaint.cancellationReason =
-    cancellationReason;
+      complaint.cancellationReason = cancellationReason;
 
-  complaint.cancelledAt =
-    new Date();
+      complaint.cancelledAt = new Date();
 
-  complaint.pendingReason =
-    "";
-}
+      complaint.pendingReason = "";
+    }
 
     /*
       |--------------------------------------------------------------------------
@@ -952,60 +949,45 @@ if (isCancellation) {
     //   });
     // }
 
+    // if (
+    //   cancellationStatuses.includes(
+    //     status,
+    //   )
+    // ) {
+    //   if (!cancellationReason) {
+    //     return res.status(400).json({
+    //       success: false,
+    //       message:
+    //         "Cancellation reason is required",
+    //     });
+    //   }
 
+    //   complaint.cancellationReason =
+    //     cancellationReason;
 
-// if (
-//   cancellationStatuses.includes(
-//     status,
-//   )
-// ) {
-//   if (!cancellationReason) {
-//     return res.status(400).json({
-//       success: false,
-//       message:
-//         "Cancellation reason is required",
-//     });
-//   }
+    //   complaint.cancelledAt =
+    //     new Date();
 
-//   complaint.cancellationReason =
-//     cancellationReason;
+    //   complaint.pendingReason =
+    //     "";
+    // }
 
-//   complaint.cancelledAt =
-//     new Date();
+    let cancellationLedger = null;
 
-//   complaint.pendingReason =
-//     "";
-// }
+    if (isCancellation) {
+      console.log("Creating cancellation ledger...");
 
-let cancellationLedger = null;
+      console.log("Complaint:", complaint.complaintNumber);
 
-if (isCancellation) {
-  console.log(
-    "Creating cancellation ledger...",
-  );
+      console.log("Dealer:", complaint.allocatedDealerId || complaint.dealerId);
 
-  console.log(
-    "Complaint:",
-    complaint.complaintNumber,
-  );
+      cancellationLedger = await createCancellationLedger({
+        complaint,
+        user: req.user,
+      });
 
-  console.log(
-    "Dealer:",
-    complaint.allocatedDealerId ||
-      complaint.dealerId,
-  );
-
-  cancellationLedger =
-    await createCancellationLedger({
-      complaint,
-      user: req.user,
-    });
-
-  console.log(
-    "Cancellation ledger:",
-    cancellationLedger,
-  );
-}
+      console.log("Cancellation ledger:", cancellationLedger);
+    }
 
     return res.status(200).json({
       success: true,

@@ -1,8 +1,27 @@
 import mongoose from "mongoose";
 import Customer from "../models/customer.model.js";
 import Complaint from "../../Complaint/models/complaint.model.js";
-import { getIsWarranty } from "../../../helper/warranty.util.js";
+// import { getIsWarranty } from "../../../helper/warranty.util.js";
+export const getIsWarranty = (complaint) => {
+  if (complaint.status !== "CLOSE_ON_BILLING") {
+    console.log("kfhdkshskfhks", complaint.status )
+    return false;
+  }
 
+  if (!complaint.closedAt) {
+    return false;
+  }
+
+  console.log("closeAt running")
+
+  const closedDate = new Date(complaint.closedAt);
+
+  const warrantyEndDate = new Date(closedDate);
+
+  warrantyEndDate.setMonth(warrantyEndDate.getMonth() + 1);
+
+  return new Date() <= warrantyEndDate;
+};
 
 /*
 |--------------------------------------------------------------------------

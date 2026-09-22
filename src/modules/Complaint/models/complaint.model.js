@@ -329,6 +329,13 @@ const complaintSchema = new mongoose.Schema(
       default: "",
     },
 
+    additionalInfo: [
+      {
+        type: String,
+        trim: true,
+      },
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Status
