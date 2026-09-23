@@ -692,6 +692,21 @@ leaves: {
   type: [dealerLeaveSchema],
   default: [],
 },
+securityAmount: {
+  type: Number,
+  default: 0,
+  min: 0,
+},
+
+additionalInfo: [
+  {
+    value: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+  },
+],
 
 // leaveFrom: {
 //   type: Date,

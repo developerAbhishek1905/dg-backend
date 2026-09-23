@@ -367,7 +367,10 @@ export const createDealer = async (req, res) => {
     });
 
     const individualCapacities = parseJSON(req.body.individualCapacities, []);
-
+const additionalInfo = parseJSON(
+  req.body.additionalInfo,
+  [],
+);
     /* ===============================
        DOCUMENTS
     =============================== */
@@ -488,7 +491,9 @@ export const createDealer = async (req, res) => {
       individualCapacities,
       documents,
       technicianStatus: finalStatus === "ACTIVE" ? "ACTIVE" : "INACTIVE",
+securityAmount: parseNumber(req.body.securityAmount),
 
+additionalInfo,
       status: finalStatus,
 
       dateOfJoining: joiningDate,
@@ -1007,6 +1012,7 @@ export const updateDealer = async (req, res) => {
       "creditDays",
       "creditLimit",
       "openingBalance",
+        "securityAmount",
     ];
 
     numberFields.forEach((field) => {
@@ -1107,6 +1113,17 @@ export const updateDealer = async (req, res) => {
         "drivingLicenceBackFile",
       );
     }
+
+    if (req.body.additionalInfo !== undefined) {
+  dealer.additionalInfo = parseJSON(
+    req.body.additionalInfo,
+    [],
+  )
+    .filter((item) => item?.value?.trim())
+    .map((item) => ({
+      value: item.value.trim(),
+    }));
+}
 
     const newOtherDocuments = getUploadedFiles(req.files, "documentUpload");
 
