@@ -4,6 +4,80 @@ import Category from "../models/category.model.js";
 import Product from "../../product/models/product.model.js  ";
 import { escapeRegex } from "../../../helper/escapeRegex.js";
 
+// export const createCategory = async (req, res) => {
+//   try {
+//     const {
+//       description = "",
+//       category = "",
+//       categoryDescription = "",
+//       status = "ACTIVE",
+//       product_id,
+//     } = req.body;
+
+//     console.log("REQ BODY:", req.body);
+//     console.log("PRODUCT ID:", product_id);
+//     if (product_id === undefined || product_id === null || product_id === "") {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Product ID is required",
+//       });
+//     }
+
+//     const parsedProductId = Number(product_id);
+
+//     if (Number.isNaN(parsedProductId)) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Product ID must be a valid number",
+//       });
+//     }
+
+//     if (!["ACTIVE", "INACTIVE"].includes(status)) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid status",
+//       });
+//     }
+
+//     const newCategory = await Category.create({
+//       product_id: parsedProductId,
+//       description: description?.trim() || "",
+//       category: category?.trim() || "",
+//       categoryDescription: categoryDescription?.trim() || "",
+//       status,
+//     });
+
+//     return res.status(201).json({
+//       success: true,
+//       message: "Category created successfully",
+//       data: formatCategory(newCategory),
+//     });
+//   } catch (error) {
+//     console.error("Create Category Error:", error);
+
+//     // if (error.code === 11000 && error.keyPattern?.newCategory) {
+//     //   return res.status(409).json({
+//     //     success: false,
+//     //     message: "Category already exists",
+//     //   });
+//     // }
+
+//     if (error.code === 11000) {
+//       return res.status(409).json({
+//         success: false,
+//         message: "Category and description combination already exists",
+//       });
+//     }
+
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to create category",
+//       error: error.message,
+//     });
+//   }
+// };
+
+
 export const createCategory = async (req, res) => {
   try {
     const {
@@ -14,9 +88,11 @@ export const createCategory = async (req, res) => {
       product_id,
     } = req.body;
 
-    console.log("REQ BODY:", req.body);
-    console.log("PRODUCT ID:", product_id);
-    if (product_id === undefined || product_id === null || product_id === "") {
+    if (
+      product_id === undefined ||
+      product_id === null ||
+      product_id === ""
+    ) {
       return res.status(400).json({
         success: false,
         message: "Product ID is required",
@@ -39,10 +115,68 @@ export const createCategory = async (req, res) => {
       });
     }
 
+    // Normalize
+    const normalizedCategory = category.trim().toUpperCase();
+    const normalizedDescription = description.trim().toUpperCase();
+
+    if (!normalizedCategory) {
+      return res.status(400).json({
+        success: false,
+        message: "Category is required",
+      });
+    }
+
+    if (!normalizedDescription) {
+      return res.status(400).json({
+        success: false,
+        message: "Description is required",
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | CHECK CATEGORY
+    |--------------------------------------------------------------------------
+    */
+
+    const categoryExists = await Category.findOne({
+      category: normalizedCategory,
+    });
+
+    if (categoryExists) {
+      return res.status(409).json({
+        success: false,
+        message: "Category already exists",
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | CHECK DESCRIPTION
+    |--------------------------------------------------------------------------
+    */
+
+    const descriptionExists = await Category.findOne({
+      description: normalizedDescription,
+    });
+
+    if (descriptionExists) {
+      return res.status(409).json({
+        success: false,
+        message: "Description already exists",
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | CREATE
+    |--------------------------------------------------------------------------
+    */
+
     const newCategory = await Category.create({
       product_id: parsedProductId,
-      description: description?.trim() || "",
-      category: category?.trim() || "",
+      category: normalizedCategory,
+      description: normalizedDescription,
       categoryDescription: categoryDescription?.trim() || "",
       status,
     });
@@ -55,10 +189,26 @@ export const createCategory = async (req, res) => {
   } catch (error) {
     console.error("Create Category Error:", error);
 
-    if (error.code === 11000 && error.keyPattern?.newCategory) {
+    if (error.code === 11000) {
+      const duplicateField = Object.keys(error.keyPattern || {})[0];
+
+      if (duplicateField === "category") {
+        return res.status(409).json({
+          success: false,
+          message: "Category already exists",
+        });
+      }
+
+      if (duplicateField === "description") {
+        return res.status(409).json({
+          success: false,
+          message: "Description already exists",
+        });
+      }
+
       return res.status(409).json({
         success: false,
-        message: "Category already exists",
+        message: "Category or description already exists",
       });
     }
 
@@ -230,12 +380,100 @@ export const getCategoryById = async (req, res) => {
   }
 };
 
+// export const updateCategory = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+
+//     const { product_id, description, category, categoryDescription, status } =
+//       req.body;
+
+//     if (!mongoose.Types.ObjectId.isValid(id)) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid category ID",
+//       });
+//     }
+
+//     const existingCategory = await Category.findById(id);
+
+//     if (!existingCategory) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Category not found",
+//       });
+//     }
+
+//     if (product_id !== undefined) {
+//       const parsedProductId = Number(product_id);
+
+//       if (Number.isNaN(parsedProductId)) {
+//         return res.status(400).json({
+//           success: false,
+//           message: "Product ID must be a valid number",
+//         });
+//       }
+
+//       existingCategory.product_id = parsedProductId;
+//     }
+
+//     if (description !== undefined) {
+//       existingCategory.description = description?.trim() || "";
+//     }
+
+//     if (category !== undefined) {
+//       existingCategory.category = category?.trim() || "";
+//     }
+
+//     if (categoryDescription !== undefined) {
+//       existingCategory.categoryDescription = categoryDescription?.trim() || "";
+//     }
+
+//     if (status !== undefined) {
+//       if (!["ACTIVE", "INACTIVE"].includes(status)) {
+//         return res.status(400).json({
+//           success: false,
+//           message: "Invalid status",
+//         });
+//       }
+
+//       existingCategory.status = status;
+//     }
+
+//     await existingCategory.save();
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "Category updated successfully",
+//       data: formatCategory(existingCategory),
+//     });
+//   } catch (error) {
+//     console.error("Update Category Error:", error);
+//     if (error.code === 11000) {
+//       return res.status(409).json({
+//         success: false,
+//         message: "Category and description combination already exists",
+//       });
+//     }
+
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to update category",
+//       error: error.message,
+//     });
+//   }
+// };
+
 export const updateCategory = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const { product_id, description, category, categoryDescription, status } =
-      req.body;
+    const {
+      product_id,
+      description,
+      category,
+      categoryDescription,
+      status,
+    } = req.body;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
@@ -253,6 +491,12 @@ export const updateCategory = async (req, res) => {
       });
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | PRODUCT
+    |--------------------------------------------------------------------------
+    */
+
     if (product_id !== undefined) {
       const parsedProductId = Number(product_id);
 
@@ -266,16 +510,71 @@ export const updateCategory = async (req, res) => {
       existingCategory.product_id = parsedProductId;
     }
 
-    if (description !== undefined) {
-      existingCategory.description = description?.trim() || "";
-    }
+    /*
+    |--------------------------------------------------------------------------
+    | CATEGORY
+    |--------------------------------------------------------------------------
+    */
 
     if (category !== undefined) {
-      existingCategory.category = category?.trim() || "";
+      const normalizedCategory = category.trim().toUpperCase();
+
+      if (!normalizedCategory) {
+        return res.status(400).json({
+          success: false,
+          message: "Category is required",
+        });
+      }
+
+      const categoryExists = await Category.findOne({
+        _id: { $ne: id },
+        category: normalizedCategory,
+      });
+
+      if (categoryExists) {
+        return res.status(409).json({
+          success: false,
+          message: "Category already exists",
+        });
+      }
+
+      existingCategory.category = normalizedCategory;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | DESCRIPTION
+    |--------------------------------------------------------------------------
+    */
+
+    if (description !== undefined) {
+      const normalizedDescription = description.trim().toUpperCase();
+
+      if (!normalizedDescription) {
+        return res.status(400).json({
+          success: false,
+          message: "Description is required",
+        });
+      }
+
+      const descriptionExists = await Category.findOne({
+        _id: { $ne: id },
+        description: normalizedDescription,
+      });
+
+      if (descriptionExists) {
+        return res.status(409).json({
+          success: false,
+          message: "Description already exists",
+        });
+      }
+
+      existingCategory.description = normalizedDescription;
     }
 
     if (categoryDescription !== undefined) {
-      existingCategory.categoryDescription = categoryDescription?.trim() || "";
+      existingCategory.categoryDescription =
+        categoryDescription?.trim() || "";
     }
 
     if (status !== undefined) {
@@ -298,6 +597,24 @@ export const updateCategory = async (req, res) => {
     });
   } catch (error) {
     console.error("Update Category Error:", error);
+
+    if (error.code === 11000) {
+      const duplicateField = Object.keys(error.keyPattern || {})[0];
+
+      if (duplicateField === "category") {
+        return res.status(409).json({
+          success: false,
+          message: "Category already exists",
+        });
+      }
+
+      if (duplicateField === "description") {
+        return res.status(409).json({
+          success: false,
+          message: "Description already exists",
+        });
+      }
+    }
 
     return res.status(500).json({
       success: false,
