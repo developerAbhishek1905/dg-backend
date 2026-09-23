@@ -135,19 +135,19 @@ export const createComplaint = async (req, res) => {
       });
     }
 
-    if (!address?.addressLine?.trim()) {
-      return res.status(400).json({
-        success: false,
-        message: "Customer address is required",
-      });
-    }
+    // if (!address?.addressLine?.trim()) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: "Customer address is required",
+    //   });
+    // }
 
-    if (!address?.state?.trim()) {
-      return res.status(400).json({
-        success: false,
-        message: "State is required",
-      });
-    }
+    // if (!address?.state?.trim()) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: "State is required",
+    //   });
+    // }
 
     if (!address?.city?.trim()) {
       return res.status(400).json({
