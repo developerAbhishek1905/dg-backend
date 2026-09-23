@@ -10,7 +10,7 @@ const addressSchema = new mongoose.Schema(
   {
     addressLine: {
       type: String,
-      required: true,
+    //   required: true,
       trim: true,
     },
 
@@ -22,7 +22,7 @@ const addressSchema = new mongoose.Schema(
 
     state: {
       type: String,
-      required: true,
+    //   required: true,
       trim: true,
     },
 
@@ -144,7 +144,7 @@ const complaintSchema = new mongoose.Schema(
 
     address: {
       type: addressSchema,
-      required: true,
+    //   required: true,
     },
 
     contactInfo: {
@@ -233,7 +233,7 @@ const complaintSchema = new mongoose.Schema(
 
     units: {
       type: Number,
-      required: true,
+    //   required: true,
       min: 1,
       default: 1,
     },
@@ -281,7 +281,7 @@ const complaintSchema = new mongoose.Schema(
       type: String,
       enum: ["REGULAR", "REPEAT", "WARRANTY", "INQUIRY"],
       default: "REGULAR",
-      required: true,
+    //   required: true,
       index: true,
     },
 
