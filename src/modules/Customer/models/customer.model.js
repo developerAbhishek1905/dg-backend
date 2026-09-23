@@ -10,7 +10,7 @@ const addressSchema = new mongoose.Schema(
   {
     addressLine: {
       type: String,
-      required: true,
+    //   required: true,
       trim: true,
     },
 
@@ -22,7 +22,7 @@ const addressSchema = new mongoose.Schema(
 
     state: {
       type: String,
-      required: true,
+    //   required: true,
       trim: true,
     },
 
@@ -114,7 +114,7 @@ const customerSchema = new mongoose.Schema(
 
     address: {
       type: addressSchema,
-      required: true,
+    //   required: true,
     },
 
     contactInfo: {
@@ -144,7 +144,7 @@ const customerSchema = new mongoose.Schema(
 customerSchema.index({
   name: "text",
   phone: "text",
-  alternatePhone: "text",
+//   alternatePhone: "text",
   customerCode: "text",
 });
 

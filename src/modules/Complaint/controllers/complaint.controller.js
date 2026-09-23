@@ -204,6 +204,16 @@ export const createComplaint = async (req, res) => {
     if (!customer) {
       const customerCode = await generateCustomerCode();
 
+      console.log(
+  "RUNTIME addressLine required:",
+  Customer.schema.path("address.addressLine")?.options?.required,
+);
+
+console.log(
+  "RUNTIME city required:",
+  Customer.schema.path("address.city")?.options?.required,
+);
+
       customer = await Customer.create({
         customerCode,
 

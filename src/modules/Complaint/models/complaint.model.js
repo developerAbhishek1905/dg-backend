@@ -568,10 +568,10 @@ complaintSchema.index({
   createdAt: -1,
 });
 
-complaintSchema.index({
-  alternatePhone: 1,
-  createdAt: -1,
-});
+// complaintSchema.index({
+//   alternatePhone: 1,
+//   createdAt: -1,
+// });
 
 complaintSchema.index({
   productId: 1,
