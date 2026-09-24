@@ -12,6 +12,7 @@ import {
   rejoinDealer,
   suspendDealer,
   getDealerDropdown,
+  endDealerLeave
 } from "../controllers/dealer.controller.js";
 
 import { dealerDocumentUpload } from "../middleware/dealerUpload.middleware.js";
@@ -24,7 +25,11 @@ router.post("/", dealerDocumentUpload, createDealer);
 
 router.post("/:id/leave", protect, registerDealerLeave);
 router.post("/:id/rejoin", protect, rejoinDealer);
-
+router.patch(
+  "/:id/leave/end",
+  protect,
+  endDealerLeave,
+);
 router.patch("/:id/rating", updateDealerRating);
 router.patch("/:id/suspend", suspendDealer);
 router.get(

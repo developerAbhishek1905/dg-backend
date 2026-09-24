@@ -1592,16 +1592,46 @@ export const registerDealerLeave = async (req, res) => {
     // Check overlapping leave
     // -------------------------------------
 
+    // const hasOverlap = (dealer.leaves ?? []).some((leave) => {
+    //   if (leave.status === "CANCELLED") {
+    //     return false;
+    //   }
+
+    //   const existingFrom = new Date(leave.from);
+    //   const existingTo = new Date(leave.to);
+
+    //   return fromDate <= existingTo && toDate >= existingFrom;
+    // });
+
     const hasOverlap = (dealer.leaves ?? []).some((leave) => {
-      if (leave.status === "CANCELLED") {
-        return false;
-      }
+  /*
+  |--------------------------------------------------------------------------
+  | Completed / Cancelled leave should not block new leave
+  |--------------------------------------------------------------------------
+  */
 
-      const existingFrom = new Date(leave.from);
-      const existingTo = new Date(leave.to);
+  if (
+    leave.status === "CANCELLED" ||
+    leave.status === "COMPLETED"
+  ) {
+    return false;
+  }
 
-      return fromDate <= existingTo && toDate >= existingFrom;
-    });
+  const existingFrom = new Date(leave.from);
+  const existingTo = new Date(leave.to);
+
+  if (
+    Number.isNaN(existingFrom.getTime()) ||
+    Number.isNaN(existingTo.getTime())
+  ) {
+    return false;
+  }
+
+  return (
+    fromDate <= existingTo &&
+    toDate >= existingFrom
+  );
+});
 
     if (hasOverlap) {
       return res.status(400).json({
@@ -1645,6 +1675,108 @@ export const registerDealerLeave = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: error.message || "Failed to register dealer leave",
+    });
+  }
+};
+
+export const endDealerLeave = async (req, res) => {
+  try {
+    const dealer = await Dealer.findById(req.params.id);
+
+    if (!dealer) {
+      return res.status(404).json({
+        success: false,
+        message: "Dealer not found",
+      });
+    }
+
+    const now = new Date();
+
+    /*
+    |--------------------------------------------------------------------------
+    | Find ACTIVE leave
+    |--------------------------------------------------------------------------
+    */
+
+    const activeLeave = dealer.leaves.find(
+      (leave) => leave.status === "ACTIVE",
+    );
+
+    if (!activeLeave) {
+      return res.status(400).json({
+        success: false,
+        message: "No active leave found for this dealer",
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | End leave immediately
+    |--------------------------------------------------------------------------
+    */
+
+    activeLeave.to = now;
+    activeLeave.status = "COMPLETED";
+
+    /*
+    |--------------------------------------------------------------------------
+    | Make dealer active
+    |--------------------------------------------------------------------------
+    */
+
+    dealer.status = "ACTIVE";
+
+    /*
+    |--------------------------------------------------------------------------
+    | Close LEAVE status history if available
+    |--------------------------------------------------------------------------
+    */
+
+    const activeLeaveHistory = [...(dealer.statusHistory || [])]
+      .reverse()
+      .find(
+        (history) =>
+          history.status === "LEAVE" &&
+          !history.to,
+      );
+
+    if (activeLeaveHistory) {
+      activeLeaveHistory.to = now;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Add ACTIVE history
+    |--------------------------------------------------------------------------
+    */
+
+    dealer.statusHistory.push({
+      status: "ACTIVE",
+      from: now,
+      to: null,
+      reason: "",
+      remarks: "Dealer leave ended manually",
+    });
+
+    await dealer.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Dealer leave ended successfully",
+      data: {
+        dealerId: dealer._id,
+        dealerStatus: dealer.status,
+        leave: activeLeave,
+      },
+    });
+  } catch (error) {
+    console.error("End Dealer Leave Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message:
+        error.message ||
+        "Failed to end dealer leave",
     });
   }
 };
