@@ -367,6 +367,7 @@ export const updateAppointmentStatus = async (req, res) => {
     // }
 
     const previousStatus = complaint.status;
+    const isWarrantyComplaint = complaint.complaintType === "WARRANTY";
 
     if (status === "CLOSE_ON_BILLING") {
       // const dealer = await Dealer.findById(
@@ -379,6 +380,61 @@ export const updateAppointmentStatus = async (req, res) => {
       //     message: "Dealer not found",
       //   });
       // }
+
+      /*
+  |--------------------------------------------------------------------------
+  | WARRANTY COMPLAINT
+  | No billing / no ledger
+  |--------------------------------------------------------------------------
+  */
+
+      if (isWarrantyComplaint) {
+        complaint.status = "CLOSE_ON_BILLING";
+        complaint.closedAt = new Date();
+
+        complaint.pendingReason = "";
+        complaint.cancellationReason = "";
+
+        await complaint.save();
+
+        await createComplaintActivity({
+          complaint,
+
+          activityType: "COMPLAINT_CLOSED",
+
+          previousStatus,
+
+          newStatus: "CLOSE_ON_BILLING",
+
+          title: "Warranty Complaint Closed",
+
+          description: "Warranty complaint closed without billing",
+
+          user: req.user,
+
+          metadata: {
+            complaintType: "WARRANTY",
+            billingSkipped: true,
+            reason: "WARRANTY_COMPLAINT",
+          },
+        });
+
+        return res.status(200).json({
+          success: true,
+
+          message: "Warranty complaint closed successfully without billing",
+
+          data: complaint,
+
+          ledger: null,
+        });
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | NORMAL COMPLAINT BILLING
+      |--------------------------------------------------------------------------
+      */
 
       const dealerId = complaint.allocatedDealerId || complaint.dealerId;
 
@@ -411,7 +467,7 @@ export const updateAppointmentStatus = async (req, res) => {
         });
 
         complaint.status = "CLOSE_ON_BILLING";
-        console.log(complaint.status)
+        console.log(complaint.status);
         complaint.closedAt = new Date();
 
         complaint.pendingReason = "";

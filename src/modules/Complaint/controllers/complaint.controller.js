@@ -205,14 +205,14 @@ export const createComplaint = async (req, res) => {
       const customerCode = await generateCustomerCode();
 
       console.log(
-  "RUNTIME addressLine required:",
-  Customer.schema.path("address.addressLine")?.options?.required,
-);
+        "RUNTIME addressLine required:",
+        Customer.schema.path("address.addressLine")?.options?.required,
+      );
 
-console.log(
-  "RUNTIME city required:",
-  Customer.schema.path("address.city")?.options?.required,
-);
+      console.log(
+        "RUNTIME city required:",
+        Customer.schema.path("address.city")?.options?.required,
+      );
 
       customer = await Customer.create({
         customerCode,
@@ -312,18 +312,64 @@ console.log(
 
     let dealerAllocation = null;
 
-    if (address?.cityId && productId && (categoryId || category)) {
-      console.log("sdbfkdnfkdnvkdnfk", productId);
-      dealerAllocation = await allocateDealerForComplaint({
-        cityId: Number(address.cityId),
+    if (complaintType === "WARRANTY" && parentComplaint) {
+      /*
+  |--------------------------------------------------------------------------
+  | Warranty Complaint
+  | Assign same dealer who handled old complaint
+  |--------------------------------------------------------------------------
+  */
 
-        productId: Number(productId),
+      if (!parentComplaint.allocatedDealerId) {
+        return res.status(400).json({
+          success: false,
+          message: "Previous complaint does not have an assigned dealer",
+        });
+      }
 
-        categoryId,
+      dealerAllocation = {
+        dealerId: parentComplaint.allocatedDealerId,
 
-        category,
-      });
+        // Keep old allocation reference if required
+        allocationId: parentComplaint.allocationId || null,
+
+        capacityRuleId: parentComplaint.allocationRuleId || null,
+
+        allocationType: "WARRANTY",
+      };
+    } else {
+      /*
+  |--------------------------------------------------------------------------
+  | Normal Complaint Allocation
+  |--------------------------------------------------------------------------
+  */
+
+      if (address?.cityId && productId && (categoryId || category)) {
+        dealerAllocation = await allocateDealerForComplaint({
+          cityId: Number(address.cityId),
+          productId: Number(productId),
+          categoryId,
+          category,
+        });
+
+        if (dealerAllocation) {
+          dealerAllocation.allocationType = "AUTO";
+        }
+      }
     }
+
+    // if (address?.cityId && productId && (categoryId || category)) {
+    //   console.log("sdbfkdnfkdnvkdnfk", productId);
+    //   dealerAllocation = await allocateDealerForComplaint({
+    //     cityId: Number(address.cityId),
+
+    //     productId: Number(productId),
+
+    //     categoryId,
+
+    //     category,
+    //   });
+    // }
 
     /*
     |--------------------------------------------------------------------------
@@ -484,7 +530,12 @@ console.log(
 
         title: "Dealer Allocated",
 
-        description: "Complaint automatically allocated to dealer",
+        // description: "Complaint automatically allocated to dealer",
+
+        description:
+          dealerAllocation.allocationType === "WARRANTY"
+            ? "Warranty complaint assigned to previous complaint dealer"
+            : "Complaint automatically allocated to dealer",
 
         dealerId: dealerAllocation.dealerId,
 
@@ -495,7 +546,8 @@ console.log(
 
           allocationRuleId: dealerAllocation.capacityRuleId,
 
-          allocationType: "AUTO",
+          // allocationType: "AUTO",
+          allocationType: dealerAllocation.allocationType || "AUTO",
 
           allocatedAt: complaint.allocatedAt,
         },
