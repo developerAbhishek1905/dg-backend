@@ -1143,13 +1143,13 @@ export const updateDealer = async (req, res) => {
 
       const hasAlreadyLeft = leavingDate && leavingDate <= new Date();
 
-      if (hasAlreadyLeft && requestedStatus === "ACTIVE") {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Dealer has already left. Use the rejoin action to activate this dealer.",
-        });
-      }
+      // if (hasAlreadyLeft && requestedStatus === "ACTIVE") {
+      //   return res.status(400).json({
+      //     success: false,
+      //     message:
+      //       "Dealer has already left. Use the rejoin action to activate this dealer.",
+      //   });
+      // }
 
       if (!["LEAVE", "SUSPENDED"].includes(dealer.status)) {
         dealer.status = requestedStatus;
@@ -1810,12 +1810,12 @@ export const rejoinDealer = async (req, res) => {
       });
     }
 
-    if (dealer.dateOfLeaving && date <= new Date(dealer.dateOfLeaving)) {
-      return res.status(400).json({
-        success: false,
-        message: "Rejoining date must be after date of leaving",
-      });
-    }
+    // if (dealer.dateOfLeaving && date <= new Date(dealer.dateOfLeaving)) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: "Rejoining date must be after date of leaving",
+    //   });
+    // }
 
     dealer.rejoiningDates ??= [];
 
