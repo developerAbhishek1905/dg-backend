@@ -7,6 +7,7 @@ import City from "../model/city.model.js";
 import Pincode from "../model/pincode.model.js";
 import { escapeRegex } from "../../../helper/escapeRegex.js";
 
+
 // CREATE AREA
 export const createArea = async (req, res) => {
   try {
@@ -1745,6 +1746,1857 @@ export const exportAreas = async (req, res) => {
       success: false,
       message: "Failed to export areas",
       error: error.message,
+    });
+  }
+};
+
+
+/*
+|--------------------------------------------------------------------------
+| Helper: Get Next Numeric ID
+|--------------------------------------------------------------------------
+*/
+
+const getNextId = async (Model, field) => {
+  const lastRecord = await Model.findOne()
+    .sort({ [field]: -1 })
+    .select(field)
+    .lean();
+
+  return lastRecord ? Number(lastRecord[field]) + 1 : 1;
+};
+
+/*
+|--------------------------------------------------------------------------
+| Create / Resolve State -> District -> City
+|--------------------------------------------------------------------------
+|
+| Supported:
+|
+| 1. All names
+| {
+|   "state_name": "Madhya Pradesh",
+|   "district_name": "Indore",
+|   "city_name": "Damoh"
+| }
+|
+| 2. Existing State + new/existing District + City
+| {
+|   "state_id": 1,
+|   "district_name": "Indore",
+|   "city_name": "Damoh"
+| }
+|
+| 3. Existing State + Existing District + City
+| {
+|   "state_id": 1,
+|   "district_id": 1,
+|   "city_name": "Damoh"
+| }
+|
+*/
+
+export const createStateDistrictCity = async (req, res) => {
+  try {
+    let {
+      state_id,
+      state_name,
+      district_id,
+      district_name,
+      city_name,
+    } = req.body;
+
+    /*
+    |--------------------------------------------------------------------------
+    | Normalize Input
+    |--------------------------------------------------------------------------
+    */
+
+    state_name = state_name?.trim();
+    district_name = district_name?.trim();
+    city_name = city_name?.trim();
+
+    if (
+      state_id !== undefined &&
+      state_id !== null &&
+      state_id !== ""
+    ) {
+      state_id = Number(state_id);
+    }
+
+    if (
+      district_id !== undefined &&
+      district_id !== null &&
+      district_id !== ""
+    ) {
+      district_id = Number(district_id);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Basic Validation
+    |--------------------------------------------------------------------------
+    |
+    | Allowed:
+    |
+    | 1. State
+    | 2. State + District
+    | 3. State + District + City
+    |
+    | Not Allowed:
+    |
+    | State + City without District
+    |
+    */
+
+    if (!state_id && !state_name) {
+      return res.status(400).json({
+        success: false,
+        message: "state_id or state_name is required",
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Validate IDs
+    |--------------------------------------------------------------------------
+    */
+
+    if (state_id && Number.isNaN(state_id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid state_id",
+      });
+    }
+
+    if (district_id && Number.isNaN(district_id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid district_id",
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | City cannot be created without District
+    |--------------------------------------------------------------------------
+    */
+
+    if (city_name && !district_id && !district_name) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "district_id or district_name is required when city_name is provided",
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | STEP 1: Resolve / Create State
+    |--------------------------------------------------------------------------
+    */
+
+    let state = null;
+    let stateCreated = false;
+
+    if (state_id) {
+      /*
+       * Existing State
+       */
+
+      state = await State.findOne({
+        state_id,
+      });
+
+      if (!state) {
+        return res.status(404).json({
+          success: false,
+          message: `State not found with state_id ${state_id}`,
+        });
+      }
+    } else {
+      /*
+       * Find State by name
+       *
+       * Case insensitive exact match:
+       *
+       * Madhya Pradesh
+       * madhya pradesh
+       * MADHYA PRADESH
+       *
+       * => Same State
+       */
+
+      state = await State.findOne({
+        state_name: {
+          $regex: `^${escapeRegex(state_name)}$`,
+          $options: "i",
+        },
+      });
+
+      /*
+       * Create State if not found
+       */
+
+      if (!state) {
+        const nextStateId = await getNextId(
+          State,
+          "state_id",
+        );
+
+        state = await State.create({
+          state_id: nextStateId,
+          state_name,
+        });
+
+        stateCreated = true;
+      }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | STEP 2: Resolve / Create District
+    |--------------------------------------------------------------------------
+    |
+    | District is OPTIONAL.
+    |
+    | If district_id or district_name exists,
+    | only then process district.
+    |
+    */
+
+    let district = null;
+    let districtCreated = false;
+
+    const hasDistrict =
+      Boolean(district_id) ||
+      Boolean(district_name);
+
+    if (hasDistrict) {
+      if (district_id) {
+        /*
+         * Existing District
+         */
+
+        district = await District.findOne({
+          district_id,
+        });
+
+        if (!district) {
+          return res.status(404).json({
+            success: false,
+            message: `District not found with district_id ${district_id}`,
+          });
+        }
+
+        /*
+         * Validate District belongs to State
+         */
+
+        if (
+          Number(district.state_id) !==
+          Number(state.state_id)
+        ) {
+          return res.status(400).json({
+            success: false,
+            message: `District ${district.district_name} does not belong to state ${state.state_name}`,
+          });
+        }
+      } else {
+        /*
+         * Find District by:
+         *
+         * state_id
+         * +
+         * district_name
+         */
+
+        district = await District.findOne({
+          state_id: state.state_id,
+
+          district_name: {
+            $regex: `^${escapeRegex(
+              district_name,
+            )}$`,
+            $options: "i",
+          },
+        });
+
+        /*
+         * Create District if not found
+         */
+
+        if (!district) {
+          const nextDistrictId =
+            await getNextId(
+              District,
+              "district_id",
+            );
+
+          district =
+            await District.create({
+              district_id:
+                nextDistrictId,
+
+              district_name,
+
+              state_id:
+                state.state_id,
+            });
+
+          districtCreated = true;
+        }
+      }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | STEP 3: Resolve / Create City
+    |--------------------------------------------------------------------------
+    |
+    | City is OPTIONAL.
+    |
+    | City will only be processed when city_name exists.
+    |
+    */
+
+    let city = null;
+    let cityCreated = false;
+
+    if (city_name) {
+      /*
+       * Safety check.
+       *
+       * This should normally already be handled
+       * by validation above.
+       */
+
+      if (!district) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "District is required before creating city",
+        });
+      }
+
+      /*
+       * Find existing City
+       *
+       * state
+       * +
+       * district
+       * +
+       * city name
+       */
+
+      city = await City.findOne({
+        state_id: state.state_id,
+
+        district_id:
+          district.district_id,
+
+        city_name: {
+          $regex: `^${escapeRegex(
+            city_name,
+          )}$`,
+          $options: "i",
+        },
+      });
+
+      /*
+       * Create City if not found
+       */
+
+      if (!city) {
+        const nextCityId =
+          await getNextId(
+            City,
+            "city_id",
+          );
+
+        city = await City.create({
+          city_id: nextCityId,
+
+          city_name,
+
+          state_id:
+            state.state_id,
+
+          district_id:
+            district.district_id,
+        });
+
+        cityCreated = true;
+      }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Build Message
+    |--------------------------------------------------------------------------
+    */
+
+    let message =
+      "Location already exists";
+
+    /*
+     * STATE ONLY
+     */
+
+    if (
+      stateCreated &&
+      !district &&
+      !city
+    ) {
+      message =
+        "State created successfully";
+    }
+
+    /*
+     * STATE + DISTRICT
+     */
+
+    else if (
+      districtCreated &&
+      !city
+    ) {
+      message =
+        "District created successfully";
+    }
+
+    /*
+     * STATE + DISTRICT + CITY
+     */
+
+    else if (cityCreated) {
+      message =
+        "City created successfully";
+    }
+
+    /*
+     * Generic fallback
+     */
+
+    else if (
+      stateCreated ||
+      districtCreated ||
+      cityCreated
+    ) {
+      message =
+        "Location registered successfully";
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | HTTP Status
+    |--------------------------------------------------------------------------
+    */
+
+    const somethingCreated =
+      stateCreated ||
+      districtCreated ||
+      cityCreated;
+
+    /*
+    |--------------------------------------------------------------------------
+    | Response
+    |--------------------------------------------------------------------------
+    */
+
+    return res
+      .status(
+        somethingCreated ? 201 : 200,
+      )
+      .json({
+        success: true,
+
+        message,
+
+        created: {
+          state: stateCreated,
+          district: districtCreated,
+          city: cityCreated,
+        },
+
+        data: {
+          /*
+           * State always exists
+           */
+
+          state: {
+            _id: state._id,
+            state_id:
+              state.state_id,
+            state_name:
+              state.state_name,
+          },
+
+          /*
+           * District may be null
+           */
+
+          district: district
+            ? {
+                _id:
+                  district._id,
+
+                district_id:
+                  district.district_id,
+
+                district_name:
+                  district.district_name,
+
+                state_id:
+                  district.state_id,
+              }
+            : null,
+
+          /*
+           * City may be null
+           */
+
+          city: city
+            ? {
+                _id: city._id,
+
+                city_id:
+                  city.city_id,
+
+                city_name:
+                  city.city_name,
+
+                district_id:
+                  city.district_id,
+
+                state_id:
+                  city.state_id,
+              }
+            : null,
+        },
+      });
+  } catch (error) {
+    console.error(
+      "Create state/district/city error:",
+      error,
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Duplicate Key
+    |--------------------------------------------------------------------------
+    */
+
+    if (error?.code === 11000) {
+      return res.status(409).json({
+        success: false,
+
+        message:
+          "State, district or city already exists",
+
+        duplicate:
+          error.keyValue,
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Server Error
+    |--------------------------------------------------------------------------
+    */
+
+    return res.status(500).json({
+      success: false,
+
+      message:
+        error.message ||
+        "Internal server error",
+    });
+  }
+};
+
+/*
+|--------------------------------------------------------------------------
+| Normalize Name
+|--------------------------------------------------------------------------
+|
+| Used only for comparison.
+|
+| " Madhya   Pradesh "
+| becomes:
+| "madhya pradesh"
+|
+*/
+
+const normalizeName = (value) => {
+  if (
+    value === undefined ||
+    value === null
+  ) {
+    return "";
+  }
+
+  return String(value)
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+};
+
+/*
+|--------------------------------------------------------------------------
+| Clean Display Name
+|--------------------------------------------------------------------------
+|
+| Preserve user's casing but remove extra spaces.
+|
+*/
+
+const cleanName = (value) => {
+  if (
+    value === undefined ||
+    value === null
+  ) {
+    return "";
+  }
+
+  return String(value)
+    .trim()
+    .replace(/\s+/g, " ");
+};
+
+/*
+|--------------------------------------------------------------------------
+| Get Next Numeric ID
+|--------------------------------------------------------------------------
+|
+| Excel NEVER provides IDs.
+|
+| IDs are generated internally by backend.
+|
+*/
+
+// const getNextId = async (
+//   Model,
+//   field,
+// ) => {
+//   const lastRecord = await Model.findOne()
+//     .sort({
+//       [field]: -1,
+//     })
+//     .select(field)
+//     .lean();
+
+//   return lastRecord?.[field]
+//     ? Number(lastRecord[field]) + 1
+//     : 1;
+// };
+
+/*
+|--------------------------------------------------------------------------
+| Find State By Name
+|--------------------------------------------------------------------------
+*/
+
+const findStateByName = async (
+  stateName,
+) => {
+  return State.findOne({
+    state_name: {
+      $regex: `^${escapeRegex(
+        stateName,
+      )}$`,
+
+      $options: "i",
+    },
+  });
+};
+
+/*
+|--------------------------------------------------------------------------
+| Find District By Name + State
+|--------------------------------------------------------------------------
+*/
+
+const findDistrictByName = async ({
+  stateId,
+  districtName,
+}) => {
+  return District.findOne({
+    state_id: stateId,
+
+    district_name: {
+      $regex: `^${escapeRegex(
+        districtName,
+      )}$`,
+
+      $options: "i",
+    },
+  });
+};
+
+/*
+|--------------------------------------------------------------------------
+| Find City By Name + State + District
+|--------------------------------------------------------------------------
+*/
+
+const findCityByName = async ({
+  stateId,
+  districtId,
+  cityName,
+}) => {
+  return City.findOne({
+    state_id: stateId,
+
+    district_id: districtId,
+
+    city_name: {
+      $regex: `^${escapeRegex(
+        cityName,
+      )}$`,
+
+      $options: "i",
+    },
+  });
+};
+
+/*
+|--------------------------------------------------------------------------
+| IMPORT LOCATION EXCEL
+|--------------------------------------------------------------------------
+|
+| Excel columns:
+|
+| state_name
+| district_name
+| city_name
+|
+| Examples:
+|
+| Madhya Pradesh |          |
+| Madhya Pradesh | Indore   |
+| Madhya Pradesh | Indore   | Indore
+| Madhya Pradesh | Indore   | Mhow
+|
+|--------------------------------------------------------------------------
+*/
+
+export const importLocationExcel = async (
+  req,
+  res,
+) => {
+  try {
+    /*
+    |--------------------------------------------------------------------------
+    | File Validation
+    |--------------------------------------------------------------------------
+    */
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Excel file is required",
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Read Workbook
+    |--------------------------------------------------------------------------
+    */
+
+    const workbook =
+      XLSX.read(req.file.buffer, {
+        type: "buffer",
+      });
+
+    if (
+      !workbook.SheetNames?.length
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Excel file does not contain any sheet",
+      });
+    }
+
+    const sheetName =
+      workbook.SheetNames[0];
+
+    const worksheet =
+      workbook.Sheets[sheetName];
+
+    /*
+    |--------------------------------------------------------------------------
+    | Convert Excel -> JSON
+    |--------------------------------------------------------------------------
+    */
+
+    const rows =
+      XLSX.utils.sheet_to_json(
+        worksheet,
+        {
+          defval: "",
+          raw: false,
+        },
+      );
+
+    if (!rows.length) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Excel file is empty",
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Validate Headers
+    |--------------------------------------------------------------------------
+    |
+    | IMPORTANT:
+    | IDs are explicitly rejected.
+    |--------------------------------------------------------------------------
+    */
+
+    const firstRow =
+      rows[0] || {};
+
+    const headers =
+      Object.keys(firstRow).map(
+        (key) =>
+          key
+            .trim()
+            .toLowerCase(),
+      );
+
+    const forbiddenColumns = [
+      "_id",
+
+      "state_id",
+      "district_id",
+      "city_id",
+
+      "stateid",
+      "districtid",
+      "cityid",
+    ];
+
+    const foundForbidden =
+      headers.filter((header) =>
+        forbiddenColumns.includes(
+          header,
+        ),
+      );
+
+    if (
+      foundForbidden.length > 0
+    ) {
+      return res.status(400).json({
+        success: false,
+
+        message:
+          "Excel must not contain any ID columns. Import is name-based only.",
+
+        forbiddenColumns:
+          foundForbidden,
+      });
+    }
+
+    if (
+      !headers.includes(
+        "state_name",
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+
+        message:
+          "state_name column is required",
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Statistics
+    |--------------------------------------------------------------------------
+    */
+
+    const summary = {
+      totalRows: rows.length,
+
+      processedRows: 0,
+      skippedRows: 0,
+      failedRows: 0,
+
+      statesCreated: 0,
+      statesExisting: 0,
+
+      districtsCreated: 0,
+      districtsExisting: 0,
+
+      citiesCreated: 0,
+      citiesExisting: 0,
+    };
+
+    const results = [];
+
+    /*
+    |--------------------------------------------------------------------------
+    | Process Rows
+    |--------------------------------------------------------------------------
+    */
+
+    for (
+      let index = 0;
+      index < rows.length;
+      index++
+    ) {
+      const row = rows[index];
+
+      /*
+       * +2 because:
+       *
+       * index 0 = first JSON row
+       * Excel row 1 = header
+       * Excel row 2 = first data
+       */
+
+      const excelRow =
+        index + 2;
+
+      try {
+        /*
+        |--------------------------------------------------------------------------
+        | Read ONLY Names
+        |--------------------------------------------------------------------------
+        */
+
+        const stateName =
+          cleanName(
+            row.state_name,
+          );
+
+        const districtName =
+          cleanName(
+            row.district_name,
+          );
+
+        const cityName =
+          cleanName(
+            row.city_name,
+          );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Validation
+        |--------------------------------------------------------------------------
+        */
+
+        if (!stateName) {
+          summary.failedRows++;
+
+          results.push({
+            row: excelRow,
+            status: "FAILED",
+            message:
+              "state_name is required",
+          });
+
+          continue;
+        }
+
+        /*
+         * City cannot exist without District.
+         */
+
+        if (
+          cityName &&
+          !districtName
+        ) {
+          summary.failedRows++;
+
+          results.push({
+            row: excelRow,
+
+            status: "FAILED",
+
+            state_name:
+              stateName,
+
+            city_name:
+              cityName,
+
+            message:
+              "district_name is required when city_name is provided",
+          });
+
+          continue;
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | STEP 1: STATE
+        |--------------------------------------------------------------------------
+        */
+
+        let state =
+          await findStateByName(
+            stateName,
+          );
+
+        let stateStatus =
+          "EXISTING";
+
+        if (!state) {
+          const nextStateId =
+            await getNextId(
+              State,
+              "state_id",
+            );
+
+          state =
+            await State.create({
+              state_id:
+                nextStateId,
+
+              state_name:
+                stateName,
+            });
+
+          stateStatus =
+            "CREATED";
+
+          summary.statesCreated++;
+        } else {
+          summary.statesExisting++;
+
+          /*
+           * Optional normalization/update.
+           *
+           * Example database:
+           * "MADHYA PRADESH"
+           *
+           * Excel:
+           * "Madhya Pradesh"
+           *
+           * Same logical state because lookup
+           * is case-insensitive.
+           *
+           * Update display value from Excel.
+           */
+
+          if (
+            normalizeName(
+              state.state_name,
+            ) ===
+              normalizeName(
+                stateName,
+              ) &&
+            state.state_name !==
+              stateName
+          ) {
+            state.state_name =
+              stateName;
+
+            await state.save();
+          }
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | STATE ONLY
+        |--------------------------------------------------------------------------
+        */
+
+        if (!districtName) {
+          summary.processedRows++;
+
+          results.push({
+            row: excelRow,
+
+            status: "SUCCESS",
+
+            state_name:
+              state.state_name,
+
+            stateStatus,
+
+            district_name: null,
+            city_name: null,
+
+            message:
+              stateStatus ===
+              "CREATED"
+                ? "State created"
+                : "State already exists",
+          });
+
+          continue;
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | STEP 2: DISTRICT
+        |--------------------------------------------------------------------------
+        */
+
+        let district =
+          await findDistrictByName(
+            {
+              stateId:
+                state.state_id,
+
+              districtName,
+            },
+          );
+
+        let districtStatus =
+          "EXISTING";
+
+        if (!district) {
+          const nextDistrictId =
+            await getNextId(
+              District,
+              "district_id",
+            );
+
+          district =
+            await District.create({
+              district_id:
+                nextDistrictId,
+
+              district_name:
+                districtName,
+
+              state_id:
+                state.state_id,
+            });
+
+          districtStatus =
+            "CREATED";
+
+          summary.districtsCreated++;
+        } else {
+          summary.districtsExisting++;
+
+          /*
+           * Update name formatting/casing
+           * using Excel value.
+           */
+
+          if (
+            normalizeName(
+              district.district_name,
+            ) ===
+              normalizeName(
+                districtName,
+              ) &&
+            district.district_name !==
+              districtName
+          ) {
+            district.district_name =
+              districtName;
+
+            await district.save();
+          }
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | STATE + DISTRICT ONLY
+        |--------------------------------------------------------------------------
+        */
+
+        if (!cityName) {
+          summary.processedRows++;
+
+          results.push({
+            row: excelRow,
+
+            status: "SUCCESS",
+
+            state_name:
+              state.state_name,
+
+            district_name:
+              district.district_name,
+
+            city_name: null,
+
+            stateStatus,
+            districtStatus,
+
+            message:
+              districtStatus ===
+              "CREATED"
+                ? "District created"
+                : "District already exists",
+          });
+
+          continue;
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | STEP 3: CITY
+        |--------------------------------------------------------------------------
+        */
+
+        let city =
+          await findCityByName({
+            stateId:
+              state.state_id,
+
+            districtId:
+              district.district_id,
+
+            cityName,
+          });
+
+        let cityStatus =
+          "EXISTING";
+
+        if (!city) {
+          const nextCityId =
+            await getNextId(
+              City,
+              "city_id",
+            );
+
+          city =
+            await City.create({
+              city_id:
+                nextCityId,
+
+              city_name:
+                cityName,
+
+              state_id:
+                state.state_id,
+
+              district_id:
+                district.district_id,
+            });
+
+          cityStatus =
+            "CREATED";
+
+          summary.citiesCreated++;
+        } else {
+          summary.citiesExisting++;
+
+          /*
+           * Update display name from Excel.
+           */
+
+          if (
+            normalizeName(
+              city.city_name,
+            ) ===
+              normalizeName(
+                cityName,
+              ) &&
+            city.city_name !==
+              cityName
+          ) {
+            city.city_name =
+              cityName;
+
+            await city.save();
+          }
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | SUCCESS
+        |--------------------------------------------------------------------------
+        */
+
+        summary.processedRows++;
+
+        results.push({
+          row: excelRow,
+
+          status: "SUCCESS",
+
+          state_name:
+            state.state_name,
+
+          district_name:
+            district.district_name,
+
+          city_name:
+            city.city_name,
+
+          stateStatus,
+          districtStatus,
+          cityStatus,
+
+          message:
+            cityStatus ===
+            "CREATED"
+              ? "City created"
+              : "Location already exists",
+        });
+      } catch (error) {
+        console.error(
+          `Location import row ${excelRow}:`,
+          error,
+        );
+
+        summary.failedRows++;
+
+        results.push({
+          row: excelRow,
+
+          status: "FAILED",
+
+          state_name:
+            cleanName(
+              row.state_name,
+            ),
+
+          district_name:
+            cleanName(
+              row.district_name,
+            ),
+
+          city_name:
+            cleanName(
+              row.city_name,
+            ),
+
+          message:
+            error.message ||
+            "Failed to process row",
+        });
+      }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Response
+    |--------------------------------------------------------------------------
+    */
+
+    return res.status(200).json({
+      success: true,
+
+      message:
+        "Location Excel import completed",
+
+      summary,
+
+      results,
+    });
+  } catch (error) {
+    console.error(
+      "Import location Excel error:",
+      error,
+    );
+
+    return res.status(500).json({
+      success: false,
+
+      message:
+        error.message ||
+        "Failed to import Excel file",
+    });
+  }
+};
+
+/*
+|--------------------------------------------------------------------------
+| EXPORT LOCATION EXCEL
+|--------------------------------------------------------------------------
+|
+| IMPORTANT:
+|
+| Export ONLY:
+|
+| state_name
+| district_name
+| city_name
+|
+| No IDs.
+|--------------------------------------------------------------------------
+*/
+
+export const exportLocationExcel = async (
+  req,
+  res,
+) => {
+  try {
+    /*
+    |--------------------------------------------------------------------------
+    | Fetch Data
+    |--------------------------------------------------------------------------
+    */
+
+    const states = await State.find({})
+      .select(
+        "state_id state_name -_id",
+      )
+      .sort({
+        state_name: 1,
+      })
+      .lean();
+
+    const districts =
+      await District.find({})
+        .select(
+          "district_id district_name state_id -_id",
+        )
+        .lean();
+
+    const cities =
+      await City.find({})
+        .select(
+          "city_name state_id district_id -_id",
+        )
+        .lean();
+
+    /*
+    |--------------------------------------------------------------------------
+    | Lookup Maps
+    |--------------------------------------------------------------------------
+    */
+
+    const districtsByState =
+      new Map();
+
+    const citiesByDistrict =
+      new Map();
+
+    for (const district of districts) {
+      const key = String(
+        district.state_id,
+      );
+
+      if (
+        !districtsByState.has(
+          key,
+        )
+      ) {
+        districtsByState.set(
+          key,
+          [],
+        );
+      }
+
+      districtsByState
+        .get(key)
+        .push(district);
+    }
+
+    for (const city of cities) {
+      const key = `${city.state_id}:${city.district_id}`;
+
+      if (
+        !citiesByDistrict.has(
+          key,
+        )
+      ) {
+        citiesByDistrict.set(
+          key,
+          [],
+        );
+      }
+
+      citiesByDistrict
+        .get(key)
+        .push(city);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Build Export Rows
+    |--------------------------------------------------------------------------
+    */
+
+    const exportRows = [];
+
+    for (const state of states) {
+      const stateDistricts =
+        districtsByState.get(
+          String(
+            state.state_id,
+          ),
+        ) || [];
+
+      /*
+       * State has no District
+       */
+
+      if (
+        stateDistricts.length ===
+        0
+      ) {
+        exportRows.push({
+          state_name:
+            state.state_name,
+
+          district_name: "",
+
+          city_name: "",
+        });
+
+        continue;
+      }
+
+      for (
+        const district of
+          stateDistricts
+      ) {
+        const key = `${state.state_id}:${district.district_id}`;
+
+        const districtCities =
+          citiesByDistrict.get(
+            key,
+          ) || [];
+
+        /*
+         * District has no City
+         */
+
+        if (
+          districtCities.length ===
+          0
+        ) {
+          exportRows.push({
+            state_name:
+              state.state_name,
+
+            district_name:
+              district.district_name,
+
+            city_name: "",
+          });
+
+          continue;
+        }
+
+        /*
+         * State + District + City
+         */
+
+        for (
+          const city of
+            districtCities
+        ) {
+          exportRows.push({
+            state_name:
+              state.state_name,
+
+            district_name:
+              district.district_name,
+
+            city_name:
+              city.city_name,
+          });
+        }
+      }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Create Worksheet
+    |--------------------------------------------------------------------------
+    */
+
+    const worksheet =
+      XLSX.utils.json_to_sheet(
+        exportRows,
+        {
+          header: [
+            "state_name",
+            "district_name",
+            "city_name",
+          ],
+        },
+      );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Column Width
+    |--------------------------------------------------------------------------
+    */
+
+    worksheet["!cols"] = [
+      {
+        wch: 25,
+      },
+      {
+        wch: 25,
+      },
+      {
+        wch: 25,
+      },
+    ];
+
+    /*
+    |--------------------------------------------------------------------------
+    | Create Workbook
+    |--------------------------------------------------------------------------
+    */
+
+    const workbook =
+      XLSX.utils.book_new();
+
+    XLSX.utils.book_append_sheet(
+      workbook,
+      worksheet,
+      "Locations",
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Generate Buffer
+    |--------------------------------------------------------------------------
+    */
+
+    const buffer =
+      XLSX.write(workbook, {
+        type: "buffer",
+        bookType: "xlsx",
+      });
+
+    /*
+    |--------------------------------------------------------------------------
+    | Response Headers
+    |--------------------------------------------------------------------------
+    */
+
+    const fileName =
+      `locations-${Date.now()}.xlsx`;
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    );
+
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${fileName}"`,
+    );
+
+    return res.send(buffer);
+  } catch (error) {
+    console.error(
+      "Export location Excel error:",
+      error,
+    );
+
+    return res.status(500).json({
+      success: false,
+
+      message:
+        error.message ||
+        "Failed to export Excel file",
+    });
+  }
+};
+
+/*
+|--------------------------------------------------------------------------
+| Download Location Import Sample
+|--------------------------------------------------------------------------
+|
+| GET /api/v1/locations/sample
+|
+*/
+
+export const downloadLocationSampleExcel = async (req, res) => {
+  try {
+    /*
+    |--------------------------------------------------------------------------
+    | Sample Data
+    |--------------------------------------------------------------------------
+    |
+    | Shows all supported import cases:
+    |
+    | 1. State only
+    | 2. State + District
+    | 3. State + District + City
+    |
+    */
+
+    const sampleData = [
+      {
+        state_name: "Madhya Pradesh",
+        district_name: "",
+        city_name: "",
+      },
+      {
+        state_name: "Madhya Pradesh",
+        district_name: "Indore",
+        city_name: "",
+      },
+      {
+        state_name: "Madhya Pradesh",
+        district_name: "Indore",
+        city_name: "Indore",
+      },
+      {
+        state_name: "Madhya Pradesh",
+        district_name: "Indore",
+        city_name: "Mhow",
+      },
+      {
+        state_name: "Madhya Pradesh",
+        district_name: "Bhopal",
+        city_name: "Bhopal",
+      },
+      {
+        state_name: "Rajasthan",
+        district_name: "Jaipur",
+        city_name: "Jaipur",
+      },
+      {
+        state_name: "Rajasthan",
+        district_name: "Udaipur",
+        city_name: "Udaipur",
+      },
+      {
+        state_name: "Gujarat",
+        district_name: "Ahmedabad",
+        city_name: "Ahmedabad",
+      },
+    ];
+
+    /*
+    |--------------------------------------------------------------------------
+    | Create Worksheet
+    |--------------------------------------------------------------------------
+    */
+
+    const worksheet = XLSX.utils.json_to_sheet(sampleData, {
+      header: [
+        "state_name",
+        "district_name",
+        "city_name",
+      ],
+    });
+
+    /*
+    |--------------------------------------------------------------------------
+    | Column Width
+    |--------------------------------------------------------------------------
+    */
+
+    worksheet["!cols"] = [
+      { wch: 25 },
+      { wch: 25 },
+      { wch: 25 },
+    ];
+
+    /*
+    |--------------------------------------------------------------------------
+    | Create Instructions Sheet
+    |--------------------------------------------------------------------------
+    */
+
+    const instructions = [
+      {
+        type: "State only",
+        instruction:
+          "Fill state_name. Keep district_name and city_name blank.",
+      },
+      {
+        type: "State + District",
+        instruction:
+          "Fill state_name and district_name. Keep city_name blank.",
+      },
+      {
+        type: "State + District + City",
+        instruction:
+          "Fill state_name, district_name and city_name.",
+      },
+      {
+        type: "Important",
+        instruction:
+          "Do not add _id, state_id, district_id or city_id columns.",
+      },
+      {
+        type: "Matching",
+        instruction:
+          "Existing records are matched using names, case-insensitively.",
+      },
+    ];
+
+    const instructionSheet =
+      XLSX.utils.json_to_sheet(instructions, {
+        header: [
+          "type",
+          "instruction",
+        ],
+      });
+
+    instructionSheet["!cols"] = [
+      { wch: 30 },
+      { wch: 75 },
+    ];
+
+    /*
+    |--------------------------------------------------------------------------
+    | Create Workbook
+    |--------------------------------------------------------------------------
+    */
+
+    const workbook = XLSX.utils.book_new();
+
+    XLSX.utils.book_append_sheet(
+      workbook,
+      worksheet,
+      "Location Import",
+    );
+
+    XLSX.utils.book_append_sheet(
+      workbook,
+      instructionSheet,
+      "Instructions",
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Generate Excel Buffer
+    |--------------------------------------------------------------------------
+    */
+
+    const buffer = XLSX.write(workbook, {
+      type: "buffer",
+      bookType: "xlsx",
+    });
+
+    /*
+    |--------------------------------------------------------------------------
+    | Response
+    |--------------------------------------------------------------------------
+    */
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    );
+
+    res.setHeader(
+      "Content-Disposition",
+      'attachment; filename="location-import-sample.xlsx"',
+    );
+
+    return res.send(buffer);
+  } catch (error) {
+    console.error(
+      "Download location sample Excel error:",
+      error,
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        error.message ||
+        "Failed to generate sample Excel",
     });
   }
 };

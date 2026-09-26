@@ -11,6 +11,10 @@ import {
   deleteArea,
   importAreas,
   exportAreas,
+  createStateDistrictCity,
+    importLocationExcel,
+  exportLocationExcel,
+  downloadLocationSampleExcel
 } from "../controller/area.controller.js";
 
 import { uploadExcel } from "../middleware/upload.middleware.js";
@@ -20,6 +24,10 @@ const router = express.Router();
 
 // Create
 router.post("/",protect, createArea);
+router.post(
+  "/register-location",
+  createStateDistrictCity,
+);
 
 // Get all
 router.get("/",protect, getAllAreas);
@@ -41,5 +49,26 @@ router.put("/:id",protect, updateArea);
 
 // Delete by MongoDB ID
 router.delete("/:id",protect, deleteArea);
+router.post(
+  "/locations/import",
+  uploadExcel.single("file"),
+  importLocationExcel,
+);
+
+/*
+|--------------------------------------------------------------------------
+| Export
+|--------------------------------------------------------------------------
+*/
+
+router.get(
+  "/locations/export",
+  exportLocationExcel,
+);
+
+router.get(
+  "/locations/sample",
+  downloadLocationSampleExcel,
+);
 
 export default router;
