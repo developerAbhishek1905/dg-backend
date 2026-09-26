@@ -7,7 +7,7 @@ import Allocation from "../../allocation/model/allocation.model.js";
 import { syncDealerAllocation } from "../../allocation/services/allocateDealer.service.js";
 import DealerLedger from "../../dealerLedger/model/dealerLedger.model.js";
 import { getLeaveStatus } from "../helpers/dealerLeave.utils.js";
-
+import DealerLifecycleLog from "../models/dealerLifecycleLog.model.js";
 /* =========================================================
    HELPERS
 ========================================================= */
@@ -304,12 +304,12 @@ export const createDealer = async (req, res) => {
       });
     }
 
-    if (!email) {
-      return res.status(400).json({
-        success: false,
-        message: "Email is required",
-      });
-    }
+    // if (!email) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: "Email is required",
+    //   });
+    // }
 
     /* ===============================
        CHECK DEALER DUPLICATES
@@ -319,23 +319,23 @@ export const createDealer = async (req, res) => {
       mobileNumber,
     });
 
-    if (existingMobile) {
-      return res.status(409).json({
-        success: false,
-        message: "Dealer with this mobile number already exists",
-      });
-    }
+    // if (existingMobile) {
+    //   return res.status(409).json({
+    //     success: false,
+    //     message: "Dealer with this mobile number already exists",
+    //   });
+    // }
 
     const existingDealerEmail = await Dealer.findOne({
       email: email.toLowerCase(),
     });
 
-    if (existingDealerEmail) {
-      return res.status(409).json({
-        success: false,
-        message: "Dealer with this email already exists",
-      });
-    }
+    // if (existingDealerEmail) {
+    //   return res.status(409).json({
+    //     success: false,
+    //     message: "Dealer with this email already exists",
+    //   });
+    // }
 
     /* ===============================
        CHECK USER DUPLICATE
@@ -367,10 +367,7 @@ export const createDealer = async (req, res) => {
     });
 
     const individualCapacities = parseJSON(req.body.individualCapacities, []);
-const additionalInfo = parseJSON(
-  req.body.additionalInfo,
-  [],
-);
+    const additionalInfo = parseJSON(req.body.additionalInfo, []);
     /* ===============================
        DOCUMENTS
     =============================== */
@@ -491,9 +488,9 @@ const additionalInfo = parseJSON(
       individualCapacities,
       documents,
       technicianStatus: finalStatus === "ACTIVE" ? "ACTIVE" : "INACTIVE",
-securityAmount: parseNumber(req.body.securityAmount),
+      securityAmount: parseNumber(req.body.securityAmount),
 
-additionalInfo,
+      additionalInfo,
       status: finalStatus,
 
       dateOfJoining: joiningDate,
@@ -502,6 +499,13 @@ additionalInfo,
       // dateOfJoining: dateOfJoining ? new Date(dateOfJoining) : new Date(),
 
       // dateOfLeaving: dateOfLeaving ? new Date(dateOfLeaving) : null,
+    });
+
+    await DealerLifecycleLog.create({
+      dealerId: dealer._id,
+      type: "JOINED",
+      date: joiningDate,
+      createdBy: req.user?._id || req.user?.id || null,
     });
 
     /* ===============================
@@ -553,7 +557,7 @@ additionalInfo,
     const user = await User.create({
       name: technicianName,
 
-      email: email.toLowerCase(),
+      email: headCode,
 
       phone: mobileNumber,
 
@@ -650,104 +654,127 @@ additionalInfo,
    GET ALL DEALERS
 ========================================================= */
 
-// export const getDealers = async (req, res) => {
-//   try {
-//     const { page = 1, limit = 10, search = "", status = "" } = req.query;
-
-//     const currentPage = Math.max(Number(page) || 1, 1);
-
-//     const pageLimit = Math.max(Number(limit) || 10, 1);
-
-//     const filter = {};
-
-//     if (status) {
-//       filter.status = status;
-//     }
-
-//     if (search) {
-//       const regex = new RegExp(search, "i");
-
-//       filter.$or = [
-//         {
-//           technicianFirmName: regex,
-//         },
-//         {
-//           technicianName: regex,
-//         },
-//         {
-//           technicianCode: regex,
-//         },
-//         {
-//           mobileNumber: regex,
-//         },
-//         {
-//           email: regex,
-//         },
-//         {
-//           gstNumber: regex,
-//         },
-//       ];
-//     }
-
-//     const total = await Dealer.countDocuments(filter);
-
-//     const dealers = await Dealer.find(filter)
-//       .sort({
-//         createdAt: -1,
-//       })
-//       .skip((currentPage - 1) * pageLimit)
-//       .limit(pageLimit);
-
-//     return res.status(200).json({
-//       success: true,
-
-//       data: dealers,
-
-//       pagination: {
-//         page: currentPage,
-//         limit: pageLimit,
-//         total,
-//         totalPages: Math.ceil(total / pageLimit),
-//       },
-//     });
-//   } catch (error) {
-//     console.error("Get Dealers Error:", error);
-
-//     return res.status(500).json({
-//       success: false,
-//       message: "Failed to fetch dealers",
-//     });
-//   }
-// };
-
 export const getDealers = async (req, res) => {
   try {
-    const { page = 1, limit = 10, search = "", status = "" } = req.query;
+    const {
+      page = 1,
+      limit = 10,
+      search = "",
+      status = "",
+      cityId = "",
+      categoryId = "",
+      productId = "",
+    } = req.query;
 
     const currentPage = Math.max(Number(page) || 1, 1);
-
     const pageLimit = Math.max(Number(limit) || 10, 1);
 
     const filter = {};
 
-    if (status) {
-      filter.status = status;
+    /*
+    |--------------------------------------------------------------------------
+    | Status Filter
+    |--------------------------------------------------------------------------
+    */
+
+    if (status && status !== "ALL") {
+      filter.status = status.toUpperCase();
     }
 
-    if (search) {
-      const regex = new RegExp(search, "i");
+    /*
+    |--------------------------------------------------------------------------
+    | Search
+    |--------------------------------------------------------------------------
+    |
+    | Search in:
+    | - headCode
+    | - technicianFirmName
+    | - technicianName
+    | - mobileNumber
+    | - alternativeNumber
+    |
+    */
+
+    if (search?.trim()) {
+      const escapedSearch = search
+        .trim()
+        .replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+      const regex = new RegExp(escapedSearch, "i");
 
       filter.$or = [
+        { headCode: regex },
         { technicianFirmName: regex },
         { technicianName: regex },
-        { technicianCode: regex },
         { mobileNumber: regex },
-        { email: regex },
-        { gstNumber: regex },
+        { alternativeNumber: regex },
       ];
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | City Filter
+    |--------------------------------------------------------------------------
+    |
+    | Stored as Number:
+    |
+    | businessAddress.cityId: 5351
+    |
+    */
+
+    if (cityId) {
+      const parsedCityId = Number(cityId);
+
+      if (!Number.isNaN(parsedCityId)) {
+        filter["businessAddress.cityId"] = parsedCityId;
+      }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Product + Category Filters
+    |--------------------------------------------------------------------------
+    */
+
+    if (productId && categoryId) {
+      const parsedProductId = Number(productId);
+
+      if (!Number.isNaN(parsedProductId)) {
+        filter.productServices = {
+          $elemMatch: {
+            productId: parsedProductId,
+
+            categories: {
+              $elemMatch: {
+                categoryId: categoryId,
+              },
+            },
+          },
+        };
+      }
+    } else if (productId) {
+      const parsedProductId = Number(productId);
+
+      if (!Number.isNaN(parsedProductId)) {
+        filter["productServices.productId"] = parsedProductId;
+      }
+    } else if (categoryId) {
+      filter["productServices.categories.categoryId"] = categoryId;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Count
+    |--------------------------------------------------------------------------
+    */
+
     const total = await Dealer.countDocuments(filter);
+
+    /*
+    |--------------------------------------------------------------------------
+    | Get Dealers
+    |--------------------------------------------------------------------------
+    */
 
     const dealers = await Dealer.find(filter)
       .sort({
@@ -757,9 +784,11 @@ export const getDealers = async (req, res) => {
       .limit(pageLimit)
       .lean();
 
-    // -------------------------------------
-    // Calculate leave statuses
-    // -------------------------------------
+    /*
+    |--------------------------------------------------------------------------
+    | Calculate Leave Status
+    |--------------------------------------------------------------------------
+    */
 
     const normalizedDealers = dealers.map((dealer) => {
       const leaves = (dealer.leaves ?? []).map((leave) => ({
@@ -767,18 +796,25 @@ export const getDealers = async (req, res) => {
         status: getLeaveStatus(leave),
       }));
 
-      const isOnLeave = leaves.some((leave) => leave.status === "ACTIVE");
+      const isOnLeave = leaves.some(
+        (leave) => leave.status === "ACTIVE",
+      );
 
       return {
         ...dealer,
-
         leaves,
-
         isOnLeave,
-
-        effectiveStatus: isOnLeave ? "LEAVE" : dealer.status,
+        effectiveStatus: isOnLeave
+          ? "LEAVE"
+          : dealer.status,
       };
     });
+
+    /*
+    |--------------------------------------------------------------------------
+    | Response
+    |--------------------------------------------------------------------------
+    */
 
     return res.status(200).json({
       success: true,
@@ -801,6 +837,88 @@ export const getDealers = async (req, res) => {
     });
   }
 };
+// export const getDealers = async (req, res) => {
+//   try {
+//     const { page = 1, limit = 10, search = "", status = "" } = req.query;
+
+//     const currentPage = Math.max(Number(page) || 1, 1);
+
+//     const pageLimit = Math.max(Number(limit) || 10, 1);
+
+//     const filter = {};
+
+//     if (status) {
+//       filter.status = status;
+//     }
+
+//     if (search) {
+//       const regex = new RegExp(search, "i");
+
+//       filter.$or = [
+//         { technicianFirmName: regex },
+//         { technicianName: regex },
+//         { technicianCode: regex },
+//         { mobileNumber: regex },
+//         { email: regex },
+//         { gstNumber: regex },
+//       ];
+//     }
+
+//     const total = await Dealer.countDocuments(filter);
+
+//     const dealers = await Dealer.find(filter)
+//       .sort({
+//         createdAt: -1,
+//       })
+//       .skip((currentPage - 1) * pageLimit)
+//       .limit(pageLimit)
+//       .lean();
+
+//     // -------------------------------------
+//     // Calculate leave statuses
+//     // -------------------------------------
+
+//     const normalizedDealers = dealers.map((dealer) => {
+//       const leaves = (dealer.leaves ?? []).map((leave) => ({
+//         ...leave,
+//         status: getLeaveStatus(leave),
+//       }));
+
+//       const isOnLeave = leaves.some((leave) => leave.status === "ACTIVE");
+
+//       return {
+//         ...dealer,
+
+//         leaves,
+
+//         isOnLeave,
+
+//         effectiveStatus: isOnLeave ? "LEAVE" : dealer.status,
+//       };
+//     });
+
+//     return res.status(200).json({
+//       success: true,
+
+//       data: normalizedDealers,
+
+//       pagination: {
+//         page: currentPage,
+//         limit: pageLimit,
+//         total,
+//         totalPages: Math.ceil(total / pageLimit),
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Get Dealers Error:", error);
+
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to fetch dealers",
+//     });
+//   }
+// };
+
 /* =========================================================
    GET DEALER BY ID
 ========================================================= */
@@ -909,43 +1027,43 @@ export const updateDealer = async (req, res) => {
        DUPLICATE MOBILE
     =============================== */
 
-    if (req.body.mobileNumber) {
-      const existingMobile = await Dealer.findOne({
-        mobileNumber: req.body.mobileNumber,
+    // if (req.body.mobileNumber) {
+    //   const existingMobile = await Dealer.findOne({
+    //     mobileNumber: req.body.mobileNumber,
 
-        _id: {
-          $ne: req.params.id,
-        },
-      });
+    //     _id: {
+    //       $ne: req.params.id,
+    //     },
+    //   });
 
-      if (existingMobile) {
-        return res.status(409).json({
-          success: false,
-          message: "Dealer with this mobile number already exists",
-        });
-      }
-    }
+    //   if (existingMobile) {
+    //     return res.status(409).json({
+    //       success: false,
+    //       message: "Dealer with this mobile number already exists",
+    //     });
+    //   }
+    // }
 
     /* ===============================
        DUPLICATE EMAIL
     =============================== */
 
-    if (req.body.email) {
-      const existingEmail = await Dealer.findOne({
-        email: req.body.email.toLowerCase(),
+    // if (req.body.email) {
+    //   const existingEmail = await Dealer.findOne({
+    //     email: req.body.email.toLowerCase(),
 
-        _id: {
-          $ne: req.params.id,
-        },
-      });
+    //     _id: {
+    //       $ne: req.params.id,
+    //     },
+    //   });
 
-      if (existingEmail) {
-        return res.status(409).json({
-          success: false,
-          message: "Dealer with this email already exists",
-        });
-      }
-    }
+    //   if (existingEmail) {
+    //     return res.status(409).json({
+    //       success: false,
+    //       message: "Dealer with this email already exists",
+    //     });
+    //   }
+    // }
 
     /* ===============================
        STRING FIELDS
@@ -1012,7 +1130,7 @@ export const updateDealer = async (req, res) => {
       "creditDays",
       "creditLimit",
       "openingBalance",
-        "securityAmount",
+      "securityAmount",
     ];
 
     numberFields.forEach((field) => {
@@ -1115,15 +1233,12 @@ export const updateDealer = async (req, res) => {
     }
 
     if (req.body.additionalInfo !== undefined) {
-  dealer.additionalInfo = parseJSON(
-    req.body.additionalInfo,
-    [],
-  )
-    .filter((item) => item?.value?.trim())
-    .map((item) => ({
-      value: item.value.trim(),
-    }));
-}
+      dealer.additionalInfo = parseJSON(req.body.additionalInfo, [])
+        .filter((item) => item?.value?.trim())
+        .map((item) => ({
+          value: item.value.trim(),
+        }));
+    }
 
     const newOtherDocuments = getUploadedFiles(req.files, "documentUpload");
 
@@ -1210,12 +1325,25 @@ export const updateDealer = async (req, res) => {
             message: "Date of leaving cannot be before date of joining",
           });
         }
-
+        const previousLeavingDate = dealer.dateOfLeaving;
         dealer.dateOfLeaving = leavingDate;
 
         if (leavingDate <= now) {
           dealer.status = "INACTIVE";
           dealer.technicianStatus = "INACTIVE";
+        }
+
+        const leavingDateChanged =
+          !previousLeavingDate ||
+          new Date(previousLeavingDate).getTime() !== leavingDate.getTime();
+
+        if (leavingDateChanged) {
+          await DealerLifecycleLog.create({
+            dealerId: dealer._id,
+            type: "LEFT",
+            date: leavingDate,
+            createdBy: req.user?._id || req.user?.id || null,
+          });
         }
       } else {
         dealer.dateOfLeaving = null;
@@ -1415,6 +1543,7 @@ export const deleteDealer = async (req, res) => {
   }
 };
 
+
 /* =========================================================
    UPDATE STATUS
 ========================================================= */
@@ -1604,34 +1733,28 @@ export const registerDealerLeave = async (req, res) => {
     // });
 
     const hasOverlap = (dealer.leaves ?? []).some((leave) => {
-  /*
+      /*
   |--------------------------------------------------------------------------
   | Completed / Cancelled leave should not block new leave
   |--------------------------------------------------------------------------
   */
 
-  if (
-    leave.status === "CANCELLED" ||
-    leave.status === "COMPLETED"
-  ) {
-    return false;
-  }
+      if (leave.status === "CANCELLED" || leave.status === "COMPLETED") {
+        return false;
+      }
 
-  const existingFrom = new Date(leave.from);
-  const existingTo = new Date(leave.to);
+      const existingFrom = new Date(leave.from);
+      const existingTo = new Date(leave.to);
 
-  if (
-    Number.isNaN(existingFrom.getTime()) ||
-    Number.isNaN(existingTo.getTime())
-  ) {
-    return false;
-  }
+      if (
+        Number.isNaN(existingFrom.getTime()) ||
+        Number.isNaN(existingTo.getTime())
+      ) {
+        return false;
+      }
 
-  return (
-    fromDate <= existingTo &&
-    toDate >= existingFrom
-  );
-});
+      return fromDate <= existingTo && toDate >= existingFrom;
+    });
 
     if (hasOverlap) {
       return res.status(400).json({
@@ -1734,11 +1857,7 @@ export const endDealerLeave = async (req, res) => {
 
     const activeLeaveHistory = [...(dealer.statusHistory || [])]
       .reverse()
-      .find(
-        (history) =>
-          history.status === "LEAVE" &&
-          !history.to,
-      );
+      .find((history) => history.status === "LEAVE" && !history.to);
 
     if (activeLeaveHistory) {
       activeLeaveHistory.to = now;
@@ -1774,9 +1893,7 @@ export const endDealerLeave = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message:
-        error.message ||
-        "Failed to end dealer leave",
+      message: error.message || "Failed to end dealer leave",
     });
   }
 };
@@ -1830,6 +1947,13 @@ export const rejoinDealer = async (req, res) => {
     }
 
     await dealer.save();
+
+    await DealerLifecycleLog.create({
+      dealerId: dealer._id,
+      type: "REJOINED",
+      date,
+      createdBy: req.user?._id || req.user?.id || null,
+    });
 
     await syncDealerAllocation({
       dealer,
@@ -1919,16 +2043,24 @@ export const suspendDealer = async (req, res) => {
 
     await dealer.save();
 
+    await DealerLifecycleLog.create({
+      dealerId: dealer._id,
+      type: "SUSPENDED",
+      date: dealer.suspendedAt,
+      reason: reason || "",
+      createdBy: req.user?._id || req.user?.id || null,
+    });
+
     await User.updateMany(
-  {
-    dealerId: dealer._id,
-  },
-  {
-    $inc: {
-      tokenVersion: 1,
-    },
-  },
-);
+      {
+        dealerId: dealer._id,
+      },
+      {
+        $inc: {
+          tokenVersion: 1,
+        },
+      },
+    );
 
     await syncDealerAllocation({
       dealer,
@@ -1955,11 +2087,7 @@ export const suspendDealer = async (req, res) => {
 
 export const getDealerDropdown = async (req, res) => {
   try {
-    const {
-      search = "",
-      cityId,
-      limit = 50,
-    } = req.query;
+    const { search = "", cityId, limit = 50 } = req.query;
 
     const filter = {
       status: "ACTIVE",
@@ -2055,6 +2183,30 @@ export const getDealerDropdown = async (req, res) => {
       success: false,
       message: "Failed to fetch dealer dropdown",
       error: error.message,
+    });
+  }
+};
+
+export const getDealerLifecycleLogs = async (req, res) => {
+  try {
+    const logs = await DealerLifecycleLog.find({
+      dealerId: req.params.id,
+    })
+      .populate("createdBy", "name email")
+      .sort({
+        date: -1,
+        createdAt: -1,
+      })
+      .lean();
+
+    return res.status(200).json({
+      success: true,
+      data: logs,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
     });
   }
 };

@@ -31,7 +31,7 @@ export const getIsWarranty = (complaint) => {
 
 const generateCustomerCode = async () => {
   const lastCustomer = await Customer.findOne({
-    customerCode: /^CUS\d+$/,
+    customerCode: /\d+$/,
   })
     .sort({
       createdAt: -1,
@@ -41,14 +41,14 @@ const generateCustomerCode = async () => {
   let nextNumber = 1;
 
   if (lastCustomer?.customerCode) {
-    const currentNumber = Number(lastCustomer.customerCode.replace("CUS", ""));
+    const currentNumber = Number(lastCustomer.customerCode.replace("", ""));
 
     if (!Number.isNaN(currentNumber)) {
       nextNumber = currentNumber + 1;
     }
   }
 
-  return `CUS${String(nextNumber).padStart(6, "0")}`;
+  return `${String(nextNumber).padStart(6, "0")}`;
 };
 
 /*

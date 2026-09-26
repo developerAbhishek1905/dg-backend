@@ -12,7 +12,8 @@ import {
   rejoinDealer,
   suspendDealer,
   getDealerDropdown,
-  endDealerLeave
+  endDealerLeave,
+  getDealerLifecycleLogs
 } from "../controllers/dealer.controller.js";
 
 import { dealerDocumentUpload } from "../middleware/dealerUpload.middleware.js";
@@ -36,6 +37,11 @@ router.get(
   "/dropdown",
   // protect,
   getDealerDropdown,
+);
+router.get(
+  "/:id/lifecycle-logs",
+  protect,
+  getDealerLifecycleLogs
 );
 /* GET ALL */
 router.get("/", getDealers);

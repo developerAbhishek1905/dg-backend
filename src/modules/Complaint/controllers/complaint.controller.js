@@ -19,23 +19,40 @@ import { escapeRegex } from "../../../helper/escapeRegex.js";
 |--------------------------------------------------------------------------
 */
 
+// export const generateCustomerCode = async () => {
+//   const lastCustomer = await Customer.findOne({
+//     customerCode: { $regex: /^CUST\d+$/ },
+//   })
+//     .sort({ createdAt: -1 })
+//     .select("customerCode")
+//     .lean();
+
+//   let nextNumber = 1;
+
+//   if (lastCustomer?.customerCode) {
+//     const lastNumber = Number(lastCustomer.customerCode.replace("CUST", ""));
+
+//     nextNumber = lastNumber + 1;
+//   }
+
+//   return `CUST${String(nextNumber).padStart(6, "0")}`;
+// };
+
 export const generateCustomerCode = async () => {
   const lastCustomer = await Customer.findOne({
-    customerCode: { $regex: /^CUST\d+$/ },
+    customerCode: { $regex: /^\d{8}$/ },
   })
-    .sort({ createdAt: -1 })
+    .sort({ customerCode: -1 })
     .select("customerCode")
     .lean();
 
   let nextNumber = 1;
 
   if (lastCustomer?.customerCode) {
-    const lastNumber = Number(lastCustomer.customerCode.replace("CUST", ""));
-
-    nextNumber = lastNumber + 1;
+    nextNumber = Number(lastCustomer.customerCode) + 1;
   }
 
-  return `CUST${String(nextNumber).padStart(6, "0")}`;
+  return String(nextNumber).padStart(8, "0");
 };
 
 const generateComplaintNumber = async () => {
@@ -1003,6 +1020,23 @@ export const getComplaints = async (req, res) => {
 
       const regex = new RegExp(escapedSearch, "i");
 
+        /*
+  |--------------------------------------------------------------------------
+  | Search Matching Customers
+  |--------------------------------------------------------------------------
+  */
+
+  const matchingCustomers = await Customer.find({
+    customerCode: regex,
+  })
+    .select("_id")
+    .lean();
+
+  const matchingCustomerIds = matchingCustomers.map(
+    (customer) => customer._id,
+  );
+
+
       /*
        * Search matching dealers also
        */
@@ -1052,6 +1086,16 @@ export const getComplaints = async (req, res) => {
               },
             ]
           : []),
+
+              ...(matchingCustomerIds.length > 0
+      ? [
+          {
+            customerId: {
+              $in: matchingCustomerIds,
+            },
+          },
+        ]
+      : []),
       ];
     }
 

@@ -50,15 +50,9 @@ export const getLeaveStatus = (
     return "COMPLETED";
   }
 
-  const currentTime = new Date(now);
+  const today = new Date(now);
   const from = new Date(leave.from);
   const to = new Date(leave.to);
-
-  /*
-  |--------------------------------------------------------------------------
-  | Validate dates
-  |--------------------------------------------------------------------------
-  */
 
   if (
     Number.isNaN(from.getTime()) ||
@@ -69,34 +63,24 @@ export const getLeaveStatus = (
 
   /*
   |--------------------------------------------------------------------------
-  | Future leave
+  | Compare leave by DATE
   |--------------------------------------------------------------------------
   */
 
-  if (currentTime < from) {
+  today.setHours(0, 0, 0, 0);
+  from.setHours(0, 0, 0, 0);
+  to.setHours(0, 0, 0, 0);
+
+  if (today < from) {
     return "SCHEDULED";
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | Leave ended
-  |--------------------------------------------------------------------------
-  */
-
-  if (currentTime > to) {
+  if (today > to) {
     return "COMPLETED";
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | Currently on leave
-  |--------------------------------------------------------------------------
-  */
-
   return "ACTIVE";
 };
-
-
 
 // export const isDealerOnLeave = (
 
