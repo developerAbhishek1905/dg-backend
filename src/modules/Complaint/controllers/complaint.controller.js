@@ -7,12 +7,14 @@ import Customer from "../../Customer/models/customer.model.js";
 import Dealer from "../../dealers/models/dealer.model.js";
 import { getIsWarranty } from "../../../helper/warranty.util.js";
 import { allocateDealerForComplaint } from "../../allocation/services/allocateDealer.service.js";
-import { sendComplaintAllocationNotifications } from "../../../services/complaintWhatsapp.service.js";
+// import { sendComplaintAllocationNotifications } from "../../../services/complaintWhatsapp.service.js";
 import { createComplaintActivity } from "../services/complaintActivity.service.js";
 import { escapeRegex } from "../../../helper/escapeRegex.js";
+import { sendWhatsAppMessage } from "../../../services/whatsappService.js";
+import { sendComplaintAllocationNotifications } from "../../../services/complaintWhatsAppService.js";
 // import { sendComplaintAllocationNotifications } from "../../../services/complaintNotification.service.js";
 // import { sendComplaintWhatsAppNotifications } from "../../../services/complaintWhatsapp.service.js";
-
+// sendComplaintAllocationNotifications
 /*
 |--------------------------------------------------------------------------
 | Complaint Number Generator
@@ -37,6 +39,7 @@ import { escapeRegex } from "../../../helper/escapeRegex.js";
 
 //   return `CUST${String(nextNumber).padStart(6, "0")}`;
 // };
+
 
 export const generateCustomerCode = async () => {
   const lastCustomer = await Customer.findOne({

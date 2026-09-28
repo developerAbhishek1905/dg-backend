@@ -614,6 +614,12 @@ const dealerSchema = new mongoose.Schema(
       default: 0,
     },
 
+    ratingCount: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+
     openingBalance: {
       type: Number,
       default: 0,
@@ -667,79 +673,79 @@ const dealerSchema = new mongoose.Schema(
        STATUS
     ========================= */
 
-dateOfJoining: {
-  type: Date,
-  default: Date.now,
-  index: true,
-},
+    dateOfJoining: {
+      type: Date,
+      default: Date.now,
+      index: true,
+    },
 
-dateOfLeaving: {
-  type: Date,
-  default: null,
-  index: true,
-},
+    dateOfLeaving: {
+      type: Date,
+      default: null,
+      index: true,
+    },
 
-lastRejoiningDate: {
-  type: Date,
-  default: null,
-},
+    lastRejoiningDate: {
+      type: Date,
+      default: null,
+    },
 
-rejoiningDates: {
-  type: [Date],
-  default: [],
-},
-leaves: {
-  type: [dealerLeaveSchema],
-  default: [],
-},
-securityAmount: {
-  type: Number,
-  default: 0,
-  min: 0,
-},
+    rejoiningDates: {
+      type: [Date],
+      default: [],
+    },
+    leaves: {
+      type: [dealerLeaveSchema],
+      default: [],
+    },
+    securityAmount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
 
-additionalInfo: [
-  {
-    value: {
+    additionalInfo: [
+      {
+        value: {
+          type: String,
+          trim: true,
+          default: "",
+        },
+      },
+    ],
+
+    // leaveFrom: {
+    //   type: Date,
+    //   default: null,
+    // },
+
+    // leaveTo: {
+    //   type: Date,
+    //   default: null,
+    // },
+
+    suspendedAt: {
+      type: Date,
+      default: null,
+    },
+
+    suspensionReason: {
       type: String,
       trim: true,
       default: "",
     },
-  },
-],
 
-// leaveFrom: {
-//   type: Date,
-//   default: null,
-// },
+    statusHistory: {
+      type: [dealerStatusHistorySchema],
+      default: [],
+    },
 
-// leaveTo: {
-//   type: Date,
-//   default: null,
-// },
-
-suspendedAt: {
-  type: Date,
-  default: null,
-},
-
-suspensionReason: {
-  type: String,
-  trim: true,
-  default: "",
-},
-
-statusHistory: {
-  type: [dealerStatusHistorySchema],
-  default: [],
-},
-
-status: {
-  type: String,
-  enum: ["ACTIVE", "INACTIVE", "SUSPENDED", "LEAVE"],
-  default: "ACTIVE",
-  index: true,
-},
+    status: {
+      type: String,
+      enum: ["ACTIVE", "INACTIVE", "SUSPENDED", "LEAVE"],
+      default: "ACTIVE",
+      index: true,
+    },
   },
   {
     timestamps: true,

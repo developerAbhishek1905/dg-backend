@@ -23,7 +23,7 @@ import { testWhatsApp } from "./services/smartpingWhatsapp.service.js";
 import appointmentRoutes from "./modules/appointment/router/appointment.route.js";
 import reasonRoutes from "./modules/reason/routes/reason.routes.js";
 import dealerLedgerRoutes from "./modules/dealerLedger/routes/dealerLadger.route.js"
-
+import ratingReviewRoutes from "./modules/dealers/routes/ratingReview.routes.js";
 
 const app = express();
 
@@ -70,7 +70,7 @@ app.use("/api/v1/brands", brandRoutes);
 app.use("/api/v1/reasons", reasonRoutes);
 app.use("/api/v1/products", productRoutes);
 app.use("/api/v1/product-types", productTypeRoutes);
-
+app.use("/api/v1/ratings", ratingReviewRoutes);
 app.use(
   "/api/v1/customers",
   customerRoutes,
