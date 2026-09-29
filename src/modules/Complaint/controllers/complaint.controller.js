@@ -1,20 +1,15 @@
+import mongoose from "mongoose";
 import { closingStatuses, percentageMethods } from "../../billing/rules.js";
 import BillingDealer from "../../dealers/models/dealer.model.js";
-import mongoose from "mongoose";
-
 import Complaint from "../models/complaint.model.js";
 import Customer from "../../Customer/models/customer.model.js";
 import Dealer from "../../dealers/models/dealer.model.js";
 import { getIsWarranty } from "../../../helper/warranty.util.js";
 import { allocateDealerForComplaint } from "../../allocation/services/allocateDealer.service.js";
-// import { sendComplaintAllocationNotifications } from "../../../services/complaintWhatsapp.service.js";
 import { createComplaintActivity } from "../services/complaintActivity.service.js";
 import { escapeRegex } from "../../../helper/escapeRegex.js";
-import { sendWhatsAppMessage } from "../../../services/whatsappService.js";
 import { sendComplaintAllocationNotifications } from "../../../services/complaintWhatsAppService.js";
-// import { sendComplaintAllocationNotifications } from "../../../services/complaintNotification.service.js";
-// import { sendComplaintWhatsAppNotifications } from "../../../services/complaintWhatsapp.service.js";
-// sendComplaintAllocationNotifications
+
 /*
 |--------------------------------------------------------------------------
 | Complaint Number Generator
@@ -496,6 +491,7 @@ export const createComplaint = async (req, res) => {
       subject: subject?.trim() || "",
       description: description?.trim() || "",
       allocatedDealerId: dealerAllocation?.dealerId ?? null,
+      allocationType:dealerAllocation.dealerId !== null ? "AUTO" : "NONE",
       allocationId: dealerAllocation?.allocationId ?? null,
       allocationRuleId: dealerAllocation?.capacityRuleId ?? null,
       allocatedAt: dealerAllocation ? new Date() : null,
@@ -600,10 +596,10 @@ export const createComplaint = async (req, res) => {
     // }
 
     /*
-|--------------------------------------------------------------------------
-| WHATSAPP NOTIFICATIONS
-|--------------------------------------------------------------------------
-*/
+    |--------------------------------------------------------------------------
+    | WHATSAPP NOTIFICATIONS
+    |--------------------------------------------------------------------------
+    */
 
     if (dealerAllocation?.dealerId) {
       sendComplaintAllocationNotifications({
@@ -2068,6 +2064,8 @@ export const assignDealerToComplaint = async (req, res) => {
     complaint.allocatedAt = new Date();
 
     complaint.status = "ALLOCATED";
+
+    complaint.allocationType = "MANUAL"
 
     await complaint.save();
 
