@@ -35,7 +35,6 @@ import { sendComplaintAllocationNotifications } from "../../../services/complain
 //   return `CUST${String(nextNumber).padStart(6, "0")}`;
 // };
 
-
 export const generateCustomerCode = async () => {
   const lastCustomer = await Customer.findOne({
     customerCode: { $regex: /^\d{8}$/ },
@@ -491,7 +490,7 @@ export const createComplaint = async (req, res) => {
       subject: subject?.trim() || "",
       description: description?.trim() || "",
       allocatedDealerId: dealerAllocation?.dealerId ?? null,
-      allocationType:dealerAllocation.dealerId !== null ? "AUTO" : "NONE",
+      allocationType: dealerAllocation?.dealerId ? "AUTO" : "NONE",
       allocationId: dealerAllocation?.allocationId ?? null,
       allocationRuleId: dealerAllocation?.capacityRuleId ?? null,
       allocatedAt: dealerAllocation ? new Date() : null,
@@ -1019,22 +1018,21 @@ export const getComplaints = async (req, res) => {
 
       const regex = new RegExp(escapedSearch, "i");
 
-        /*
+      /*
   |--------------------------------------------------------------------------
   | Search Matching Customers
   |--------------------------------------------------------------------------
   */
 
-  const matchingCustomers = await Customer.find({
-    customerCode: regex,
-  })
-    .select("_id")
-    .lean();
+      const matchingCustomers = await Customer.find({
+        customerCode: regex,
+      })
+        .select("_id")
+        .lean();
 
-  const matchingCustomerIds = matchingCustomers.map(
-    (customer) => customer._id,
-  );
-
+      const matchingCustomerIds = matchingCustomers.map(
+        (customer) => customer._id,
+      );
 
       /*
        * Search matching dealers also
@@ -1086,15 +1084,15 @@ export const getComplaints = async (req, res) => {
             ]
           : []),
 
-              ...(matchingCustomerIds.length > 0
-      ? [
-          {
-            customerId: {
-              $in: matchingCustomerIds,
-            },
-          },
-        ]
-      : []),
+        ...(matchingCustomerIds.length > 0
+          ? [
+              {
+                customerId: {
+                  $in: matchingCustomerIds,
+                },
+              },
+            ]
+          : []),
       ];
     }
 
@@ -2065,7 +2063,7 @@ export const assignDealerToComplaint = async (req, res) => {
 
     complaint.status = "ALLOCATED";
 
-    complaint.allocationType = "MANUAL"
+    complaint.allocationType = "MANUAL";
 
     await complaint.save();
 
