@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 import User from "../../users/models/user.model.js";
 import Dealer from "../../dealers/models/dealer.model.js";
+import bcrypt from "bcryptjs";
 
 // const generateToken = (user) => {
 //   return jwt.sign(
@@ -432,6 +433,126 @@ export const logout = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to logout",
+    });
+  }
+};
+
+
+
+export const changePassword = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    const { currentPassword, newPassword } = req.body;
+
+    /*
+    |--------------------------------------------------------------------------
+    | Validation
+    |--------------------------------------------------------------------------
+    */
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Current password and new password are required",
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: "New password must be at least 6 characters",
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Get User With Password
+    |--------------------------------------------------------------------------
+    */
+
+    const user = await User.findById(userId).select("+password");
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Verify Current Password
+    |--------------------------------------------------------------------------
+    */
+
+    const currentPasswordMatched =
+      await user.comparePassword(currentPassword);
+
+    if (!currentPasswordMatched) {
+      return res.status(400).json({
+        success: false,
+        message: "Current password is incorrect",
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Prevent Same Password
+    |--------------------------------------------------------------------------
+    */
+
+    const samePassword = await user.comparePassword(newPassword);
+
+    if (samePassword) {
+      return res.status(400).json({
+        success: false,
+        message: "New password must be different from current password",
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Set New Password
+    |--------------------------------------------------------------------------
+    |
+    | IMPORTANT:
+    | Don't bcrypt.hash() here.
+    |
+    | User model pre("save") middleware automatically hashes it.
+    |
+    */
+
+    user.password = newPassword;
+
+    /*
+    |--------------------------------------------------------------------------
+    | Invalidate Existing Sessions
+    |--------------------------------------------------------------------------
+    */
+
+    user.tokenVersion += 1;
+
+    /*
+    |--------------------------------------------------------------------------
+    | Save
+    |--------------------------------------------------------------------------
+    |
+    | pre("save") will convert newPassword into bcrypt hash.
+    |
+    */
+
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Password changed successfully. Please login again.",
+    });
+  } catch (error) {
+    console.error("Change password error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to change password",
     });
   }
 };

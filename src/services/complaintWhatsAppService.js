@@ -27,62 +27,80 @@ export const sendComplaintAllocationNotifications = async ({
     |--------------------------------------------------------------------------
     */
 
-    const customerMessage = `
+   /*
+|--------------------------------------------------------------------------
+| Build Common Values
+|--------------------------------------------------------------------------
+*/
+
+const serviceType =
+  complaint.categoryId?.description ||
+  complaint.category ||
+  complaint.productName ||
+  "Service";
+
+const technicianName =
+  dealer.technicianName ||
+  dealer.technicianFirmName ||
+  "Assigned Technician";
+
+const serviceCharge = Number(complaint.quoteAmount) || 0;
+
+const customerAddress = [
+  complaint.address?.addressLine,
+  complaint.address?.city,
+  complaint.address?.district,
+  complaint.address?.state,
+  complaint.address?.pinCode,
+]
+  .filter(Boolean)
+  .join(", ");
+
+const complaintLink =
+  `https://dg-iota-tawny.vercel.app/appointments/${complaint._id}`;
+
+/*
+|--------------------------------------------------------------------------
+| Customer Message
+|--------------------------------------------------------------------------
+*/
+
+const customerMessage = `
 Dear ${complaint.customerName},
 
-Your complaint has been registered successfully.
+Your *${serviceType}* complaint has been successfully registered.
 
-Complaint No: ${complaint.complaintNumber}
-Product: ${complaint.productName}
-Category: ${complaint.category || "-"}
-Issue: ${complaint.faultReported || "-"}
-Status: ${complaint.status}
+*Complaint No.: ${complaint.complaintNumber}*
+*Technician: ${technicianName}*
+*Applicable Service Charge: ₹${serviceCharge}*
 
-Service Dealer: ${
-      dealer.technicianFirmName ||
-      dealer.technicianName ||
-      "Assigned Service Dealer"
-    }
+Our technician will contact you shortly regarding your complaint.
 
-Dealer Contact: ${dealer.mobileNumber || "-"}
+For any assistance, please contact our *Customer Care: 7888694177*.
 
-Our service team will contact you shortly.
-
-Thank you.
+Thank you for choosing our service.
 `.trim();
 
-    /*
-    |--------------------------------------------------------------------------
-    | Dealer Message
-    |--------------------------------------------------------------------------
-    */
+/*
+|--------------------------------------------------------------------------
+| Dealer Message
+|--------------------------------------------------------------------------
+*/
 
-    const dealerMessage = `
-Dear ${dealer.technicianName || dealer.technicianFirmName || "Dealer"},
+const dealerMessage = `
+Dear ${technicianName},
 
-please login on https://dg-iota-tawny.vercel.app
+A new *${serviceType}* complaint has been assigned to you.
 
-A new complaint has been assigned to you.
+*Complaint No.: ${complaint.complaintNumber}*
+*Customer: ${complaint.customerName}*
+*Contact: ${complaint.phone}*
+*Address: ${customerAddress || "-"}*
+*Service Charge: ₹${serviceCharge}*
 
-Complaint No: ${complaint.complaintNumber}
+Please contact the customer and attend the complaint as scheduled.
 
-Customer: ${complaint.customerName}
-Mobile: ${complaint.phone}
-
-Product: ${complaint.productName}
-Category: ${complaint.category || "-"}
-Issue: ${complaint.faultReported || "-"}
-
-Address:
-${complaint.address?.addressLine || ""}
-${complaint.address?.city || ""}
-${complaint.address?.district || ""}
-${complaint.address?.state || ""}
-${complaint.address?.pinCode || ""}
-
-Priority: ${complaint.priority || "MEDIUM"}
-
-Please contact the customer and proceed with the service.
+🔗 *View Complaint:* ${complaintLink}
 `.trim();
 
     /*

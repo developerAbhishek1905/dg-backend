@@ -2068,6 +2068,20 @@ export const assignDealerToComplaint = async (req, res) => {
     await complaint.save();
 
     /* =========================================
+      WHATSAPP NOTIFICATION
+    ========================================= */
+
+    sendComplaintAllocationNotifications({
+      complaint,
+      dealerId: dealer._id,
+    }).catch((error) => {
+      console.error(
+        "Manual dealer assignment WhatsApp notification failed:",
+        error,
+      );
+    });
+
+    /* =========================================
        POPULATE
     ========================================= */
 

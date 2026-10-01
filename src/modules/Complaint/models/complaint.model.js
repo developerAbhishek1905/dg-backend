@@ -67,6 +67,49 @@ const addressSchema = new mongoose.Schema(
   },
 );
 
+const followUpRemarkSchema = new mongoose.Schema(
+  {
+    followUpStatus: {
+      type: String,
+      trim: true,
+      uppercase: true,
+    },
+
+    followUpDate: {
+      type: Date,
+    },
+
+    remark: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    sentToDealer: {
+      type: Boolean,
+      default: false,
+    },
+
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+
+    createdAt: {
+      type: Date,
+      default: Date.now,
+    },
+
+    updatedAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  {
+    _id: true,
+  },
+);
+
 /*
 |--------------------------------------------------------------------------
 | Complaint Schema
@@ -465,6 +508,26 @@ const complaintSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+
+    customerFollowUpStatus: {
+  type: String,
+  trim: true,
+  uppercase: true,
+},
+
+customerFollowUpDate: {
+  type: Date,
+},
+
+latestRemark: {
+  type: String,
+  trim: true,
+},
+
+followUpRemarks: {
+  type: [followUpRemarkSchema],
+  default: [],
+},
 
     /*
     |--------------------------------------------------------------------------

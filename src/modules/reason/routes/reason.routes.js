@@ -6,7 +6,7 @@ import {
 } from "../controllers/reason.controller.js";
 
 const router = express.Router();
-router.use(protect);
+// router.use(protect);
 router.get("/dropdown", getReasonDropdown);
 router.post("/", createReason);
 router.get("/", getAllReasons);
