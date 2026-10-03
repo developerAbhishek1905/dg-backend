@@ -67,16 +67,71 @@ const addressSchema = new mongoose.Schema(
   },
 );
 
+// const followUpRemarkSchema = new mongoose.Schema(
+//   {
+//     followUpStatus: {
+//       type: String,
+//       trim: true,
+//       uppercase: true,
+//     },
+
+//     followUpDate: {
+//       type: Date,
+//     },
+
+//     remark: {
+//       type: String,
+//       required: true,
+//       trim: true,
+//     },
+
+//     sentToDealer: {
+//       type: Boolean,
+//       default: false,
+//     },
+
+//     createdBy: {
+//       type: mongoose.Schema.Types.ObjectId,
+//       ref: "User",
+//     },
+
+//     createdAt: {
+//       type: Date,
+//       default: Date.now,
+//     },
+
+//     updatedAt: {
+//       type: Date,
+//       default: Date.now,
+//     },
+//   },
+//   {
+//     _id: true,
+//   },
+// );
+
 const followUpRemarkSchema = new mongoose.Schema(
   {
+    followUpReasonId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Reason",
+      required: true,
+    },
+
     followUpStatus: {
       type: String,
+      required: true,
       trim: true,
-      uppercase: true,
+    },
+
+    reasonType: {
+      type: String,
+      trim: true,
     },
 
     followUpDate: {
       type: Date,
+      required: true,
     },
 
     remark: {
@@ -109,7 +164,6 @@ const followUpRemarkSchema = new mongoose.Schema(
     _id: true,
   },
 );
-
 /*
 |--------------------------------------------------------------------------
 | Complaint Schema
@@ -509,25 +563,44 @@ const complaintSchema = new mongoose.Schema(
       default: "",
     },
 
+    customerFollowUpReasonId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Reason",
+    },
+
     customerFollowUpStatus: {
-  type: String,
-  trim: true,
-  uppercase: true,
-},
+      type: String,
+      trim: true,
+    },
 
-customerFollowUpDate: {
-  type: Date,
-},
+    customerFollowUpDate: {
+      type: Date,
+    },
 
-latestRemark: {
-  type: String,
-  trim: true,
-},
+    latestRemark: {
+      type: String,
+      trim: true,
+    },
 
-followUpRemarks: {
-  type: [followUpRemarkSchema],
-  default: [],
-},
+    // customerFollowUpStatus: {
+    //   type: String,
+    //   trim: true,
+    //   uppercase: true,
+    // },
+
+    // customerFollowUpDate: {
+    //   type: Date,
+    // },
+
+    // latestRemark: {
+    //   type: String,
+    //   trim: true,
+    // },
+
+    followUpRemarks: {
+      type: [followUpRemarkSchema],
+      default: [],
+    },
 
     /*
     |--------------------------------------------------------------------------

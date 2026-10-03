@@ -16,25 +16,6 @@ import { sendComplaintAllocationNotifications } from "../../../services/complain
 |--------------------------------------------------------------------------
 */
 
-// export const generateCustomerCode = async () => {
-//   const lastCustomer = await Customer.findOne({
-//     customerCode: { $regex: /^CUST\d+$/ },
-//   })
-//     .sort({ createdAt: -1 })
-//     .select("customerCode")
-//     .lean();
-
-//   let nextNumber = 1;
-
-//   if (lastCustomer?.customerCode) {
-//     const lastNumber = Number(lastCustomer.customerCode.replace("CUST", ""));
-
-//     nextNumber = lastNumber + 1;
-//   }
-
-//   return `CUST${String(nextNumber).padStart(6, "0")}`;
-// };
-
 export const generateCustomerCode = async () => {
   const lastCustomer = await Customer.findOne({
     customerCode: { $regex: /^\d{8}$/ },
@@ -54,30 +35,22 @@ export const generateCustomerCode = async () => {
 
 const generateComplaintNumber = async () => {
   const now = new Date();
-
   const day = String(now.getDate()).padStart(2, "0");
-
   const month = String(now.getMonth() + 1).padStart(2, "0");
-
   const year = String(now.getFullYear()).slice(-2);
-
   const datePart = `${day}${month}${year}`;
-
   const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
   const endOfDay = new Date(
     now.getFullYear(),
     now.getMonth(),
     now.getDate() + 1,
   );
-
   const count = await Complaint.countDocuments({
     createdAt: {
       $gte: startOfDay,
       $lt: endOfDay,
     },
   });
-
   const sequence = String(count + 1).padStart(4, "0");
 
   return `CMP${datePart}/${sequence}`;
@@ -93,43 +66,29 @@ export const createComplaint = async (req, res) => {
   try {
     const {
       customerId,
-
       customerName,
       phone,
       alternatePhone,
       email,
-
       address,
       contactInfo,
-
       brandId,
       brand,
-
       productId,
       productName,
-
       productTypeId,
       productType,
       productCode,
-
       productDescription,
-
       units,
       quoteAmount,
-
       faultReported,
-
       categoryId,
       category,
-
       priority,
-
       complaintType,
-
       repeatComplaintNumber,
-
       adName,
-
       subject,
       description,
       additionalInfo,
@@ -149,20 +108,6 @@ export const createComplaint = async (req, res) => {
       });
     }
 
-    // if (!address?.addressLine?.trim()) {
-    //   return res.status(400).json({
-    //     success: false,
-    //     message: "Customer address is required",
-    //   });
-    // }
-
-    // if (!address?.state?.trim()) {
-    //   return res.status(400).json({
-    //     success: false,
-    //     message: "State is required",
-    //   });
-    // }
-
     if (!address?.city?.trim()) {
       return res.status(400).json({
         success: false,
@@ -176,13 +121,6 @@ export const createComplaint = async (req, res) => {
         message: "Product is required",
       });
     }
-
-    // if (!faultReported?.trim()) {
-    //   return res.status(400).json({
-    //     success: false,
-    //     message: "Fault reported is required",
-    //   });
-    // }
 
     /*
     |--------------------------------------------------------------------------
@@ -230,49 +168,34 @@ export const createComplaint = async (req, res) => {
 
       customer = await Customer.create({
         customerCode,
-
         name: customerName.trim(),
-
         phone: phone.trim(),
-
         alternatePhone: alternatePhone?.trim() || "",
-
         email: email?.trim()?.toLowerCase() || "",
-
         address: {
           addressLine: address?.addressLine?.trim() || "",
-
           stateId:
             address?.stateId !== undefined && address?.stateId !== null
               ? Number(address.stateId)
               : null,
-
           state: address?.state?.trim() || "",
-
           districtId:
             address?.districtId !== undefined && address?.districtId !== null
               ? Number(address.districtId)
               : null,
-
           district: address?.district?.trim() || "",
-
           cityId:
             address?.cityId !== undefined && address?.cityId !== null
               ? Number(address.cityId)
               : null,
-
           city: address?.city?.trim() || "",
-
           pincodeId:
             address?.pincodeId !== undefined && address?.pincodeId !== null
               ? Number(address.pincodeId)
               : null,
-
           pinCode: address?.pinCode?.trim() || "",
         },
-
         contactInfo: contactInfo?.trim() || "",
-
         status: "ACTIVE",
       });
     }
@@ -304,35 +227,74 @@ export const createComplaint = async (req, res) => {
     |--------------------------------------------------------------------------
     */
 
+    // let complaintNumber;
+
+    // if (complaintType === "WARRANTY" && parentComplaint) {
+    //   const childCount = await Complaint.countDocuments({
+    //     parentComplaintId: parentComplaint._id,
+    //   });
+
+    //   const sequence = String(childCount + 1).padStart(2, "0");
+
+    //   complaintNumber = `${parentComplaint.complaintNumber}/${sequence}`;
+    // } else {
+    //   complaintNumber = await generateComplaintNumber();
+    // }
+
     let complaintNumber;
 
     if (complaintType === "WARRANTY" && parentComplaint) {
+      /*
+      |--------------------------------------------------------------------------
+      | WARRANTY / REPEAT COMPLAINT NUMBER
+      |--------------------------------------------------------------------------
+      |
+      | Parent:
+      | CMP031026/0001
+      |
+      | Warranty:
+      | REP031026/0001/01
+      | REP031026/0001/02
+      |
+      */
+
       const childCount = await Complaint.countDocuments({
         parentComplaintId: parentComplaint._id,
+        complaintType: "WARRANTY",
       });
 
       const sequence = String(childCount + 1).padStart(2, "0");
 
-      complaintNumber = `${parentComplaint.complaintNumber}/${sequence}`;
+      // CMP031026/0001 -> 031026/0001
+      const parentNumberWithoutPrefix =
+        parentComplaint.complaintNumber.replace(/^CMP/, "");
+
+      complaintNumber = `REP${parentNumberWithoutPrefix}/${sequence}`;
     } else {
+      /*
+      |--------------------------------------------------------------------------
+      | REGULAR COMPLAINT
+      |--------------------------------------------------------------------------
+      */
+
       complaintNumber = await generateComplaintNumber();
     }
 
     /*
-|--------------------------------------------------------------------------
-| Auto Allocate Dealer
-|--------------------------------------------------------------------------
-*/
+    |--------------------------------------------------------------------------
+    | Auto Allocate Dealer
+    |--------------------------------------------------------------------------
+    */
 
     let dealerAllocation = null;
 
     if (complaintType === "WARRANTY" && parentComplaint) {
       /*
-  |--------------------------------------------------------------------------
-  | Warranty Complaint
-  | Assign same dealer who handled old complaint
-  |--------------------------------------------------------------------------
-  */
+      |--------------------------------------------------------------------------
+      | Warranty Complaint
+      | Assign same dealer who handled old complaint
+      |--------------------------------------------------------------------------
+      */
 
       if (!parentComplaint.allocatedDealerId) {
         return res.status(400).json({
@@ -656,227 +618,6 @@ export const createComplaint = async (req, res) => {
 | Get All Complaints
 |--------------------------------------------------------------------------
 */
-
-// export const getComplaints = async (req, res) => {
-//   try {
-//     const {
-//       search = "",
-//       status,
-//       complaintType,
-//       priority,
-//       customerId,
-//       technicianId,
-//       dealerId,
-//       fromDate,
-//       toDate,
-//       page = 1,
-//       limit = 10,
-//     } = req.query;
-
-//     const filter = {};
-
-//     /*
-//     |--------------------------------------------------------------------------
-//     | Status Filters
-//     |--------------------------------------------------------------------------
-//     */
-
-//     if (status) {
-//       filter.status = status.toUpperCase();
-//     }
-
-//     if (complaintType) {
-//       filter.complaintType = complaintType.toUpperCase();
-//     }
-
-//     if (priority) {
-//       filter.priority = priority.toUpperCase();
-//     }
-
-//     /*
-//     |--------------------------------------------------------------------------
-//     | Relation Filters
-//     |--------------------------------------------------------------------------
-//     */
-
-//     if (customerId && mongoose.Types.ObjectId.isValid(customerId)) {
-//       filter.customerId = customerId;
-//     }
-
-//     if (technicianId && mongoose.Types.ObjectId.isValid(technicianId)) {
-//       filter.technicianId = technicianId;
-//     }
-
-//     if (dealerId && mongoose.Types.ObjectId.isValid(dealerId)) {
-//       filter.dealerId = dealerId;
-//     }
-
-//     /*
-//     |--------------------------------------------------------------------------
-//     | Date Filters
-//     |--------------------------------------------------------------------------
-//     */
-
-//     if (fromDate || toDate) {
-//       filter.complaintDateTime = {};
-
-//       if (fromDate) {
-//         const startDate = new Date(fromDate);
-
-//         if (isNaN(startDate.getTime())) {
-//           return res.status(400).json({
-//             success: false,
-//             message: "Invalid fromDate",
-//           });
-//         }
-
-//         startDate.setHours(0, 0, 0, 0);
-
-//         filter.complaintDateTime.$gte = startDate;
-//       }
-
-//       if (toDate) {
-//         const endDate = new Date(toDate);
-
-//         if (isNaN(endDate.getTime())) {
-//           return res.status(400).json({
-//             success: false,
-//             message: "Invalid toDate",
-//           });
-//         }
-
-//         endDate.setHours(23, 59, 59, 999);
-
-//         filter.complaintDateTime.$lte = endDate;
-//       }
-//     }
-
-//     /*
-//     |--------------------------------------------------------------------------
-//     | Search
-//     |--------------------------------------------------------------------------
-//     */
-
-//     if (search.trim()) {
-//       const regex = new RegExp(search.trim(), "i");
-
-//       filter.$or = [
-//         {
-//           complaintNumber: regex,
-//         },
-//         {
-//           customerName: regex,
-//         },
-//         {
-//           phone: regex,
-//         },
-//         {
-//           alternatePhone: regex,
-//         },
-//         {
-//           brand: regex,
-//         },
-//         {
-//           productName: regex,
-//         },
-//         {
-//           productType: regex,
-//         },
-//         {
-//           faultReported: regex,
-//         },
-//         {
-//           category: regex,
-//         },
-//       ];
-//     }
-
-//     /*
-//     |--------------------------------------------------------------------------
-//     | Pagination
-//     |--------------------------------------------------------------------------
-//     */
-
-//     const pageNumber = Math.max(Number(page), 1);
-
-//     const limitNumber = Math.min(Math.max(Number(limit), 1), 100);
-
-//     const skip = (pageNumber - 1) * limitNumber;
-
-//     /*
-//     |--------------------------------------------------------------------------
-//     | Query
-//     |--------------------------------------------------------------------------
-//     */
-
-//     const [complaints, total] = await Promise.all([
-//       Complaint.find(filter)
-
-//         .populate(
-//           "customerId",
-//           "customerCode name phone alternatePhone email address",
-//         )
-//         .populate("categoryId", "product_name category description")
-//         .populate("allocatedDealerId", "technicianName technicianFirmName")
-
-//         .populate("parentComplaintId", "complaintNumber complaintType status")
-
-//         .populate("brandId", "brandName")
-//         // .populate("productId","product_name category description")
-//         .populate("productTypeId", "product_id product_code product_type")
-
-//         .sort({
-//           complaintDateTime: -1,
-//         })
-
-//         .skip(skip)
-
-//         .limit(limitNumber)
-
-//         .lean(),
-
-//       Complaint.countDocuments(filter),
-//     ]);
-
-//     /*
-//     |--------------------------------------------------------------------------
-//     | Add Warranty Status
-//     |--------------------------------------------------------------------------
-//     */
-
-//     const complaintsWithWarranty = complaints.map((complaint) => ({
-//       ...complaint,
-
-//       isWarranty: getIsWarranty(complaint),
-//     }));
-
-//     return res.status(200).json({
-//       success: true,
-
-//       data: complaintsWithWarranty,
-
-//       pagination: {
-//         total,
-
-//         page: pageNumber,
-
-//         limit: limitNumber,
-
-//         totalPages: Math.ceil(total / limitNumber),
-//       },
-//     });
-//   } catch (error) {
-//     console.error("Get complaints error:", error);
-
-//     return res.status(500).json({
-//       success: false,
-
-//       message: "Failed to fetch complaints",
-
-//       error: error.message,
-//     });
-//   }
-// };
 
 export const getComplaints = async (req, res) => {
   try {

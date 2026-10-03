@@ -11,7 +11,7 @@ import {
 } from "../../dealerLedger/services/dealerBilling.service.js";
 import Dealer from "../../dealers/models/dealer.model.js";
 import DealerLedger from "../../dealerLedger/model/dealerLedger.model.js";
-
+import Reason from "../../reason/models/reason.model.js"
 /*
 |--------------------------------------------------------------------------
 | Get Appointment Complaints
@@ -1904,21 +1904,145 @@ export const getPendingFollowUpStatuses = async (req, res) => {
   }
 };
 
+// export const saveComplaintFollowUp = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+
+//     const {
+//       followUpStatus,
+//       followUpDate,
+//       remark,
+//       sendToDealer = false,
+//     } = req.body;
+
+//     if (!followUpStatus) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Follow-up status is required",
+//       });
+//     }
+
+//     if (!followUpDate) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Follow-up date is required",
+//       });
+//     }
+
+//     if (!remark?.trim()) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Remark is required",
+//       });
+//     }
+
+//     const allowedStatuses = [
+//       "PENDING_ON_CALL",
+//       "PENDING_ON_VISIT",
+//     ];
+
+//     console.log("jfdkjhk",followUpStatus)
+
+//     if (!allowedStatuses.includes(followUpStatus)) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid pending follow-up status",
+//       });
+//     }
+
+//     const complaint = await Complaint.findById(id);
+
+//     if (!complaint) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Complaint not found",
+//       });
+//     }
+
+//     const now = new Date();
+
+//     /*
+//     |--------------------------------------------------------------------------
+//     | Latest Follow-up
+//     |--------------------------------------------------------------------------
+//     */
+
+//     complaint.customerFollowUpStatus = followUpStatus;
+//     complaint.customerFollowUpDate = new Date(followUpDate);
+//     complaint.latestRemark = remark.trim();
+
+//     /*
+//     |--------------------------------------------------------------------------
+//     | History
+//     |--------------------------------------------------------------------------
+//     */
+
+//     complaint.followUpRemarks.push({
+//       followUpStatus,
+//       followUpDate: new Date(followUpDate),
+//       remark: remark.trim(),
+
+//       sentToDealer: Boolean(sendToDealer),
+
+//       createdBy: req.user?._id || req.user?.id,
+
+//       createdAt: now,
+//       updatedAt: now,
+//     });
+
+//     await complaint.save();
+
+//     return res.status(200).json({
+//       success: true,
+
+//       message: sendToDealer
+//         ? "Remark saved and sent to dealer successfully"
+//         : "Remark saved successfully",
+
+//       data: complaint,
+//     });
+//   } catch (error) {
+//     console.error(
+//       "Save complaint follow-up error:",
+//       error,
+//     );
+
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to save complaint follow-up",
+//       error: error.message,
+//     });
+//   }
+// };
+
 export const saveComplaintFollowUp = async (req, res) => {
   try {
     const { id } = req.params;
 
     const {
-      followUpStatus,
+      followUpReasonId,
       followUpDate,
       remark,
       sendToDealer = false,
     } = req.body;
 
-    if (!followUpStatus) {
+    /*
+    |--------------------------------------------------------------------------
+    | Validation
+    |--------------------------------------------------------------------------
+    */
+
+    if (!followUpReasonId) {
       return res.status(400).json({
         success: false,
-        message: "Follow-up status is required",
+        message: "Follow-up reason is required",
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(followUpReasonId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid follow-up reason",
       });
     }
 
@@ -1936,17 +2060,46 @@ export const saveComplaintFollowUp = async (req, res) => {
       });
     }
 
-    const allowedStatuses = [
-      "PENDING_ON_CALL",
-      "PENDING_ON_VISIT",
-    ];
+    /*
+    |--------------------------------------------------------------------------
+    | Find Reason
+    |--------------------------------------------------------------------------
+    */
 
-    if (!allowedStatuses.includes(followUpStatus)) {
-      return res.status(400).json({
+    const reason = await Reason.findById(
+      followUpReasonId,
+    ).lean();
+
+    if (!reason) {
+      return res.status(404).json({
         success: false,
-        message: "Invalid pending follow-up status",
+        message: "Follow-up reason not found",
       });
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Only pending reasons allowed
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+      !reason.reasonType
+        ?.toLowerCase()
+        .includes("pending")
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Selected reason is not a pending reason",
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Complaint
+    |--------------------------------------------------------------------------
+    */
 
     const complaint = await Complaint.findById(id);
 
@@ -1958,6 +2111,17 @@ export const saveComplaintFollowUp = async (req, res) => {
     }
 
     const now = new Date();
+    const parsedFollowUpDate =
+      new Date(followUpDate);
+
+    if (
+      Number.isNaN(parsedFollowUpDate.getTime())
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid follow-up date",
+      });
+    }
 
     /*
     |--------------------------------------------------------------------------
@@ -1965,9 +2129,17 @@ export const saveComplaintFollowUp = async (req, res) => {
     |--------------------------------------------------------------------------
     */
 
-    complaint.customerFollowUpStatus = followUpStatus;
-    complaint.customerFollowUpDate = new Date(followUpDate);
-    complaint.latestRemark = remark.trim();
+    complaint.customerFollowUpReasonId =
+      reason._id;
+
+    complaint.customerFollowUpStatus =
+      reason.reasonName;
+
+    complaint.customerFollowUpDate =
+      parsedFollowUpDate;
+
+    complaint.latestRemark =
+      remark.trim();
 
     /*
     |--------------------------------------------------------------------------
@@ -1975,14 +2147,26 @@ export const saveComplaintFollowUp = async (req, res) => {
     |--------------------------------------------------------------------------
     */
 
+    if (!Array.isArray(complaint.followUpRemarks)) {
+  complaint.followUpRemarks = [];
+}
+
+
     complaint.followUpRemarks.push({
-      followUpStatus,
-      followUpDate: new Date(followUpDate),
+      followUpReasonId: reason._id,
+
+      followUpStatus: reason.reasonName,
+
+      reasonType: reason.reasonType,
+
+      followUpDate: parsedFollowUpDate,
+
       remark: remark.trim(),
 
       sentToDealer: Boolean(sendToDealer),
 
-      createdBy: req.user?._id || req.user?.id,
+      createdBy:
+        req.user?._id || req.user?.id,
 
       createdAt: now,
       updatedAt: now,
@@ -2007,11 +2191,13 @@ export const saveComplaintFollowUp = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "Failed to save complaint follow-up",
+      message:
+        "Failed to save complaint follow-up",
       error: error.message,
     });
   }
 };
+
 
 export const getComplaintFollowUpRemarks = async (req, res) => {
   try {

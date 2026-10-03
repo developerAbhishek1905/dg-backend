@@ -341,16 +341,16 @@ export const createDealer = async (req, res) => {
        CHECK USER DUPLICATE
     =============================== */
 
-    const existingUser = await User.findOne({
-      email: email.toLowerCase(),
-    });
+    // const existingUser = await User.findOne({
+    //   email: email.toLowerCase(),
+    // });
 
-    if (existingUser) {
-      return res.status(409).json({
-        success: false,
-        message: "User with this email already exists",
-      });
-    }
+    // if (existingUser) {
+    //   return res.status(409).json({
+    //     success: false,
+    //     message: "User with this email already exists",
+    //   });
+    // }
     /* ===============================
        NESTED DATA
     =============================== */
@@ -368,6 +368,56 @@ export const createDealer = async (req, res) => {
 
     const individualCapacities = parseJSON(req.body.individualCapacities, []);
     const additionalInfo = parseJSON(req.body.additionalInfo, []);
+
+    /* =====================================================
+   CHECK MOBILE / ALTERNATIVE NUMBER IN SAME CITY
+===================================================== */
+
+    const cityId = businessAddress?.cityId;
+
+    if (!cityId) {
+      return res.status(400).json({
+        success: false,
+        message: "Business city is required",
+      });
+    }
+
+    const normalizedMobile = mobileNumber?.trim();
+    const normalizedAlternative = alternativeNumber?.trim();
+
+    const phoneConditions = [];
+
+    // Check mobile against BOTH mobileNumber and alternativeNumber
+    if (normalizedMobile) {
+      phoneConditions.push(
+        { mobileNumber: normalizedMobile },
+        { alternativeNumber: normalizedMobile },
+      );
+    }
+
+    // Check alternative against BOTH mobileNumber and alternativeNumber
+    if (normalizedAlternative) {
+      phoneConditions.push(
+        { mobileNumber: normalizedAlternative },
+        { alternativeNumber: normalizedAlternative },
+      );
+    }
+
+    if (phoneConditions.length > 0) {
+      const existingDealer = await Dealer.findOne({
+        "businessAddress.cityId": Number(cityId),
+        $or: phoneConditions,
+      });
+
+      if (existingDealer) {
+        return res.status(409).json({
+          success: false,
+          message:
+            "This mobile/alternative number is already registered with another dealer in the same city.",
+        });
+      }
+    }
+
     /* ===============================
        DOCUMENTS
     =============================== */
@@ -796,17 +846,13 @@ export const getDealers = async (req, res) => {
         status: getLeaveStatus(leave),
       }));
 
-      const isOnLeave = leaves.some(
-        (leave) => leave.status === "ACTIVE",
-      );
+      const isOnLeave = leaves.some((leave) => leave.status === "ACTIVE");
 
       return {
         ...dealer,
         leaves,
         isOnLeave,
-        effectiveStatus: isOnLeave
-          ? "LEAVE"
-          : dealer.status,
+        effectiveStatus: isOnLeave ? "LEAVE" : dealer.status,
       };
     });
 
@@ -1060,7 +1106,7 @@ export const updateDealer = async (req, res) => {
     //   if (existingEmail) {
     //     return res.status(409).json({
     //       success: false,
-    //       message: "Dealer with this email already exists",
+    //       message: "Dealer with this token",
     //     });
     //   }
     // }
@@ -1542,7 +1588,6 @@ export const deleteDealer = async (req, res) => {
     });
   }
 };
-
 
 /* =========================================================
    UPDATE STATUS
