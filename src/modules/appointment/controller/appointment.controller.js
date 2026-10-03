@@ -1448,6 +1448,8 @@ const getComplaintsByStatuses = async ({
   statuses,
   label,
   reasonField,
+    sortBy = "updatedAt",
+  sortOrder = -1,
 }) => {
   try {
     const {
@@ -1585,9 +1587,13 @@ const getComplaintsByStatuses = async ({
           "customerId",
           "customerCode name phone alternatePhone email",
         )
+        // .sort({
+        //   updatedAt: -1,
+        // })
         .sort({
-          updatedAt: -1,
-        })
+  [sortBy]: sortOrder,
+  updatedAt: -1,
+})
         .skip(skip)
         .limit(limitNumber)
         .lean(),
@@ -1605,6 +1611,7 @@ const getComplaintsByStatuses = async ({
       | Status Wise Count
       |--------------------------------------------------------------------------
       */
+     
 
       Complaint.aggregate([
         {
@@ -1737,6 +1744,22 @@ export const getCancelledComplaints = async (req, res) => {
   });
 };
 
+// export const getPendingComplaints = async (req, res) => {
+//   return getComplaintsByStatuses({
+//     req,
+//     res,
+
+//     statuses: [
+//       "PENDING_ON_CALL",
+//       "PENDING_ON_VISIT",
+//     ],
+
+//     label: "pending",
+
+//     reasonField: "pendingReason",
+//   });
+// };
+
 export const getPendingComplaints = async (req, res) => {
   return getComplaintsByStatuses({
     req,
@@ -1750,6 +1773,10 @@ export const getPendingComplaints = async (req, res) => {
     label: "pending",
 
     reasonField: "pendingReason",
+
+    // Earliest customer follow-up first
+    sortBy: "customerFollowUpDate",
+    sortOrder: 1,
   });
 };
 
@@ -2140,6 +2167,9 @@ export const saveComplaintFollowUp = async (req, res) => {
 
     complaint.latestRemark =
       remark.trim();
+
+
+complaint.lastFollowUpUpdatedAt = now;
 
     /*
     |--------------------------------------------------------------------------

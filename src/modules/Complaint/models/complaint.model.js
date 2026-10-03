@@ -602,6 +602,11 @@ const complaintSchema = new mongoose.Schema(
       default: [],
     },
 
+    lastFollowUpUpdatedAt: {
+  type: Date,
+  default: null,
+},
+
     /*
     |--------------------------------------------------------------------------
     | Closure
