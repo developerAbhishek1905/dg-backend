@@ -149,3 +149,185 @@ export const getRatings = async (req, res) => {
     });
   }
 };
+
+export const createRatingReview = async (req, res) => {
+  const session = await mongoose.startSession();
+
+  try {
+    const { complaintId, rating, review = "" } = req.body;
+
+    if (!complaintId) {
+      return res.status(400).json({
+        success: false,
+        message: "Complaint ID is required",
+      });
+    }
+
+    const numericRating = Number(rating);
+
+    if (
+      !Number.isInteger(numericRating) ||
+      numericRating < 1 ||
+      numericRating > 5
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Rating must be between 1 and 5",
+      });
+    }
+
+    const complaint = await Complaint.findById(complaintId);
+
+    if (!complaint) {
+      return res.status(404).json({
+        success: false,
+        message: "Complaint not found",
+      });
+    }
+
+    if (!complaint.allocatedDealerId) {
+      return res.status(400).json({
+        success: false,
+        message: "No dealer assigned to this complaint",
+      });
+    }
+
+    // Prevent duplicate review
+    const existingReview = await RatingReview.findOne({
+      complaintId: complaint._id,
+    });
+
+    if (existingReview) {
+      return res.status(409).json({
+        success: false,
+        message: "Review already submitted for this complaint",
+      });
+    }
+
+    session.startTransaction();
+
+    const [ratingReview] = await RatingReview.create(
+      [
+        {
+          complaintId: complaint._id,
+          complaintNumber: complaint.complaintNumber,
+
+          dealerId: complaint.allocatedDealerId,
+
+          customerId: complaint.customerId,
+
+          rating: numericRating,
+
+          review: review?.trim() || "",
+
+          createdBy: req.user?._id || null,
+        },
+      ],
+      { session },
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Calculate dealer rating from actual RatingReview records
+    |--------------------------------------------------------------------------
+    */
+
+    const ratingStats = await RatingReview.aggregate([
+      {
+        $match: {
+          dealerId: new mongoose.Types.ObjectId(
+            complaint.allocatedDealerId,
+          ),
+        },
+      },
+      {
+        $group: {
+          _id: "$dealerId",
+          averageRating: {
+            $avg: "$rating",
+          },
+          ratingCount: {
+            $sum: 1,
+          },
+        },
+      },
+    ]).session(session);
+
+    const averageRating =
+      ratingStats.length > 0
+        ? Number(ratingStats[0].averageRating.toFixed(2))
+        : 0;
+
+    const ratingCount =
+      ratingStats.length > 0
+        ? ratingStats[0].ratingCount
+        : 0;
+
+    /*
+    |--------------------------------------------------------------------------
+    | Update Dealer
+    |--------------------------------------------------------------------------
+    */
+
+    await Dealer.findByIdAndUpdate(
+      complaint.allocatedDealerId,
+      {
+        $set: {
+          rating: averageRating,
+          ratingCount,
+        },
+      },
+      {
+        session,
+      },
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Store rating on complaint
+    |--------------------------------------------------------------------------
+    */
+
+    await Complaint.findByIdAndUpdate(
+      complaint._id,
+      {
+        $set: {
+          rating: numericRating,
+        },
+      },
+      {
+        session,
+      },
+    );
+
+    await session.commitTransaction();
+
+    return res.status(201).json({
+      success: true,
+      message: "Rating submitted successfully",
+      data: {
+        review: ratingReview,
+        dealerRating: averageRating,
+        dealerRatingCount: ratingCount,
+      },
+    });
+  } catch (error) {
+    await session.abortTransaction();
+
+    console.error("Create rating review error:", error);
+
+    if (error?.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: "Review already submitted for this complaint",
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to submit rating",
+    });
+  } finally {
+    await session.endSession();
+  }
+};

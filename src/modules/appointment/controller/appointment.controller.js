@@ -2690,7 +2690,7 @@ export const approveClosure = async (req, res) => {
 
     complaint.closureApproved = true;
 
-    complaint.closureRemark = remark.trim();
+    complaint.closureApprovalRemark = remark.trim();
 
     complaint.closureApprovedAt = now;
 

@@ -64,12 +64,12 @@ export const createUser = async (req, res) => {
       email: normalizedEmail,
     });
 
-    if (existingUser) {
-      return res.status(409).json({
-        success: false,
-        message: "User with this email already exists",
-      });
-    }
+    // if (existingUser) {
+    //   return res.status(409).json({
+    //     success: false,
+    //     message: "User with this email already exists",
+    //   });
+    // }
 
     const role = await Role.findById(roleId);
 

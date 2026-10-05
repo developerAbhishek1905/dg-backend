@@ -9,6 +9,7 @@ import { allocateDealerForComplaint } from "../../allocation/services/allocateDe
 import { createComplaintActivity } from "../services/complaintActivity.service.js";
 import { escapeRegex } from "../../../helper/escapeRegex.js";
 import { sendComplaintAllocationNotifications } from "../../../services/complaintWhatsAppService.js";
+import DailyCapacityUsage from "../../allocation/model/dailyCapacityUsage.model.js";
 
 /*
 |--------------------------------------------------------------------------
@@ -51,11 +52,52 @@ const generateComplaintNumber = async () => {
       $lt: endOfDay,
     },
   });
-  const sequence = String(count + 1).padStart(4, "0");
+  const sequence = String(count + 1).padStart(3, "0");
 
   return `CMP${datePart}/${sequence}`;
 };
 
+const releaseDealerCapacity = async ({
+  dealerId,
+  allocationId,
+  capacityRuleId,
+  productId,
+  cityId,
+  date,
+}) => {
+  const usageDate = new Date(date);
+
+  const dateKey = usageDate.toISOString().slice(0, 10);
+
+  const usage = await DailyCapacityUsage.findOne({
+    allocationId,
+    dealerId,
+    date: dateKey,
+    cityId: Number(cityId),
+    capacityRuleId,
+  });
+
+  if (!usage) {
+    return;
+  }
+
+  /*
+      |--------------------------------------------------------------------------
+      | COMBINED / INDIVIDUAL handling
+      |--------------------------------------------------------------------------
+      |
+      | If your capacity engine stores productId:
+      | INDIVIDUAL -> productId
+      | COMBINED   -> null
+      |
+      | then query should use the same productId strategy that allocation uses.
+      |--------------------------------------------------------------------------
+      */
+
+  usage.usedCapacity = Math.max(0, Number(usage.usedCapacity || 0) - 1);
+
+  await usage.save();
+};
 /*
 |--------------------------------------------------------------------------
 | Create Complaint
@@ -266,8 +308,10 @@ export const createComplaint = async (req, res) => {
       const sequence = String(childCount + 1).padStart(2, "0");
 
       // CMP031026/0001 -> 031026/0001
-      const parentNumberWithoutPrefix =
-        parentComplaint.complaintNumber.replace(/^CMP/, "");
+      const parentNumberWithoutPrefix = parentComplaint.complaintNumber.replace(
+        /^CMP/,
+        "",
+      );
 
       complaintNumber = `REP${parentNumberWithoutPrefix}/${sequence}`;
     } else {
@@ -1093,6 +1137,30 @@ export const updateComplaint = async (req, res) => {
       "cancellationReason",
     ];
 
+    const oldAllocation = {
+      dealerId: complaint.allocatedDealerId
+        ? complaint.allocatedDealerId.toString()
+        : null,
+
+      allocationId: complaint.allocationId
+        ? complaint.allocationId.toString()
+        : null,
+
+      allocationRuleId: complaint.allocationRuleId
+        ? complaint.allocationRuleId.toString()
+        : null,
+
+      productId: complaint.productId,
+
+      cityId: complaint.address?.cityId,
+
+      categoryId: complaint.categoryId ? complaint.categoryId.toString() : null,
+
+      category: complaint.category,
+
+      date: complaint.allocatedAt || complaint.complaintDateTime,
+    };
+
     allowedFields.forEach((field) => {
       if (req.body[field] !== undefined) {
         complaint[field] = req.body[field];
@@ -1239,6 +1307,343 @@ export const updateComplaint = async (req, res) => {
 
     if (req.body.status !== "CANCELLED" && req.body.status !== undefined) {
       complaint.cancelledAt = null;
+    }
+
+    const newCityId = complaint.address?.cityId;
+    const newProductId = complaint.productId;
+
+    const newCategoryId = complaint.categoryId
+      ? complaint.categoryId.toString()
+      : null;
+
+    const newCategory = complaint.category;
+
+    const allocationDataChanged =
+      Number(oldAllocation.cityId) !== Number(newCityId) ||
+      Number(oldAllocation.productId) !== Number(newProductId) ||
+      oldAllocation.categoryId !== newCategoryId ||
+      oldAllocation.category !== newCategory;
+
+    /*
+    |--------------------------------------------------------------------------
+    | Dealer Reallocation
+    |--------------------------------------------------------------------------
+    */
+
+    if (allocationDataChanged && complaint.complaintType !== "WARRANTY") {
+      const newAllocation = await allocateDealerForComplaint({
+        cityId: Number(newCityId),
+        productId: Number(newProductId),
+        categoryId: newCategoryId,
+        category: newCategory,
+      });
+
+      // if (!newAllocation?.dealerId) {
+      //   return res.status(409).json({
+      //     success: false,
+      //     message:
+      //       "Complaint updated data does not have an available dealer with capacity.",
+      //   });
+      // }
+
+      /*
+|--------------------------------------------------------------------------
+| Dealer Reallocation
+|--------------------------------------------------------------------------
+*/
+
+      if (allocationDataChanged && complaint.complaintType !== "WARRANTY") {
+        const oldDealerId = oldAllocation.dealerId;
+
+        /*
+  |--------------------------------------------------------------------------
+  | Try New Allocation
+  |--------------------------------------------------------------------------
+  */
+
+        const newAllocation = await allocateDealerForComplaint({
+          cityId: Number(newCityId),
+          productId: Number(newProductId),
+          categoryId: newCategoryId,
+          category: newCategory,
+        });
+
+        /*
+  |--------------------------------------------------------------------------
+  | CASE 1: Dealer Found
+  |--------------------------------------------------------------------------
+  */
+
+        if (newAllocation?.dealerId) {
+          const newDealerId = newAllocation.dealerId.toString();
+
+          const dealerChanged = oldDealerId !== newDealerId;
+
+          /*
+    |--------------------------------------------------------------------------
+    | Release OLD Dealer Capacity
+    |--------------------------------------------------------------------------
+    */
+
+          if (
+            dealerChanged &&
+            oldAllocation.dealerId &&
+            oldAllocation.allocationId &&
+            oldAllocation.allocationRuleId
+          ) {
+            await releaseDealerCapacity({
+              dealerId: oldAllocation.dealerId,
+              allocationId: oldAllocation.allocationId,
+              capacityRuleId: oldAllocation.allocationRuleId,
+              productId: oldAllocation.productId,
+              cityId: oldAllocation.cityId,
+              date: oldAllocation.date,
+            });
+          }
+
+          /*
+    |--------------------------------------------------------------------------
+    | Assign New Dealer
+    |--------------------------------------------------------------------------
+    */
+
+          complaint.allocatedDealerId = newAllocation.dealerId;
+
+          complaint.allocationId = newAllocation.allocationId;
+
+          complaint.allocationRuleId = newAllocation.capacityRuleId;
+
+          complaint.allocationType = "AUTO";
+
+          complaint.allocatedAt = new Date();
+
+          /*
+    |--------------------------------------------------------------------------
+    | Status
+    |--------------------------------------------------------------------------
+    */
+
+          if (
+            complaint.status === "REGISTERED" ||
+            complaint.status === "ALLOCATED"
+          ) {
+            complaint.status = "ALLOCATED";
+          }
+        } else {
+
+        /*
+  |--------------------------------------------------------------------------
+  | CASE 2: No Dealer Available
+  |--------------------------------------------------------------------------
+  */
+          /*
+    |--------------------------------------------------------------------------
+    | If complaint already had dealer, release its capacity
+    |--------------------------------------------------------------------------
+    */
+
+          if (
+            oldAllocation.dealerId &&
+            oldAllocation.allocationId &&
+            oldAllocation.allocationRuleId
+          ) {
+            await releaseDealerCapacity({
+              dealerId: oldAllocation.dealerId,
+              allocationId: oldAllocation.allocationId,
+              capacityRuleId: oldAllocation.allocationRuleId,
+              productId: oldAllocation.productId,
+              cityId: oldAllocation.cityId,
+              date: oldAllocation.date,
+            });
+          }
+
+          /*
+    |--------------------------------------------------------------------------
+    | Remove Allocation
+    |--------------------------------------------------------------------------
+    */
+
+          complaint.allocatedDealerId = null;
+          complaint.allocationId = null;
+          complaint.allocationRuleId = null;
+          complaint.allocationType = "NONE";
+          complaint.allocatedAt = null;
+
+          /*
+    |--------------------------------------------------------------------------
+    | Keep Complaint Registered
+    |--------------------------------------------------------------------------
+    */
+
+          if (
+            complaint.status === "REGISTERED" ||
+            complaint.status === "ALLOCATED"
+          ) {
+            complaint.status = "REGISTERED";
+          }
+        }
+      }
+
+      // const oldDealerId = oldAllocation.dealerId;
+
+      // const newDealerId = newAllocation.dealerId.toString();
+
+      // const dealerChanged = oldDealerId !== newDealerId;
+
+      const oldDealerId = oldAllocation.dealerId;
+
+      /*
+|--------------------------------------------------------------------------
+| No Dealer Available
+|--------------------------------------------------------------------------
+*/
+
+      if (!newAllocation?.dealerId) {
+        /*
+  |--------------------------------------------------------------------------
+  | Old dealer tha to uski capacity release karo
+  |--------------------------------------------------------------------------
+  */
+
+        if (
+          oldAllocation.dealerId &&
+          oldAllocation.allocationId &&
+          oldAllocation.allocationRuleId
+        ) {
+          await releaseDealerCapacity({
+            dealerId: oldAllocation.dealerId,
+            allocationId: oldAllocation.allocationId,
+            capacityRuleId: oldAllocation.allocationRuleId,
+            productId: oldAllocation.productId,
+            cityId: oldAllocation.cityId,
+            date: oldAllocation.date,
+          });
+        }
+
+        /*
+  |--------------------------------------------------------------------------
+  | Complaint se allocation clear karo
+  |--------------------------------------------------------------------------
+  */
+
+        complaint.allocatedDealerId = null;
+        complaint.allocationId = null;
+        complaint.allocationRuleId = null;
+        complaint.allocationType = "NONE";
+        complaint.allocatedAt = null;
+
+        /*
+  |--------------------------------------------------------------------------
+  | Back to REGISTERED
+  |--------------------------------------------------------------------------
+  */
+
+        if (
+          complaint.status === "REGISTERED" ||
+          complaint.status === "ALLOCATED"
+        ) {
+          complaint.status = "REGISTERED";
+        }
+      } else {
+
+      /*
+|--------------------------------------------------------------------------
+| Dealer Available
+|--------------------------------------------------------------------------
+*/
+        const newDealerId = newAllocation.dealerId.toString();
+
+        const dealerChanged = oldDealerId !== newDealerId;
+
+        /*
+  |--------------------------------------------------------------------------
+  | Dealer Changed
+  |--------------------------------------------------------------------------
+  */
+
+        if (
+          dealerChanged &&
+          oldAllocation.dealerId &&
+          oldAllocation.allocationId &&
+          oldAllocation.allocationRuleId
+        ) {
+          await releaseDealerCapacity({
+            dealerId: oldAllocation.dealerId,
+            allocationId: oldAllocation.allocationId,
+            capacityRuleId: oldAllocation.allocationRuleId,
+            productId: oldAllocation.productId,
+            cityId: oldAllocation.cityId,
+            date: oldAllocation.date,
+          });
+        }
+
+        /*
+  |--------------------------------------------------------------------------
+  | Update allocation
+  |--------------------------------------------------------------------------
+  */
+
+        complaint.allocatedDealerId = newAllocation.dealerId;
+
+        complaint.allocationId = newAllocation.allocationId;
+
+        complaint.allocationRuleId = newAllocation.capacityRuleId;
+
+        complaint.allocationType = "AUTO";
+        complaint.allocatedAt = new Date();
+
+        if (
+          complaint.status === "REGISTERED" ||
+          complaint.status === "ALLOCATED"
+        ) {
+          complaint.status = "ALLOCATED";
+        }
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | Release old dealer capacity
+      |--------------------------------------------------------------------------
+      */
+
+      // if (
+      //   dealerChanged &&
+      //   oldAllocation.dealerId &&
+      //   oldAllocation.allocationId &&
+      //   oldAllocation.allocationRuleId
+      // ) {
+      //   await releaseDealerCapacity({
+      //     dealerId: oldAllocation.dealerId,
+      //     allocationId: oldAllocation.allocationId,
+      //     capacityRuleId: oldAllocation.allocationRuleId,
+      //     productId: oldAllocation.productId,
+      //     cityId: oldAllocation.cityId,
+      //     date: oldAllocation.date,
+      //   });
+      // }
+
+      /*
+      |--------------------------------------------------------------------------
+      | Update Complaint Allocation
+      |--------------------------------------------------------------------------
+      */
+
+      // complaint.allocatedDealerId = newAllocation.dealerId;
+
+      // complaint.allocationId = newAllocation.allocationId;
+
+      // complaint.allocationRuleId = newAllocation.capacityRuleId;
+
+      // complaint.allocationType = "AUTO";
+
+      // complaint.allocatedAt = new Date();
+
+      // if (
+      //   complaint.status === "REGISTERED" ||
+      //   complaint.status === "ALLOCATED"
+      // ) {
+      //   complaint.status = "ALLOCATED";
+      // }
     }
 
     await complaint.save();
