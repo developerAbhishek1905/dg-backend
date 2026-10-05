@@ -11,6 +11,9 @@ import {
   getPendingFollowUpStatuses,
   saveComplaintFollowUp,
   getComplaintFollowUpRemarks,
+  saveCancellationRemark,
+  cancelComplaint,
+  approveClosure
 } from "../controller/appointment.controller.js";
 import { protect } from "../../auth/middleware/auth.middleware.js";
 
@@ -38,4 +41,24 @@ router.get(
   protect,
   getComplaintFollowUpRemarks,
 );
+
+router.post(
+  "/complaints/:id/cancellation-remark",
+  protect,
+  saveCancellationRemark,
+  
+);
+
+router.patch(
+  "/complaints/:id/cancel",
+  protect,
+  cancelComplaint,
+);
+
+router.patch(
+  "/complaints/:id/approve-closure",
+  protect,
+  approveClosure,
+);
+
 export default router;

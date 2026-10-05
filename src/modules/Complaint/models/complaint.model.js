@@ -164,6 +164,51 @@ const followUpRemarkSchema = new mongoose.Schema(
     _id: true,
   },
 );
+
+const cancellationRemarkSchema = new mongoose.Schema(
+  {
+    reasonId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Reason",
+      default: null,
+    },
+
+    reason: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    followUpDate: {
+      type: Date,
+      required: true,
+    },
+
+    remark: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+
+    createdAt: {
+      type: Date,
+      default: Date.now,
+    },
+
+    updatedAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  {
+    _id: true,
+  },
+);
 /*
 |--------------------------------------------------------------------------
 | Complaint Schema
@@ -604,6 +649,49 @@ const complaintSchema = new mongoose.Schema(
 
     lastFollowUpUpdatedAt: {
   type: Date,
+  default: null,
+},
+
+cancellationFollowUpDate: {
+  type: Date,
+  default: null,
+},
+
+cancellationLatestRemark: {
+  type: String,
+  trim: true,
+  default: "",
+},
+
+cancellationLastUpdatedAt: {
+  type: Date,
+  default: null,
+},
+
+cancellationRemarks: {
+  type: [cancellationRemarkSchema],
+  default: [],
+},
+
+closureApproved: {
+  type: Boolean,
+  default: false,
+},
+
+closureApprovalRemark: {
+  type: String,
+  trim: true,
+  default: "",
+},
+
+closureApprovedAt: {
+  type: Date,
+  default: null,
+},
+
+closureApprovedBy: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "User",
   default: null,
 },
 

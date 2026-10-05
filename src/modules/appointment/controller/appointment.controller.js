@@ -11,7 +11,7 @@ import {
 } from "../../dealerLedger/services/dealerBilling.service.js";
 import Dealer from "../../dealers/models/dealer.model.js";
 import DealerLedger from "../../dealerLedger/model/dealerLedger.model.js";
-import Reason from "../../reason/models/reason.model.js"
+import Reason from "../../reason/models/reason.model.js";
 /*
 |--------------------------------------------------------------------------
 | Get Appointment Complaints
@@ -1441,14 +1441,13 @@ export const getComplaintActivityByComplaintId = async (req, res) => {
 //   }
 // };
 
-
 const getComplaintsByStatuses = async ({
   req,
   res,
   statuses,
   label,
   reasonField,
-    sortBy = "updatedAt",
+  sortBy = "updatedAt",
   sortOrder = -1,
 }) => {
   try {
@@ -1462,10 +1461,7 @@ const getComplaintsByStatuses = async ({
     } = req.query;
 
     const pageNumber = Math.max(Number(page) || 1, 1);
-    const limitNumber = Math.min(
-      Math.max(Number(limit) || 10, 1),
-      100,
-    );
+    const limitNumber = Math.min(Math.max(Number(limit) || 10, 1), 100);
 
     const skip = (pageNumber - 1) * limitNumber;
 
@@ -1566,102 +1562,97 @@ const getComplaintsByStatuses = async ({
     |--------------------------------------------------------------------------
     */
 
-    const [
-      complaints,
-      total,
-      statusAggregation,
-      reasonAggregation,
-    ] = await Promise.all([
-      /*
+    const [complaints, total, statusAggregation, reasonAggregation] =
+      await Promise.all([
+        /*
       |--------------------------------------------------------------------------
       | Complaints
       |--------------------------------------------------------------------------
       */
 
-      Complaint.find(filter)
-        .populate(
-          "allocatedDealerId",
-          "technicianCode technicianFirmName technicianName mobileNumber status",
-        )
-        .populate(
-          "customerId",
-          "customerCode name phone alternatePhone email",
-        )
-        // .sort({
-        //   updatedAt: -1,
-        // })
-        .sort({
-  [sortBy]: sortOrder,
-  updatedAt: -1,
-})
-        .skip(skip)
-        .limit(limitNumber)
-        .lean(),
+        Complaint.find(filter)
+          .populate(
+            "allocatedDealerId",
+            "technicianCode technicianFirmName technicianName mobileNumber status",
+          )
+          .populate(
+            "customerId",
+            "customerCode name phone alternatePhone email",
+          )
+          // .sort({
+          //   updatedAt: -1,
+          // })
+          .sort({
+            [sortBy]: sortOrder,
+            updatedAt: -1,
+          })
+          .skip(skip)
+          .limit(limitNumber)
+          .lean(),
 
-      /*
+        /*
       |--------------------------------------------------------------------------
       | Total
       |--------------------------------------------------------------------------
       */
 
-      Complaint.countDocuments(filter),
+        Complaint.countDocuments(filter),
 
-      /*
+        /*
       |--------------------------------------------------------------------------
       | Status Wise Count
       |--------------------------------------------------------------------------
       */
-     
 
-      Complaint.aggregate([
-        {
-          $match: filter,
-        },
-        {
-          $group: {
-            _id: "$status",
-            count: {
-              $sum: 1,
+        Complaint.aggregate([
+          {
+            $match: filter,
+          },
+          {
+            $group: {
+              _id: "$status",
+              count: {
+                $sum: 1,
+              },
             },
           },
-        },
-      ]),
+        ]),
 
-      /*
+        /*
       |--------------------------------------------------------------------------
       | Reason Wise Count
       |--------------------------------------------------------------------------
       */
 
-      Complaint.aggregate([
-        {
-          $match: {
-            ...filter,
+        Complaint.aggregate([
+          {
+            $match: {
+              ...filter,
 
-            [reasonField]: {
-              $exists: true,
-              $nin: [null, ""],
+              [reasonField]: {
+                $exists: true,
+                $nin: [null, ""],
+              },
             },
           },
-        },
 
-        {
-          $group: {
-            _id: `$${reasonField}`,
+          {
+            $group: {
+              _id: `$${reasonField}`,
 
-            count: {
-              $sum: 1,
+              count: {
+                $sum: 1,
+              },
             },
           },
-        },
 
-        {
-          $sort: {
-            count: -1,
+          {
+            $sort: {
+              count: -1,
+            },
           },
-        },
-      ]),
-    ]);
+        ]),
+      ]);
 
     /*
     |--------------------------------------------------------------------------
@@ -1728,21 +1719,21 @@ const getComplaintsByStatuses = async ({
   }
 };
 
-export const getCancelledComplaints = async (req, res) => {
-  return getComplaintsByStatuses({
-    req,
-    res,
+// export const getCancelledComplaints = async (req, res) => {
+//   return getComplaintsByStatuses({
+//     req,
+//     res,
 
-    statuses: [
-      "CANCEL_ON_CALL",
-      "CANCEL_ON_VISIT",
-    ],
+//     statuses: [
+//       "CANCEL_ON_CALL",
+//       "CANCEL_ON_VISIT",
+//     ],
 
-    label: "cancelled",
+//     label: "cancelled",
 
-    reasonField: "cancellationReason",
-  });
-};
+//     reasonField: "cancellationReason",
+//   });
+// };
 
 // export const getPendingComplaints = async (req, res) => {
 //   return getComplaintsByStatuses({
@@ -1760,15 +1751,25 @@ export const getCancelledComplaints = async (req, res) => {
 //   });
 // };
 
+export const getCancelledComplaints = async (req, res) => {
+  return getComplaintsByStatuses({
+    req,
+    res,
+
+    statuses: ["CANCEL_ON_CALL", "CANCEL_ON_VISIT", "CANCELLED"],
+
+    label: "cancelled",
+
+    reasonField: "cancellationReason",
+  });
+};
+
 export const getPendingComplaints = async (req, res) => {
   return getComplaintsByStatuses({
     req,
     res,
 
-    statuses: [
-      "PENDING_ON_CALL",
-      "PENDING_ON_VISIT",
-    ],
+    statuses: ["PENDING_ON_CALL", "PENDING_ON_VISIT"],
 
     label: "pending",
 
@@ -1785,10 +1786,7 @@ export const getClosedComplaints = async (req, res) => {
     req,
     res,
 
-    statuses: [
-      "CLOSE_ON_BILLING",
-      "CLOSED",
-    ],
+    statuses: ["CLOSE_ON_BILLING", "CLOSED"],
 
     label: "closed",
 
@@ -1903,7 +1901,6 @@ export const approveDealerBilling = async (req, res) => {
     });
   }
 };
-
 
 export const getPendingFollowUpStatuses = async (req, res) => {
   try {
@@ -2093,9 +2090,7 @@ export const saveComplaintFollowUp = async (req, res) => {
     |--------------------------------------------------------------------------
     */
 
-    const reason = await Reason.findById(
-      followUpReasonId,
-    ).lean();
+    const reason = await Reason.findById(followUpReasonId).lean();
 
     if (!reason) {
       return res.status(404).json({
@@ -2110,15 +2105,10 @@ export const saveComplaintFollowUp = async (req, res) => {
     |--------------------------------------------------------------------------
     */
 
-    if (
-      !reason.reasonType
-        ?.toLowerCase()
-        .includes("pending")
-    ) {
+    if (!reason.reasonType?.toLowerCase().includes("pending")) {
       return res.status(400).json({
         success: false,
-        message:
-          "Selected reason is not a pending reason",
+        message: "Selected reason is not a pending reason",
       });
     }
 
@@ -2138,12 +2128,9 @@ export const saveComplaintFollowUp = async (req, res) => {
     }
 
     const now = new Date();
-    const parsedFollowUpDate =
-      new Date(followUpDate);
+    const parsedFollowUpDate = new Date(followUpDate);
 
-    if (
-      Number.isNaN(parsedFollowUpDate.getTime())
-    ) {
+    if (Number.isNaN(parsedFollowUpDate.getTime())) {
       return res.status(400).json({
         success: false,
         message: "Invalid follow-up date",
@@ -2156,20 +2143,15 @@ export const saveComplaintFollowUp = async (req, res) => {
     |--------------------------------------------------------------------------
     */
 
-    complaint.customerFollowUpReasonId =
-      reason._id;
+    complaint.customerFollowUpReasonId = reason._id;
 
-    complaint.customerFollowUpStatus =
-      reason.reasonName;
+    complaint.customerFollowUpStatus = reason.reasonName;
 
-    complaint.customerFollowUpDate =
-      parsedFollowUpDate;
+    complaint.customerFollowUpDate = parsedFollowUpDate;
 
-    complaint.latestRemark =
-      remark.trim();
+    complaint.latestRemark = remark.trim();
 
-
-complaint.lastFollowUpUpdatedAt = now;
+    complaint.lastFollowUpUpdatedAt = now;
 
     /*
     |--------------------------------------------------------------------------
@@ -2178,9 +2160,8 @@ complaint.lastFollowUpUpdatedAt = now;
     */
 
     if (!Array.isArray(complaint.followUpRemarks)) {
-  complaint.followUpRemarks = [];
-}
-
+      complaint.followUpRemarks = [];
+    }
 
     complaint.followUpRemarks.push({
       followUpReasonId: reason._id,
@@ -2195,8 +2176,7 @@ complaint.lastFollowUpUpdatedAt = now;
 
       sentToDealer: Boolean(sendToDealer),
 
-      createdBy:
-        req.user?._id || req.user?.id,
+      createdBy: req.user?._id || req.user?.id,
 
       createdAt: now,
       updatedAt: now,
@@ -2214,31 +2194,21 @@ complaint.lastFollowUpUpdatedAt = now;
       data: complaint,
     });
   } catch (error) {
-    console.error(
-      "Save complaint follow-up error:",
-      error,
-    );
+    console.error("Save complaint follow-up error:", error);
 
     return res.status(500).json({
       success: false,
-      message:
-        "Failed to save complaint follow-up",
+      message: "Failed to save complaint follow-up",
       error: error.message,
     });
   }
 };
 
-
 export const getComplaintFollowUpRemarks = async (req, res) => {
   try {
     const complaint = await Complaint.findById(req.params.id)
-      .select(
-        "complaintNumber customerName phone followUpRemarks",
-      )
-      .populate(
-        "followUpRemarks.createdBy",
-        "name email",
-      )
+      .select("complaintNumber customerName phone followUpRemarks")
+      .populate("followUpRemarks.createdBy", "name email")
       .lean();
 
     if (!complaint) {
@@ -2248,12 +2218,9 @@ export const getComplaintFollowUpRemarks = async (req, res) => {
       });
     }
 
-    const remarks = [
-      ...(complaint.followUpRemarks || []),
-    ].sort(
+    const remarks = [...(complaint.followUpRemarks || [])].sort(
       (a, b) =>
-        new Date(b.createdAt).getTime() -
-        new Date(a.createdAt).getTime(),
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
 
     return res.status(200).json({
@@ -2281,9 +2248,7 @@ export const getDealerComplaintRemarks = async (req, res) => {
       _id: req.params.id,
       allocatedDealerId: req.user.dealerId,
     })
-      .select(
-        "complaintNumber followUpRemarks",
-      )
+      .select("complaintNumber followUpRemarks")
       .lean();
 
     if (!complaint) {
@@ -2297,8 +2262,7 @@ export const getDealerComplaintRemarks = async (req, res) => {
       .filter((item) => item.sentToDealer)
       .sort(
         (a, b) =>
-          new Date(b.createdAt).getTime() -
-          new Date(a.createdAt).getTime(),
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
       );
 
     return res.status(200).json({
@@ -2309,6 +2273,446 @@ export const getDealerComplaintRemarks = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to fetch dealer remarks",
+      error: error.message,
+    });
+  }
+};
+
+// export const saveCancellationRemark = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+
+//     const {
+//       followUpDate,
+//       remark,
+//     } = req.body;
+
+//     if (!followUpDate) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Follow-up date and time is required",
+//       });
+//     }
+
+//     if (!remark?.trim()) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Remark is required",
+//       });
+//     }
+
+//     const parsedDate = new Date(followUpDate);
+
+//     if (Number.isNaN(parsedDate.getTime())) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid follow-up date",
+//       });
+//     }
+
+//     const complaint = await Complaint.findById(id);
+
+//     if (!complaint) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Complaint not found",
+//       });
+//     }
+
+//     const now = new Date();
+
+//     /*
+//     |--------------------------------------------------------------------------
+//     | Latest
+//     |--------------------------------------------------------------------------
+//     */
+
+//     complaint.cancellationFollowUpDate =
+//       parsedDate;
+
+//     complaint.cancellationLatestRemark =
+//       remark.trim();
+
+//     complaint.cancellationLastUpdatedAt =
+//       now;
+
+//     /*
+//     |--------------------------------------------------------------------------
+//     | History
+//     |--------------------------------------------------------------------------
+//     */
+
+//     if (!Array.isArray(complaint.cancellationRemarks)) {
+//       complaint.cancellationRemarks = [];
+//     }
+
+//     complaint.cancellationRemarks.push({
+//       followUpDate: parsedDate,
+
+//       remark: remark.trim(),
+
+//       createdBy:
+//         req.user?._id || req.user?.id,
+
+//       createdAt: now,
+//       updatedAt: now,
+//     });
+
+//     await complaint.save();
+
+//     return res.status(200).json({
+//       success: true,
+//       message:
+//         "Cancellation remark saved successfully",
+//       data: complaint,
+//     });
+//   } catch (error) {
+//     console.error(
+//       "Save cancellation remark error:",
+//       error,
+//     );
+
+//     return res.status(500).json({
+//       success: false,
+//       message:
+//         "Failed to save cancellation remark",
+//       error: error.message,
+//     });
+//   }
+// };
+
+export const saveCancellationRemark = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const { reasonId, followUpDate, remark } = req.body;
+
+    /*
+    |--------------------------------------------------------------------------
+    | Validation
+    |--------------------------------------------------------------------------
+    */
+
+    if (!reasonId) {
+      return res.status(400).json({
+        success: false,
+        message: "Reason is required",
+      });
+    }
+
+    if (!followUpDate) {
+      return res.status(400).json({
+        success: false,
+        message: "Follow-up date is required",
+      });
+    }
+
+    if (!remark?.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Remark is required",
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Find Reason
+    |--------------------------------------------------------------------------
+    */
+
+    const reason = await Reason.findById(reasonId);
+
+    if (!reason) {
+      return res.status(404).json({
+        success: false,
+        message: "Reason not found",
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Complaint
+    |--------------------------------------------------------------------------
+    */
+
+    const complaint = await Complaint.findById(id);
+
+    if (!complaint) {
+      return res.status(404).json({
+        success: false,
+        message: "Complaint not found",
+      });
+    }
+
+    const now = new Date();
+
+    /*
+    |--------------------------------------------------------------------------
+    | Push Cancellation Remark
+    |--------------------------------------------------------------------------
+    */
+
+    complaint.cancellationRemarks.push({
+      reasonId: reason._id,
+
+      // Snapshot of reason name
+      reason: reason.reasonName,
+
+      followUpDate: new Date(followUpDate),
+
+      remark: remark.trim(),
+
+      createdBy: req.user?._id || req.user?.id,
+
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    /*
+    |--------------------------------------------------------------------------
+    | Latest Follow-up Data
+    |--------------------------------------------------------------------------
+    */
+
+    complaint.cancellationFollowUpDate = new Date(followUpDate);
+
+    complaint.cancellationLatestRemark = remark.trim();
+
+    complaint.cancellationLastUpdatedAt = now;
+
+    await complaint.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Cancellation follow-up saved successfully",
+      data: complaint,
+    });
+  } catch (error) {
+    console.error("Save cancellation follow-up error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to save cancellation follow-up",
+      error: error.message,
+    });
+  }
+};
+
+export const cancelComplaint = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const { reasonId, followUpDate, remark } = req.body;
+
+    if (!reasonId) {
+      return res.status(400).json({
+        success: false,
+        message: "Cancellation reason is required",
+      });
+    }
+
+    if (!followUpDate) {
+      return res.status(400).json({
+        success: false,
+        message: "Date and time is required",
+      });
+    }
+
+    if (!remark?.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Remark is required",
+      });
+    }
+
+    const reason = await Reason.findById(reasonId);
+
+    if (!reason) {
+      return res.status(404).json({
+        success: false,
+        message: "Cancellation reason not found",
+      });
+    }
+
+    if (!reason.reasonType?.toLowerCase().includes("cancel")) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid cancellation reason",
+      });
+    }
+
+    const complaint = await Complaint.findById(id);
+
+    if (!complaint) {
+      return res.status(404).json({
+        success: false,
+        message: "Complaint not found",
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Prevent reopening / repeated cancellation
+    |--------------------------------------------------------------------------
+    */
+
+    if (complaint.status === "CANCELLED") {
+      return res.status(400).json({
+        success: false,
+        message: "Complaint is already cancelled",
+      });
+    }
+
+    const now = new Date();
+    const parsedFollowUpDate = new Date(followUpDate);
+
+    if (Number.isNaN(parsedFollowUpDate.getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid date and time",
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Cancel Complaint
+    |--------------------------------------------------------------------------
+    */
+
+    complaint.status = "CANCELLED";
+
+    complaint.cancelledAt = now;
+
+    /*
+    |--------------------------------------------------------------------------
+    | DO NOT CHANGE ORIGINAL CANCELLATION REASON
+    |--------------------------------------------------------------------------
+    |
+    | complaint.cancellationReason remains unchanged.
+    |
+    */
+
+    /*
+    |--------------------------------------------------------------------------
+    | Store Cancellation Follow-up / Remark
+    |--------------------------------------------------------------------------
+    */
+
+    if (!Array.isArray(complaint.cancellationRemarks)) {
+      complaint.cancellationRemarks = [];
+    }
+
+    complaint.cancellationRemarks.push({
+      reasonId: reason._id,
+      reason: reason.reasonName,
+
+      followUpDate: parsedFollowUpDate,
+
+      remark: remark.trim(),
+
+      createdBy: req.user?._id || req.user?.id,
+
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    /*
+    |--------------------------------------------------------------------------
+    | Latest Follow-up Snapshot
+    |--------------------------------------------------------------------------
+    */
+
+    complaint.cancellationFollowUpDate = parsedFollowUpDate;
+
+    complaint.cancellationLatestRemark = remark.trim();
+
+    complaint.cancellationLastUpdatedAt = now;
+
+    await complaint.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Complaint cancelled successfully",
+      data: complaint,
+    });
+  } catch (error) {
+    console.error("Cancel complaint error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to cancel complaint",
+      error: error.message,
+    });
+  }
+};
+
+export const approveClosure = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { remark } = req.body;
+
+    if (!remark?.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Closure remark is required",
+      });
+    }
+
+    const complaint = await Complaint.findById(id);
+
+    if (!complaint) {
+      return res.status(404).json({
+        success: false,
+        message: "Complaint not found",
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Prevent Duplicate Approval
+    |--------------------------------------------------------------------------
+    */
+
+    if (complaint.closureApproved) {
+      return res.status(400).json({
+        success: false,
+        message: "Closure is already approved",
+      });
+    }
+
+    const now = new Date();
+
+    /*
+    |--------------------------------------------------------------------------
+    | Approve Closure
+    |--------------------------------------------------------------------------
+    */
+
+    complaint.closureApproved = true;
+
+    complaint.closureRemark = remark.trim();
+
+    complaint.closureApprovedAt = now;
+
+    complaint.closureApprovedBy =
+      req.user?._id || req.user?.id;
+
+    await complaint.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Closure approved successfully",
+      data: complaint,
+    });
+  } catch (error) {
+    console.error(
+      "Approve closure error:",
+      error,
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to approve closure",
       error: error.message,
     });
   }
