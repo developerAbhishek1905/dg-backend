@@ -591,6 +591,12 @@ const complaintSchema = new mongoose.Schema(
       default: "",
     },
 
+    closingReason: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
     suspendedAt: {
       type: Date,
       default: null,
@@ -648,59 +654,59 @@ const complaintSchema = new mongoose.Schema(
     },
 
     lastFollowUpUpdatedAt: {
-  type: Date,
-  default: null,
-},
+      type: Date,
+      default: null,
+    },
 
-cancellationFollowUpDate: {
-  type: Date,
-  default: null,
-},
+    cancellationFollowUpDate: {
+      type: Date,
+      default: null,
+    },
 
-cancellationLatestRemark: {
-  type: String,
-  trim: true,
-  default: "",
-},
+    cancellationLatestRemark: {
+      type: String,
+      trim: true,
+      default: "",
+    },
 
-cancellationLastUpdatedAt: {
-  type: Date,
-  default: null,
-},
+    cancellationLastUpdatedAt: {
+      type: Date,
+      default: null,
+    },
 
-cancellationRemarks: {
-  type: [cancellationRemarkSchema],
-  default: [],
-},
+    cancellationRemarks: {
+      type: [cancellationRemarkSchema],
+      default: [],
+    },
 
-closureApproved: {
-  type: Boolean,
-  default: false,
-},
+    closureApproved: {
+      type: Boolean,
+      default: false,
+    },
 
-closureApprovalRemark: {
-  type: String,
-  trim: true,
-  default: "",
-},
+    closureApprovalRemark: {
+      type: String,
+      trim: true,
+      default: "",
+    },
 
-closureApprovedAt: {
-  type: Date,
-  default: null,
-},
+    closureApprovedAt: {
+      type: Date,
+      default: null,
+    },
 
-closureApprovedBy: {
-  type: mongoose.Schema.Types.ObjectId,
-  ref: "User",
-  default: null,
-},
+    closureApprovedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
 
-rating: {
-  type: Number,
-  min: 1,
-  max: 5,
-  default: null,
-},
+    rating: {
+      type: Number,
+      min: 1,
+      max: 5,
+      default: null,
+    },
 
     /*
     |--------------------------------------------------------------------------

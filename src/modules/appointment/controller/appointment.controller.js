@@ -245,7 +245,7 @@ export const updateAppointmentStatus = async (req, res) => {
       appointmentTime,
       pendingReason,
       cancellationReason,
-
+      closingReason,
       // Billing popup values
       customerAmount,
       profitAmount,
@@ -394,6 +394,7 @@ export const updateAppointmentStatus = async (req, res) => {
 
         complaint.pendingReason = "";
         complaint.cancellationReason = "";
+        complaint.closingReason = closingReason;
 
         await complaint.save();
 
@@ -472,6 +473,8 @@ export const updateAppointmentStatus = async (req, res) => {
 
         complaint.pendingReason = "";
         complaint.cancellationReason = "";
+        complaint.closingReason = closingReason;
+
 
         await complaint.save();
 
@@ -787,6 +790,9 @@ export const updateAppointmentStatus = async (req, res) => {
     if (pendingReason) {
       complaint.pendingReason = pendingReason;
     }
+        if (closingReason) {
+      complaint.closingReason = closingReason;
+    }
 
     if (cancellationReason) {
       complaint.cancellationReason = cancellationReason;
@@ -803,6 +809,7 @@ export const updateAppointmentStatus = async (req, res) => {
       previousStatus,
       pendingReason,
       cancellationReason,
+      closingReason
     });
 
     await createComplaintActivity({
@@ -818,7 +825,7 @@ export const updateAppointmentStatus = async (req, res) => {
 
       description: activity.description,
 
-      reason: pendingReason || cancellationReason || "",
+      reason: pendingReason || cancellationReason ||closingReason|| "", 
 
       appointmentDate: complaint.appointmentDate,
 
@@ -878,6 +885,8 @@ export const updateAppointmentStatus = async (req, res) => {
       complaint.pendingReason = "";
 
       complaint.cancellationReason = "";
+      
+      complaint.closingReason ="";
 
       complaint.cancelledAt = null;
     }
@@ -899,6 +908,7 @@ export const updateAppointmentStatus = async (req, res) => {
       complaint.pendingReason = pendingReason;
 
       complaint.cancellationReason = "";
+      complaint.closingReason ="";
 
       complaint.cancelledAt = null;
     }
@@ -964,6 +974,8 @@ export const updateAppointmentStatus = async (req, res) => {
       complaint.cancelledAt = new Date();
 
       complaint.pendingReason = "";
+
+      complaint.closingReason = "";
     }
 
     /*
@@ -978,6 +990,9 @@ export const updateAppointmentStatus = async (req, res) => {
       complaint.pendingReason = "";
 
       complaint.cancellationReason = "";
+
+      complaint.closingReason = closingReason;
+
     }
 
     complaint.status = status;
