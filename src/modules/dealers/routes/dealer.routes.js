@@ -13,11 +13,15 @@ import {
   suspendDealer,
   getDealerDropdown,
   endDealerLeave,
-  getDealerLifecycleLogs
+  getDealerLifecycleLogs,
 } from "../controllers/dealer.controller.js";
 
 import { dealerDocumentUpload } from "../middleware/dealerUpload.middleware.js";
 import { protect } from "../../auth/middleware/auth.middleware.js";
+import {
+  getDailyDealerActivity,
+  getAllDealerActivity,
+} from "../controllers/dailyDealerActivity.controller.js";
 
 const router = express.Router();
 
@@ -26,11 +30,7 @@ router.post("/", dealerDocumentUpload, createDealer);
 
 router.post("/:id/leave", protect, registerDealerLeave);
 router.post("/:id/rejoin", protect, rejoinDealer);
-router.patch(
-  "/:id/leave/end",
-  protect,
-  endDealerLeave,
-);
+router.patch("/:id/leave/end", protect, endDealerLeave);
 router.patch("/:id/rating", updateDealerRating);
 router.patch("/:id/suspend", suspendDealer);
 router.get(
@@ -38,11 +38,11 @@ router.get(
   // protect,
   getDealerDropdown,
 );
-router.get(
-  "/:id/lifecycle-logs",
-  protect,
-  getDealerLifecycleLogs
-);
+router.get("/dealer-activity/:dealerId/daily", protect, getDailyDealerActivity);
+
+router.get("/dealer-activity", protect, getAllDealerActivity);
+
+router.get("/:id/lifecycle-logs", protect, getDealerLifecycleLogs);
 /* GET ALL */
 router.get("/", getDealers);
 

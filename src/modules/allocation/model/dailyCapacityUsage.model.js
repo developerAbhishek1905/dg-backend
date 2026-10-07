@@ -48,6 +48,28 @@ const dailyCapacityUsageSchema =
         default: 0,
         min: 0,
       },
+
+      /*
+      |--------------------------------------------------------------------------
+      | Dealer Activity / Reporting Fields
+      |--------------------------------------------------------------------------
+      |
+      | Optional only.
+      | Existing capacity/allocation logic will continue working.
+      |
+      */
+
+      totalCapacity: {
+        type: Number,
+        default: null,
+        min: 0,
+      },
+
+      remainingCapacity: {
+        type: Number,
+        default: null,
+        min: 0,
+      },
     },
     {
       timestamps: true,
