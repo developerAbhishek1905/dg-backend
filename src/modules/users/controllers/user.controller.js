@@ -337,6 +337,54 @@ export const deleteUser = async (req, res) => {
   }
 };
 
+export const getUserDropdown = async (req, res) => {
+  try {
+    const search = String(req.query.search || "").trim();
+
+    const filter = {
+      status: "ACTIVE",
+
+      // Exclude all users linked to a dealer
+      dealerId: null,
+    };
+
+    if (search) {
+      const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+      filter.$or = [
+        { name: { $regex: escapedSearch, $options: "i" } },
+        { email: { $regex: escapedSearch, $options: "i" } },
+        { phone: { $regex: escapedSearch, $options: "i" } },
+      ];
+    }
+
+    const users = await User.find(filter)
+      .select("_id name email phone roleId")
+      .sort({ name: 1 })
+      .limit(50)
+      .lean();
+
+    return res.status(200).json({
+      success: true,
+      message: "Users fetched successfully",
+      data: users.map((user) => ({
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        roleId: user.roleId,
+      })),
+    });
+  } catch (error) {
+    console.error("Get User Dropdown Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch users",
+      error: error.message,
+    });
+  }
+};
 
 const formatUser = (user) => ({
   id: user._id,

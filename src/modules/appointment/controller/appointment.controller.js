@@ -12,18 +12,7 @@ import {
 import Dealer from "../../dealers/models/dealer.model.js";
 import DealerLedger from "../../dealerLedger/model/dealerLedger.model.js";
 import Reason from "../../reason/models/reason.model.js";
-/*
-|--------------------------------------------------------------------------
-| Get Appointment Complaints
-|--------------------------------------------------------------------------
-| ADMIN / other roles:
-|   -> All complaints
-|
-| DEALER:
-|   -> Only complaints allocated to logged-in dealer
-|--------------------------------------------------------------------------
-*/
-
+import {escapeRegex} from "../../../helper/escapeRegex.js"
 export const getAppointmentComplaints = async (req, res) => {
   try {
     const {
@@ -475,7 +464,6 @@ export const updateAppointmentStatus = async (req, res) => {
         complaint.cancellationReason = "";
         complaint.closingReason = closingReason;
 
-
         await complaint.save();
 
         /*
@@ -790,7 +778,7 @@ export const updateAppointmentStatus = async (req, res) => {
     if (pendingReason) {
       complaint.pendingReason = pendingReason;
     }
-        if (closingReason) {
+    if (closingReason) {
       complaint.closingReason = closingReason;
     }
 
@@ -809,7 +797,7 @@ export const updateAppointmentStatus = async (req, res) => {
       previousStatus,
       pendingReason,
       cancellationReason,
-      closingReason
+      closingReason,
     });
 
     await createComplaintActivity({
@@ -825,7 +813,7 @@ export const updateAppointmentStatus = async (req, res) => {
 
       description: activity.description,
 
-      reason: pendingReason || cancellationReason ||closingReason|| "", 
+      reason: pendingReason || cancellationReason || closingReason || "",
 
       appointmentDate: complaint.appointmentDate,
 
@@ -885,8 +873,8 @@ export const updateAppointmentStatus = async (req, res) => {
       complaint.pendingReason = "";
 
       complaint.cancellationReason = "";
-      
-      complaint.closingReason ="";
+
+      complaint.closingReason = "";
 
       complaint.cancelledAt = null;
     }
@@ -908,7 +896,7 @@ export const updateAppointmentStatus = async (req, res) => {
       complaint.pendingReason = pendingReason;
 
       complaint.cancellationReason = "";
-      complaint.closingReason ="";
+      complaint.closingReason = "";
 
       complaint.cancelledAt = null;
     }
@@ -992,7 +980,6 @@ export const updateAppointmentStatus = async (req, res) => {
       complaint.cancellationReason = "";
 
       complaint.closingReason = closingReason;
-
     }
 
     complaint.status = status;
@@ -1304,158 +1291,6 @@ export const getComplaintActivityByComplaintId = async (req, res) => {
   }
 };
 
-// const getComplaintsByStatuses = async ({ req, res, statuses, label }) => {
-//   try {
-//     const {
-//       search = "",
-//       page = 1,
-//       limit = 10,
-
-//       dealerId,
-
-//       startDate,
-//       endDate,
-//     } = req.query;
-
-//     const pageNumber = Math.max(Number(page) || 1, 1);
-
-//     const limitNumber = Math.min(Math.max(Number(limit) || 10, 1), 100);
-
-//     const skip = (pageNumber - 1) * limitNumber;
-
-//     const filter = {
-//       status: {
-//         $in: statuses,
-//       },
-//     };
-
-//     /*
-//     |--------------------------------------------------------------------------
-//     | Dealer
-//     |--------------------------------------------------------------------------
-//     */
-
-//     if (dealerId) {
-//       filter.allocatedDealerId = dealerId;
-//     }
-
-//     /*
-//     |--------------------------------------------------------------------------
-//     | Date
-//     |--------------------------------------------------------------------------
-//     */
-
-//     if (startDate || endDate) {
-//       filter.complaintDateTime = {};
-
-//       if (startDate) {
-//         filter.complaintDateTime.$gte = new Date(`${startDate}T00:00:00.000Z`);
-//       }
-
-//       if (endDate) {
-//         filter.complaintDateTime.$lte = new Date(`${endDate}T23:59:59.999Z`);
-//       }
-//     }
-
-//     /*
-//     |--------------------------------------------------------------------------
-//     | Search
-//     |--------------------------------------------------------------------------
-//     */
-
-//     if (search.trim()) {
-//       const safeSearch = escapeRegex(search.trim());
-
-//       filter.$or = [
-//         {
-//           complaintNumber: {
-//             $regex: safeSearch,
-
-//             $options: "i",
-//           },
-//         },
-
-//         {
-//           customerName: {
-//             $regex: safeSearch,
-
-//             $options: "i",
-//           },
-//         },
-
-//         {
-//           phone: {
-//             $regex: safeSearch,
-
-//             $options: "i",
-//           },
-//         },
-
-//         {
-//           productName: {
-//             $regex: safeSearch,
-
-//             $options: "i",
-//           },
-//         },
-
-//         {
-//           category: {
-//             $regex: safeSearch,
-
-//             $options: "i",
-//           },
-//         },
-//       ];
-//     }
-
-//     const [complaints, total] = await Promise.all([
-//       Complaint.find(filter)
-//         .populate(
-//           "allocatedDealerId",
-//           "technicianCode technicianFirmName technicianName mobileNumber status",
-//         )
-//         .populate("customerId", "customerCode name phone alternatePhone email")
-//         .sort({
-//           updatedAt: -1,
-//         })
-//         .skip(skip)
-//         .limit(limitNumber)
-//         .lean(),
-
-//       Complaint.countDocuments(filter),
-//     ]);
-
-//     return res.status(200).json({
-//       success: true,
-
-//       message: `${label} complaints fetched successfully`,
-
-//       data: complaints,
-
-//       pagination: {
-//         total,
-
-//         page: pageNumber,
-
-//         limit: limitNumber,
-
-//         totalPages: Math.ceil(total / limitNumber),
-//       },
-//     });
-//   } catch (error) {
-//     console.error(error);
-
-//     return res.status(500).json({
-//       success: false,
-
-//       message: `Failed to fetch ${label} complaints`,
-
-//       error: error.message,
-//     });
-//   }
-// };
-
 const getComplaintsByStatuses = async ({
   req,
   res,
@@ -1471,6 +1306,9 @@ const getComplaintsByStatuses = async ({
       page = 1,
       limit = 10,
       dealerId,
+      cityId,
+      createdBy,
+      categoryId,
       startDate,
       endDate,
     } = req.query;
@@ -1488,8 +1326,43 @@ const getComplaintsByStatuses = async ({
 
     const baseFilter = {};
 
-    if (dealerId) {
-      baseFilter.allocatedDealerId = dealerId;
+if (dealerId) {
+  if (!mongoose.Types.ObjectId.isValid(dealerId)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid dealer ID",
+    });
+  }
+
+  baseFilter.allocatedDealerId = new mongoose.Types.ObjectId(dealerId);
+}
+
+    if (cityId) {
+      const parsedCityId = Number(cityId);
+
+      if (!Number.isInteger(parsedCityId)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid city ID",
+        });
+      }
+
+      baseFilter["address.cityId"] = parsedCityId;
+    }
+
+    if (createdBy && mongoose.Types.ObjectId.isValid(createdBy)) {
+      baseFilter.createdBy = new mongoose.Types.ObjectId(createdBy);
+    }
+
+    if (categoryId) {
+      if (!mongoose.Types.ObjectId.isValid(categoryId)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid category ID",
+        });
+      }
+
+      baseFilter.categoryId = new mongoose.Types.ObjectId(categoryId);
     }
 
     /*
@@ -1577,97 +1450,92 @@ const getComplaintsByStatuses = async ({
     |--------------------------------------------------------------------------
     */
 
-    const [complaints, total, statusAggregation, reasonAggregation] =
-      await Promise.all([
-        /*
-      |--------------------------------------------------------------------------
-      | Complaints
-      |--------------------------------------------------------------------------
-      */
+    const [
+      complaints,
+      total,
+      statusAggregation,
+      reasonAggregation,
+      closureAggregation,
+    ] = await Promise.all([
+      Complaint.find(filter)
+        .populate(
+          "allocatedDealerId",
+          "technicianCode technicianFirmName technicianName mobileNumber status",
+        )
+        .populate("customerId", "customerCode name phone alternatePhone email")
+        .populate("createdBy", "name")
+        .sort({
+          [sortBy]: sortOrder,
+          updatedAt: -1,
+        })
+        .skip(skip)
+        .limit(limitNumber)
+        .lean(),
 
-        Complaint.find(filter)
-          .populate(
-            "allocatedDealerId",
-            "technicianCode technicianFirmName technicianName mobileNumber status",
-          )
-          .populate(
-            "customerId",
-            "customerCode name phone alternatePhone email",
-          )
-          // .sort({
-          //   updatedAt: -1,
-          // })
-          .sort({
-            [sortBy]: sortOrder,
-            updatedAt: -1,
-          })
-          .skip(skip)
-          .limit(limitNumber)
-          .lean(),
+      Complaint.countDocuments(filter),
 
-        /*
-      |--------------------------------------------------------------------------
-      | Total
-      |--------------------------------------------------------------------------
-      */
-
-        Complaint.countDocuments(filter),
-
-        /*
-      |--------------------------------------------------------------------------
-      | Status Wise Count
-      |--------------------------------------------------------------------------
-      */
-
-        Complaint.aggregate([
-          {
-            $match: filter,
+      Complaint.aggregate([
+        { $match: filter },
+        {
+          $group: {
+            _id: "$status",
+            count: { $sum: 1 },
           },
-          {
-            $group: {
-              _id: "$status",
-              count: {
-                $sum: 1,
+        },
+      ]),
+
+      Complaint.aggregate([
+        {
+          $match: {
+            ...filter,
+            [reasonField]: {
+              $exists: true,
+              $nin: [null, ""],
+            },
+          },
+        },
+        {
+          $group: {
+            _id: `$${reasonField}`,
+            count: { $sum: 1 },
+          },
+        },
+        { $sort: { count: -1 } },
+      ]),
+
+      Complaint.aggregate([
+        { $match: filter },
+        {
+          $group: {
+            _id: null,
+
+            approved: {
+              $sum: {
+                $cond: [{ $eq: ["$closureApproved", true] }, 1, 0],
+              },
+            },
+
+            pendingApproval: {
+              $sum: {
+                $cond: [{ $ne: ["$closureApproved", true] }, 1, 0],
+              },
+            },
+
+            rated: {
+              $sum: {
+                $cond: [{ $gt: ["$rating", 0] }, 1, 0],
+              },
+            },
+
+            notRated: {
+              $sum: {
+                $cond: [{ $gt: ["$rating", 0] }, 0, 1],
               },
             },
           },
-        ]),
-
-        /*
-      |--------------------------------------------------------------------------
-      | Reason Wise Count
-      |--------------------------------------------------------------------------
-      */
-
-        Complaint.aggregate([
-          {
-            $match: {
-              ...filter,
-
-              [reasonField]: {
-                $exists: true,
-                $nin: [null, ""],
-              },
-            },
-          },
-
-          {
-            $group: {
-              _id: `$${reasonField}`,
-
-              count: {
-                $sum: 1,
-              },
-            },
-          },
-
-          {
-            $sort: {
-              count: -1,
-            },
-          },
-        ]),
-      ]);
+        },
+      ]),
+    ]);
 
     /*
     |--------------------------------------------------------------------------
@@ -1703,19 +1571,31 @@ const getComplaintsByStatuses = async ({
     |--------------------------------------------------------------------------
     */
 
+    const closureStats = closureAggregation[0] || {};
+
+    const summary =
+      label === "closed"
+        ? {
+            total,
+            pendingApproval: closureStats.pendingApproval || 0,
+            approved: closureStats.approved || 0,
+            rejected: 0,
+            rated: closureStats.rated || 0,
+            notRated: closureStats.notRated || 0,
+            statusCounts,
+            reasonCounts,
+          }
+        : {
+            total,
+            statusCounts,
+            reasonCounts,
+          };
+
     return res.status(200).json({
       success: true,
-
       message: `${label} complaints fetched successfully`,
-
       data: complaints,
-
-      summary: {
-        total,
-        statusCounts,
-        reasonCounts,
-      },
-
+      summary,
       pagination: {
         total,
         page: pageNumber,
@@ -1723,6 +1603,27 @@ const getComplaintsByStatuses = async ({
         totalPages: Math.ceil(total / limitNumber),
       },
     });
+
+    // return res.status(200).json({
+    //   success: true,
+
+    //   message: `${label} complaints fetched successfully`,
+
+    //   data: complaints,
+
+    //   summary: {
+    //     total,
+    //     statusCounts,
+    //     reasonCounts,
+    //   },
+
+    //   pagination: {
+    //     total,
+    //     page: pageNumber,
+    //     limit: limitNumber,
+    //     totalPages: Math.ceil(total / limitNumber),
+    //   },
+    // });
   } catch (error) {
     console.error(error);
 
@@ -1733,38 +1634,6 @@ const getComplaintsByStatuses = async ({
     });
   }
 };
-
-// export const getCancelledComplaints = async (req, res) => {
-//   return getComplaintsByStatuses({
-//     req,
-//     res,
-
-//     statuses: [
-//       "CANCEL_ON_CALL",
-//       "CANCEL_ON_VISIT",
-//     ],
-
-//     label: "cancelled",
-
-//     reasonField: "cancellationReason",
-//   });
-// };
-
-// export const getPendingComplaints = async (req, res) => {
-//   return getComplaintsByStatuses({
-//     req,
-//     res,
-
-//     statuses: [
-//       "PENDING_ON_CALL",
-//       "PENDING_ON_VISIT",
-//     ],
-
-//     label: "pending",
-
-//     reasonField: "pendingReason",
-//   });
-// };
 
 export const getCancelledComplaints = async (req, res) => {
   return getComplaintsByStatuses({
@@ -1800,11 +1669,12 @@ export const getClosedComplaints = async (req, res) => {
   return getComplaintsByStatuses({
     req,
     res,
-
-    statuses: ["CLOSE_ON_BILLING", "CLOSED"],
-
+    statuses: [
+      "CLOSE_ON_BILLING",
+      "CLOSE_ON_VERIFICATION",
+      "CLOSED",
+    ],
     label: "closed",
-
     reasonField: "closeReason",
   });
 };
@@ -1942,117 +1812,6 @@ export const getPendingFollowUpStatuses = async (req, res) => {
     });
   }
 };
-
-// export const saveComplaintFollowUp = async (req, res) => {
-//   try {
-//     const { id } = req.params;
-
-//     const {
-//       followUpStatus,
-//       followUpDate,
-//       remark,
-//       sendToDealer = false,
-//     } = req.body;
-
-//     if (!followUpStatus) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Follow-up status is required",
-//       });
-//     }
-
-//     if (!followUpDate) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Follow-up date is required",
-//       });
-//     }
-
-//     if (!remark?.trim()) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Remark is required",
-//       });
-//     }
-
-//     const allowedStatuses = [
-//       "PENDING_ON_CALL",
-//       "PENDING_ON_VISIT",
-//     ];
-
-//     console.log("jfdkjhk",followUpStatus)
-
-//     if (!allowedStatuses.includes(followUpStatus)) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Invalid pending follow-up status",
-//       });
-//     }
-
-//     const complaint = await Complaint.findById(id);
-
-//     if (!complaint) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Complaint not found",
-//       });
-//     }
-
-//     const now = new Date();
-
-//     /*
-//     |--------------------------------------------------------------------------
-//     | Latest Follow-up
-//     |--------------------------------------------------------------------------
-//     */
-
-//     complaint.customerFollowUpStatus = followUpStatus;
-//     complaint.customerFollowUpDate = new Date(followUpDate);
-//     complaint.latestRemark = remark.trim();
-
-//     /*
-//     |--------------------------------------------------------------------------
-//     | History
-//     |--------------------------------------------------------------------------
-//     */
-
-//     complaint.followUpRemarks.push({
-//       followUpStatus,
-//       followUpDate: new Date(followUpDate),
-//       remark: remark.trim(),
-
-//       sentToDealer: Boolean(sendToDealer),
-
-//       createdBy: req.user?._id || req.user?.id,
-
-//       createdAt: now,
-//       updatedAt: now,
-//     });
-
-//     await complaint.save();
-
-//     return res.status(200).json({
-//       success: true,
-
-//       message: sendToDealer
-//         ? "Remark saved and sent to dealer successfully"
-//         : "Remark saved successfully",
-
-//       data: complaint,
-//     });
-//   } catch (error) {
-//     console.error(
-//       "Save complaint follow-up error:",
-//       error,
-//     );
-
-//     return res.status(500).json({
-//       success: false,
-//       message: "Failed to save complaint follow-up",
-//       error: error.message,
-//     });
-//   }
-// };
 
 export const saveComplaintFollowUp = async (req, res) => {
   try {
@@ -2292,109 +2051,6 @@ export const getDealerComplaintRemarks = async (req, res) => {
     });
   }
 };
-
-// export const saveCancellationRemark = async (req, res) => {
-//   try {
-//     const { id } = req.params;
-
-//     const {
-//       followUpDate,
-//       remark,
-//     } = req.body;
-
-//     if (!followUpDate) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Follow-up date and time is required",
-//       });
-//     }
-
-//     if (!remark?.trim()) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Remark is required",
-//       });
-//     }
-
-//     const parsedDate = new Date(followUpDate);
-
-//     if (Number.isNaN(parsedDate.getTime())) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Invalid follow-up date",
-//       });
-//     }
-
-//     const complaint = await Complaint.findById(id);
-
-//     if (!complaint) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Complaint not found",
-//       });
-//     }
-
-//     const now = new Date();
-
-//     /*
-//     |--------------------------------------------------------------------------
-//     | Latest
-//     |--------------------------------------------------------------------------
-//     */
-
-//     complaint.cancellationFollowUpDate =
-//       parsedDate;
-
-//     complaint.cancellationLatestRemark =
-//       remark.trim();
-
-//     complaint.cancellationLastUpdatedAt =
-//       now;
-
-//     /*
-//     |--------------------------------------------------------------------------
-//     | History
-//     |--------------------------------------------------------------------------
-//     */
-
-//     if (!Array.isArray(complaint.cancellationRemarks)) {
-//       complaint.cancellationRemarks = [];
-//     }
-
-//     complaint.cancellationRemarks.push({
-//       followUpDate: parsedDate,
-
-//       remark: remark.trim(),
-
-//       createdBy:
-//         req.user?._id || req.user?.id,
-
-//       createdAt: now,
-//       updatedAt: now,
-//     });
-
-//     await complaint.save();
-
-//     return res.status(200).json({
-//       success: true,
-//       message:
-//         "Cancellation remark saved successfully",
-//       data: complaint,
-//     });
-//   } catch (error) {
-//     console.error(
-//       "Save cancellation remark error:",
-//       error,
-//     );
-
-//     return res.status(500).json({
-//       success: false,
-//       message:
-//         "Failed to save cancellation remark",
-//       error: error.message,
-//     });
-//   }
-// };
 
 export const saveCancellationRemark = async (req, res) => {
   try {
@@ -2709,8 +2365,7 @@ export const approveClosure = async (req, res) => {
 
     complaint.closureApprovedAt = now;
 
-    complaint.closureApprovedBy =
-      req.user?._id || req.user?.id;
+    complaint.closureApprovedBy = req.user?._id || req.user?.id;
 
     await complaint.save();
 
@@ -2720,10 +2375,7 @@ export const approveClosure = async (req, res) => {
       data: complaint,
     });
   } catch (error) {
-    console.error(
-      "Approve closure error:",
-      error,
-    );
+    console.error("Approve closure error:", error);
 
     return res.status(500).json({
       success: false,
