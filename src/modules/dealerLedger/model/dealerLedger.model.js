@@ -63,7 +63,7 @@ const dealerLedgerSchema = new mongoose.Schema(
 
     transactionType: {
       type: String,
-      enum: ["OPENING_BALANCE", "CLOSURE", "CANCELLATION", "ADJUSTMENT"],
+      enum: ["OPENING_BALANCE", "CLOSURE", "CANCELLATION", "ADJUSTMENT","PAYMENT"],
       required: true,
       index: true,
     },
@@ -77,6 +77,7 @@ const dealerLedgerSchema = new mongoose.Schema(
         "PROFIT_SHARING",
         "CANCELLATION",
         "ADJUSTMENT",
+        "PAYMENT"
       ],
       required: true,
       index: true,
@@ -308,6 +309,49 @@ const dealerLedgerSchema = new mongoose.Schema(
       ref: "User",
       default: null,
     },
+
+    units: {
+  type: Number,
+  min: 1,
+  default: 1,
+},
+
+closingRemark: {
+  type: String,
+  trim: true,
+  default: "",
+},
+
+/*
+|--------------------------------------------------------------------------
+| Payment Tracking
+|--------------------------------------------------------------------------
+*/
+
+paymentId: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "DealerPayment",
+  default: null,
+  index: true,
+},
+
+paidAmount: {
+  type: Number,
+  min: 0,
+  default: 0,
+},
+
+paymentStatus: {
+  type: String,
+  enum: ["UNPAID", "PARTIALLY_PAID", "PAID"],
+  default: "UNPAID",
+  index: true,
+},
+
+lastPaymentAt: {
+  type: Date,
+  default: null,
+},
 
     /*
     |--------------------------------------------------------------------------

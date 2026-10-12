@@ -2,6 +2,8 @@
 
 import mongoose from "mongoose";
 import DealerLedger from "../model/dealerLedger.model.js";
+import Dealer from "../../dealers/models/dealer.model.js";
+import Category from "../../category/models/category.model.js";
 import Complaint from "../../Complaint/models/complaint.model.js";
 import { createComplaintActivity } from "../../Complaint/services/complaintActivity.service.js";
 
@@ -22,6 +24,15 @@ import { createComplaintActivity } from "../../Complaint/services/complaintActiv
 | limit
 |
 */
+
+const BILLING_TYPES = [
+  "FIXED",
+  "PARTIAL_PAYMENT",
+  "PROFIT_SHARING",
+  "CANCELLATION",
+  "OPENING_BALANCE",
+  "ADJUSTMENT",
+];
 
 export const getAllDealerLedgers = async (req, res) => {
   try {
@@ -175,7 +186,14 @@ export const getAllDealerLedgers = async (req, res) => {
         })
         .populate({
           path: "complaintId",
-          select: "complaintNumber customerName phone status",
+          select: `
+    complaintNumber
+    customerName
+    phone
+    status
+    units
+    closureApprovalRemark
+  `,
         })
         .sort({
           billingDate: -1,
@@ -187,6 +205,18 @@ export const getAllDealerLedgers = async (req, res) => {
 
       DealerLedger.countDocuments(filter),
     ]);
+
+    const formattedLedgers = ledgers.map((ledger) => {
+      const complaint = ledger.complaintId;
+
+      return {
+        ...ledger,
+
+        units: complaint?.units ?? 1,
+
+        closingRemark: complaint?.closureApprovalRemark || "",
+      };
+    });
 
     /*
     |--------------------------------------------------------------------------
@@ -310,6 +340,426 @@ export const getAllDealerLedgers = async (req, res) => {
   }
 };
 
+const getTransactionType = (billingType) => {
+  switch (billingType) {
+    case "CANCELLATION":
+      return "CANCELLATION";
+
+    case "OPENING_BALANCE":
+      return "OPENING_BALANCE";
+
+    case "ADJUSTMENT":
+      return "ADJUSTMENT";
+
+    default:
+      return "CLOSURE";
+  }
+};
+
+const roundAmount = (value) => Math.round((value + Number.EPSILON) * 100) / 100;
+
+const getBillCalculation = (data) => {
+  const { billingType, customerAmount, profitAmount, percentage, amount } =
+    data;
+
+  let finalAmount = 0;
+  let baseAmount = 0;
+
+  if (billingType === "PARTIAL_PAYMENT") {
+    baseAmount = customerAmount;
+    finalAmount = roundAmount((customerAmount * percentage) / 100);
+  } else if (billingType === "PROFIT_SHARING") {
+    baseAmount = profitAmount;
+    finalAmount = roundAmount((profitAmount * percentage) / 100);
+  } else {
+    baseAmount = amount;
+    finalAmount = amount;
+  }
+
+  return {
+    baseAmount,
+    amount: finalAmount,
+    calculation: {
+      fixedRate: billingType === "FIXED" ? finalAmount : 0,
+      customerAmount,
+      profitAmount,
+      percentage,
+    },
+  };
+};
+
+const validateBill = (body) => {
+  if (!mongoose.isValidObjectId(body.dealerId)) {
+    return "Valid dealer is required";
+  }
+
+  if (!BILLING_TYPES.includes(body.billingType)) {
+    return "Invalid billing type";
+  }
+
+  if (!Number.isInteger(Number(body.units)) || Number(body.units) < 1) {
+    return "Units must be a positive integer";
+  }
+
+  const numbers = ["customerAmount", "profitAmount", "percentage", "amount"];
+
+  for (const key of numbers) {
+    const value = Number(body[key] ?? 0);
+
+    if (!Number.isFinite(value) || value < 0) {
+      return `${key} must be a valid non-negative number`;
+    }
+  }
+
+  const percentage = Number(body.percentage ?? 0);
+
+  if (percentage > 100) {
+    return "Percentage cannot exceed 100";
+  }
+
+  if (body.categoryId && !mongoose.isValidObjectId(body.categoryId)) {
+    return "Invalid category ID";
+  }
+
+  if (
+    body.productId !== null &&
+    body.productId !== undefined &&
+    body.productId !== "" &&
+    !Number.isFinite(Number(body.productId))
+  ) {
+    return "Invalid product ID";
+  }
+
+  return null;
+};
+
+const buildBillData = async (body, existingBill = null) => {
+  const dealer = await Dealer.findById(body.dealerId).lean();
+
+  if (!dealer) {
+    return {
+      error: "Dealer not found",
+      status: 404,
+    };
+  }
+
+  let category = null;
+
+  if (body.categoryId) {
+    category = await Category.findById(body.categoryId).lean();
+
+    if (!category) {
+      return {
+        error: "Category not found",
+        status: 404,
+      };
+    }
+  }
+
+  const complaintNumber = String(body.complaintNumber || "")
+    .trim()
+    .toUpperCase();
+
+  let complaint = null;
+
+  if (complaintNumber) {
+    complaint = await Complaint.findOne({
+      complaintNumber,
+    }).lean();
+
+    if (!complaint) {
+      return {
+        error: "Complaint not found",
+        status: 404,
+      };
+    }
+  }
+
+  const billingType = body.billingType;
+
+  // Manual closure/cancellation bills must reference a complaint.
+  if (
+    ["FIXED", "PARTIAL_PAYMENT", "PROFIT_SHARING", "CANCELLATION"].includes(
+      billingType,
+    ) &&
+    !complaint
+  ) {
+    return {
+      error: "Complaint is required for this billing type",
+      status: 400,
+    };
+  }
+
+  // Prevent a duplicate ledger for the same complaint and transaction.
+  // if (complaint) {
+  //   const duplicate = await DealerLedger.findOne({
+  //     complaintId: complaint._id,
+  //     transactionType: getTransactionType(billingType),
+  //     reversed: { $ne: true },
+  //     status: { $nin: ["REVERSED", "CANCELLED"] },
+  //     ...(existingBill
+  //       ? { _id: { $ne: existingBill._id } }
+  //       : {}),
+  //   }).lean();
+
+  //   if (duplicate) {
+  //     return {
+  //       error: "An active bill already exists for this complaint and transaction type",
+  //       status: 409,
+  //     };
+  //   }
+  // }
+
+  const customerAmount = Number(body.customerAmount ?? 0);
+  const profitAmount = Number(body.profitAmount ?? 0);
+  const percentage = Number(body.percentage ?? 0);
+  const enteredAmount = Number(body.amount ?? 0);
+
+  const calculation = getBillCalculation({
+    billingType,
+    customerAmount,
+    profitAmount,
+    percentage,
+    amount: enteredAmount,
+  });
+
+  // Use verified category/product snapshot when linked to a complaint.
+  // For manual adjustment/opening balance, use submitted fields.
+  const productId =
+    body.productId === null ||
+    body.productId === undefined ||
+    body.productId === ""
+      ? null
+      : Number(body.productId);
+
+  const billData = {
+    dealerId: dealer._id,
+    dealerCode: dealer.headCode || "",
+    dealerName: dealer.technicianFirmName || dealer.technicianName || "",
+
+    complaintId: complaint?._id ?? null,
+    complaintNumber,
+
+    transactionType: getTransactionType(billingType),
+    billingType,
+
+    productId,
+    productName: String(body.productName || "").trim(),
+
+    categoryId: category?._id ?? null,
+    category: category?.category || String(body.category || "").trim(),
+    serviceDescription:
+      category?.description || existingBill?.serviceDescription || "",
+
+    units: Number(body.units),
+
+    customerAmount,
+    profitAmount,
+    baseAmount: calculation.baseAmount,
+    percentage,
+
+    serviceRate: billingType === "FIXED" ? calculation.amount : 0,
+
+    amount: calculation.amount,
+    calculation: calculation.calculation,
+
+    entryType: body.entryType === "CREDIT" ? "CREDIT" : "DEBIT",
+
+    description: String(
+      body.description ||
+        `${billingType.replaceAll("_", " ")} billing${
+          complaintNumber ? ` for complaint ${complaintNumber}` : ""
+        }`,
+    ).trim(),
+  };
+
+  return {
+    billData,
+    complaint,
+  };
+};
+
+/*
+|--------------------------------------------------------------------------
+| CREATE BILL
+|--------------------------------------------------------------------------
+| POST /api/v1/billing/ledgers
+*/
+
+export const createDealerLedger = async (req, res) => {
+  try {
+    const error = validateBill(req.body);
+
+    if (error) {
+      return res.status(400).json({
+        success: false,
+        message: error,
+      });
+    }
+
+    const result = await buildBillData(req.body);
+
+    if (result.error) {
+      return res.status(result.status).json({
+        success: false,
+        message: result.error,
+      });
+    }
+
+    const { billData, complaint } = result;
+
+    const bill = await DealerLedger.create({
+      ...billData,
+
+      // Manual bills always start pending.
+      status: "PENDING",
+
+      // Snapshot the initial closing remark.
+      closingRemark: String(
+        req.body.closingRemark || complaint?.closureApprovalRemark || "",
+      ).trim(),
+
+      billedBy: req.user?._id ?? null,
+      billingDate: new Date(),
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "Bill created successfully",
+      data: bill,
+    });
+  } catch (error) {
+    console.error("CREATE BILL ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to create bill",
+    });
+  }
+};
+
+/*
+|--------------------------------------------------------------------------
+| UPDATE BILL
+|--------------------------------------------------------------------------
+| PATCH /api/v1/billing/ledgers/:id
+*/
+
+export const updateDealerLedger = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid bill ID",
+      });
+    }
+
+    const existingBill = await DealerLedger.findById(id);
+
+    if (!existingBill) {
+      return res.status(404).json({
+        success: false,
+        message: "Bill not found",
+      });
+    }
+
+    if (existingBill.status !== "PENDING") {
+      return res.status(403).json({
+        success: false,
+        message: "Only pending bills can be edited",
+      });
+    }
+
+    if (existingBill.reversed) {
+      return res.status(403).json({
+        success: false,
+        message: "Reversed bills cannot be edited",
+      });
+    }
+
+    // Merge existing values because PATCH can contain partial fields.
+    const body = {
+      dealerId: existingBill.dealerId.toString(),
+      complaintNumber: existingBill.complaintNumber,
+      productId: existingBill.productId,
+      productName: existingBill.productName,
+      categoryId: existingBill.categoryId?.toString() || "",
+      category: existingBill.category,
+      units: existingBill.units,
+      billingType: existingBill.billingType,
+      customerAmount: existingBill.customerAmount,
+      profitAmount: existingBill.profitAmount,
+      percentage: existingBill.percentage,
+      amount: existingBill.amount,
+      entryType: existingBill.entryType,
+      description: existingBill.description,
+      ...req.body,
+    };
+
+    const error = validateBill(body);
+
+    if (error) {
+      return res.status(400).json({
+        success: false,
+        message: error,
+      });
+    }
+
+    const result = await buildBillData(body, existingBill);
+
+    if (result.error) {
+      return res.status(result.status).json({
+        success: false,
+        message: result.error,
+      });
+    }
+
+    const { billData } = result;
+
+    // Atomic status guard prevents overwriting a bill approved
+    // while the edit request was being processed.
+    const updatedBill = await DealerLedger.findOneAndUpdate(
+      {
+        _id: id,
+        status: "PENDING",
+        reversed: { $ne: true },
+      },
+      {
+        $set: billData,
+      },
+      {
+        new: true,
+        runValidators: true,
+      },
+    );
+
+    if (!updatedBill) {
+      return res.status(409).json({
+        success: false,
+        message: "Bill status changed. Please reload.",
+      });
+    }
+
+    // closingRemark is intentionally not updated.
+    // approvedBy, approvedAt and billingDate remain unchanged.
+
+    return res.status(200).json({
+      success: true,
+      message: "Bill updated successfully",
+      data: updatedBill,
+    });
+  } catch (error) {
+    console.error("UPDATE BILL ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update bill",
+    });
+  }
+};
+
 export const approveDealerLedger = async (req, res) => {
   const session = await mongoose.startSession();
 
@@ -403,7 +853,7 @@ export const approveDealerLedger = async (req, res) => {
     const complaint = await Complaint.findById(ledger.complaintId).session(
       session,
     );
-    console.log("khdbfkbdkbdkb",complaint)
+    console.log("khdbfkbdkbdkb", complaint);
 
     if (!complaint) {
       await session.abortTransaction();
@@ -419,6 +869,8 @@ export const approveDealerLedger = async (req, res) => {
     | Validate Billing Review
     |--------------------------------------------------------------------------
     */
+
+    console.log("aaaaaaaaaaaaaa",complaint.billingReview)
 
     if (!complaint.billingReview) {
       await session.abortTransaction();
@@ -560,5 +1012,365 @@ export const approveDealerLedger = async (req, res) => {
     });
   } finally {
     await session.endSession();
+  }
+};
+
+export const getDealerUnpaidBills = async (req, res) => {
+  try {
+    const { dealerId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(dealerId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid dealer ID",
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Dealer + Opening Balance
+    |--------------------------------------------------------------------------
+    */
+
+    const dealer = await Dealer.findById(dealerId)
+      .select(
+        "headCode technicianFirmName technicianName mobileNumber openingBalance openingBalanceType",
+      )
+      .lean();
+
+    if (!dealer) {
+      return res.status(404).json({
+        success: false,
+        message: "Dealer not found",
+      });
+    }
+
+    const openingBalance = Number(dealer.openingBalance || 0);
+
+    const openingDebit =
+      dealer.openingBalanceType === "DR" ? openingBalance : 0;
+
+    const openingCredit =
+      dealer.openingBalanceType === "CR" ? openingBalance : 0;
+
+    /*
+    |--------------------------------------------------------------------------
+    | Approved Ledger Totals
+    |--------------------------------------------------------------------------
+    */
+
+    const dealerObjectId = new mongoose.Types.ObjectId(dealerId);
+
+    const totals = await DealerLedger.aggregate([
+      {
+        $match: {
+          dealerId: dealerObjectId,
+          status: { $in: ["APPROVED", "BILLED"] },
+          reversed: false,
+
+          // Opening balance is already stored in Dealer.
+          // Avoid counting it twice.
+          transactionType: {
+            $ne: "OPENING_BALANCE",
+          },
+        },
+      },
+      {
+        $group: {
+          _id: "$entryType",
+          total: { $sum: "$amount" },
+        },
+      },
+    ]);
+
+    const ledgerDebit = totals.find((item) => item._id === "DEBIT")?.total || 0;
+
+    const ledgerCredit =
+      totals.find((item) => item._id === "CREDIT")?.total || 0;
+
+    const totalDebit = openingDebit + ledgerDebit;
+
+    const totalCredit = openingCredit + ledgerCredit;
+
+    const netOutstanding = totalDebit - totalCredit;
+
+    const balanceType =
+      netOutstanding > 0 ? "DEBIT" : netOutstanding < 0 ? "CREDIT" : "SETTLED";
+
+    /*
+    |--------------------------------------------------------------------------
+    | Unpaid Complaint Bills
+    |--------------------------------------------------------------------------
+    */
+
+    const bills = await DealerLedger.find({
+      dealerId: dealerObjectId,
+
+      transactionType: {
+        $in: ["CLOSURE", "CANCELLATION"],
+      },
+
+      status: {
+        $in: ["APPROVED", "BILLED"],
+      },
+
+      reversed: false,
+
+      complaintId: { $ne: null },
+
+      paymentStatus: {
+        $in: ["UNPAID", "PARTIALLY_PAID", null],
+      },
+    })
+      .select(
+        "_id complaintId complaintNumber productName category serviceDescription amount paidAmount paymentStatus entryType billingDate",
+      )
+      .sort({ billingDate: -1 })
+      .lean();
+
+    const unpaidBills = bills
+      .map((bill) => {
+        const paidAmount = Number(bill.paidAmount || 0);
+
+        const remainingAmount = Math.max(
+          0,
+          Number(bill.amount || 0) - paidAmount,
+        );
+
+        return {
+          _id: bill._id,
+          complaintId: bill.complaintId,
+          complaintNumber: bill.complaintNumber,
+
+          productName: bill.productName,
+          category: bill.category,
+          serviceDescription: bill.serviceDescription,
+
+          amount: bill.amount,
+          paidAmount,
+          remainingAmount,
+
+          paymentStatus: bill.paymentStatus,
+          entryType: bill.entryType,
+          billingDate: bill.billingDate,
+        };
+      })
+      .filter((bill) => bill.remainingAmount > 0);
+
+    /*
+    |--------------------------------------------------------------------------
+    | Response
+    |--------------------------------------------------------------------------
+    */
+
+    return res.status(200).json({
+      success: true,
+      message: "Dealer unpaid bills fetched successfully",
+
+      data: {
+        dealer: {
+          _id: dealer._id,
+          headCode: dealer.headCode,
+          technicianFirmName: dealer.technicianFirmName,
+          technicianName: dealer.technicianName,
+          mobileNumber: dealer.mobileNumber,
+        },
+
+        summary: {
+          openingBalance,
+          openingBalanceType: dealer.openingBalanceType,
+
+          openingDebit,
+          openingCredit,
+
+          ledgerDebit,
+          ledgerCredit,
+
+          totalDebit,
+          totalCredit,
+
+          netOutstanding,
+          balanceType,
+        },
+
+        bills: unpaidBills,
+
+        totalUnpaidBills: unpaidBills.length,
+
+        totalUnpaidAmount: unpaidBills.reduce(
+          (total, bill) => total + bill.remainingAmount,
+          0,
+        ),
+      },
+    });
+  } catch (error) {
+    console.error("Get Dealer Unpaid Bills Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch dealer unpaid bills",
+      error: error.message,
+    });
+  }
+};
+
+export const getDealerLedgerOverview = async (req, res) => {
+  try {
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 10));
+    const search = String(req.query.search || "").trim();
+
+    const match = {};
+
+    if (search) {
+      const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const regex = new RegExp(escaped, "i");
+
+      match.$or = [
+        { headCode: regex },
+        { technicianFirmName: regex },
+        { technicianName: regex },
+        { mobileNumber: regex },
+      ];
+    }
+
+    const dealers = await Dealer.find(match)
+      .select(
+        "headCode technicianFirmName technicianName mobileNumber openingBalance openingBalanceType securityAmount creditLimit",
+      )
+      .sort({ headCode: 1 })
+      .lean();
+
+    const dealerIds = dealers.map((dealer) => dealer._id);
+
+    const unpaidGroups = await DealerLedger.aggregate([
+      {
+        $match: {
+          dealerId: { $in: dealerIds },
+          transactionType: { $in: ["CLOSURE", "CANCELLATION"] },
+          entryType: "DEBIT",
+          status: { $in: ["APPROVED", "BILLED"] },
+          reversed: false,
+          complaintId: { $ne: null },
+          paymentStatus: {
+            $in: ["UNPAID", "PARTIALLY_PAID", null],
+          },
+        },
+      },
+      {
+        $project: {
+          dealerId: 1,
+          remainingAmount: {
+            $max: [
+              0,
+              {
+                $subtract: [
+                  { $ifNull: ["$amount", 0] },
+                  { $ifNull: ["$paidAmount", 0] },
+                ],
+              },
+            ],
+          },
+        },
+      },
+      {
+        $match: {
+          remainingAmount: { $gt: 0 },
+        },
+      },
+      {
+        $group: {
+          _id: "$dealerId",
+          unpaidBillsCount: { $sum: 1 },
+          unpaidBillsAmount: { $sum: "$remainingAmount" },
+        },
+      },
+    ]);
+
+    const unpaidMap = new Map(
+      unpaidGroups.map((item) => [String(item._id), item]),
+    );
+
+    const money = (value) => Math.round((Number(value) || 0) * 100) / 100;
+
+    const rows = dealers.map((dealer) => {
+      const balance = money(dealer.openingBalance);
+      const isCredit = dealer.openingBalanceType === "CR";
+      const unpaid = unpaidMap.get(String(dealer._id));
+
+      return {
+        dealerId: dealer._id,
+        headCode: dealer.headCode || "",
+        dealerName: dealer.technicianFirmName || dealer.technicianName || "",
+        mobileNumber: dealer.mobileNumber || "",
+
+        unpaidBillsCount: unpaid?.unpaidBillsCount || 0,
+        unpaidBillsAmount: money(unpaid?.unpaidBillsAmount),
+
+        // Outstanding = Unpaid Bills Amount
+        currentOutstanding: money(unpaid?.unpaidBillsAmount),
+
+        // Running Balance
+        openingBalance: money(dealer.openingBalance),
+        openingBalanceType: dealer.openingBalanceType || "DR",
+
+        creditLimit: money(dealer.creditLimit),
+        securityDeposit: money(dealer.securityAmount),
+
+        creditAmount:
+          dealer.openingBalanceType === "CR" ? money(dealer.openingBalance) : 0,
+      };
+    });
+
+    const summary = rows.reduce(
+      (total, row) => {
+        total.unpaidBillsCount += row.unpaidBillsCount;
+        total.unpaidBillsAmount += row.unpaidBillsAmount;
+        total.currentOutstanding += row.currentOutstanding;
+        total.creditAmount += row.creditAmount;
+        total.securityDeposit += row.securityDeposit;
+        return total;
+      },
+      {
+        totalDealers: rows.length,
+        unpaidBillsCount: 0,
+        unpaidBillsAmount: 0,
+        currentOutstanding: 0,
+        creditAmount: 0,
+        securityDeposit: 0,
+      },
+    );
+
+    for (const key of [
+      "unpaidBillsAmount",
+      "currentOutstanding",
+      "creditAmount",
+      "securityDeposit",
+    ]) {
+      summary[key] = money(summary[key]);
+    }
+
+    const totalPages = Math.ceil(rows.length / limit);
+    const paginatedRows = rows.slice((page - 1) * limit, page * limit);
+
+    return res.status(200).json({
+      success: true,
+      message: "Dealer ledger overview fetched successfully",
+      data: paginatedRows,
+      summary,
+      pagination: {
+        page,
+        limit,
+        total: rows.length,
+        totalPages,
+      },
+    });
+  } catch (error) {
+    console.error("Dealer Ledger Overview Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch dealer ledger overview",
+    });
   }
 };

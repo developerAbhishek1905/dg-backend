@@ -14,6 +14,9 @@ import {
   getDealerDropdown,
   endDealerLeave,
   getDealerLifecycleLogs,
+  refundDealerSecurity,
+  getDealerSecurityRefunds,
+  getRefundsByDealer,
 } from "../controllers/dealer.controller.js";
 
 import { dealerDocumentUpload } from "../middleware/dealerUpload.middleware.js";
@@ -33,6 +36,21 @@ router.post("/:id/rejoin", protect, rejoinDealer);
 router.patch("/:id/leave/end", protect, endDealerLeave);
 router.patch("/:id/rating", updateDealerRating);
 router.patch("/:id/suspend", suspendDealer);
+
+router.post(
+  "/security-refunds/:dealerId/refund",
+  protect,
+  // Add your finance/admin permission middleware here.
+  refundDealerSecurity,
+);
+router.get("/security-refunds/:dealerId", protect, getRefundsByDealer);
+
+router.get(
+  "/security-refunds/:dealerId/history",
+  protect,
+  // Add your finance/admin permission middleware here.
+  getDealerSecurityRefunds,
+);
 router.get(
   "/dropdown",
   // protect,

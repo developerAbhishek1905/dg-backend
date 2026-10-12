@@ -24,7 +24,7 @@ import appointmentRoutes from "./modules/appointment/router/appointment.route.js
 import reasonRoutes from "./modules/reason/routes/reason.routes.js";
 import dealerLedgerRoutes from "./modules/dealerLedger/routes/dealerLadger.route.js"
 import ratingReviewRoutes from "./modules/dealers/routes/ratingReview.routes.js";
-
+import dealerPaymentRoutes from "./modules/dealerLedger/routes/dealerPayment.routes.js";
 const app = express();
 
 app.use(
@@ -100,4 +100,10 @@ app.use(
   dealerLedgerRoutes,
 );
 
+
+
+app.use(
+  "/api/v1/dealer-payments",
+  dealerPaymentRoutes,
+);
 export default app;

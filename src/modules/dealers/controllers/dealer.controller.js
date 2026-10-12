@@ -8,6 +8,7 @@ import { syncDealerAllocation } from "../../allocation/services/allocateDealer.s
 import DealerLedger from "../../dealerLedger/model/dealerLedger.model.js";
 import { getLeaveStatus } from "../helpers/dealerLeave.utils.js";
 import DealerLifecycleLog from "../models/dealerLifecycleLog.model.js";
+import SecurityRefund from "../models/securityRefund.model.js"
 /* =========================================================
    HELPERS
 ========================================================= */
@@ -2063,6 +2064,408 @@ export const getDealerLifecycleLogs = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: error.message,
+    });
+  }
+};
+
+/*
+|--------------------------------------------------------------------------
+| Calculate eligible refund date
+|--------------------------------------------------------------------------
+*/
+
+const getEligibleRefundDate = (leavingDate) => {
+  const date = new Date(leavingDate);
+
+  // Add 3 calendar months, clamp month-end dates.
+  const year = date.getUTCFullYear();
+  const month = date.getUTCMonth() + 3;
+  const day = date.getUTCDate();
+
+  const targetMonth = new Date(
+    Date.UTC(year, month, 1),
+  );
+
+  const lastDay = new Date(
+    Date.UTC(
+      targetMonth.getUTCFullYear(),
+      targetMonth.getUTCMonth() + 1,
+      0,
+    ),
+  ).getUTCDate();
+
+  targetMonth.setUTCDate(Math.min(day, lastDay));
+
+  targetMonth.setUTCHours(
+    date.getUTCHours(),
+    date.getUTCMinutes(),
+    date.getUTCSeconds(),
+    date.getUTCMilliseconds(),
+  );
+
+  return targetMonth;
+};
+
+/*
+|--------------------------------------------------------------------------
+| Refund Dealer Security Amount
+|--------------------------------------------------------------------------
+*/
+
+export const refundDealerSecurity = async (req, res) => {
+  const { dealerId } = req.params;
+
+  const {
+    paymentMode,
+    transactionReference = "",
+    remark = "",
+  } = req.body;
+
+  if (!mongoose.Types.ObjectId.isValid(dealerId)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid dealer ID",
+    });
+  }
+
+  const validModes = [
+    "CASH",
+    "UPI",
+    "BANK_TRANSFER",
+    "CHEQUE",
+  ];
+
+  if (!validModes.includes(paymentMode)) {
+    return res.status(400).json({
+      success: false,
+      message: "Valid payment mode is required",
+    });
+  }
+
+  if (!req.user?._id) {
+    return res.status(401).json({
+      success: false,
+      message: "Authentication required",
+    });
+  }
+
+  const session = await mongoose.startSession();
+
+  try {
+    let refundRecord;
+
+    await session.withTransaction(async () => {
+      const dealer = await Dealer.findById(dealerId)
+        .session(session);
+
+      if (!dealer) {
+        const error = new Error("Dealer not found");
+        error.statusCode = 404;
+        throw error;
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | Validate latest leaving date
+      |--------------------------------------------------------------------------
+      */
+
+      if (!dealer.dateOfLeaving) {
+        const error = new Error(
+          "Dealer has no leaving date. Security refund is not allowed.",
+        );
+        error.statusCode = 400;
+        throw error;
+      }
+
+      const leavingDate = new Date(
+        dealer.dateOfLeaving,
+      );
+
+      const now = new Date();
+
+      if (
+        Number.isNaN(leavingDate.getTime()) ||
+        leavingDate > now
+      ) {
+        const error = new Error(
+          "Dealer leaving date is invalid or in the future.",
+        );
+        error.statusCode = 400;
+        throw error;
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | Dealer must not have rejoined after leaving
+      |--------------------------------------------------------------------------
+      */
+
+      const hasRejoinedAfterLeaving =
+        (dealer.lastRejoiningDate &&
+          new Date(dealer.lastRejoiningDate) >
+            leavingDate) ||
+        dealer.rejoiningDates?.some(
+          (date) => new Date(date) > leavingDate,
+        );
+
+      if (hasRejoinedAfterLeaving) {
+        const error = new Error(
+          "Dealer has rejoined after the latest leaving date. Refund is not allowed.",
+        );
+        error.statusCode = 400;
+        throw error;
+      }
+
+      // Do not refund a currently active dealer.
+      if (dealer.status === "ACTIVE") {
+        const error = new Error(
+          "Active dealer security cannot be refunded.",
+        );
+        error.statusCode = 400;
+        throw error;
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | Check 3-month eligibility
+      |--------------------------------------------------------------------------
+      */
+
+      const eligibleRefundDate =
+        getEligibleRefundDate(leavingDate);
+
+      if (now < eligibleRefundDate) {
+        const error = new Error(
+          "Security amount can only be refunded after 3 months from the latest leaving date.",
+        );
+
+        error.statusCode = 400;
+        error.eligibleRefundDate =
+          eligibleRefundDate;
+
+        throw error;
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | Validate security amount
+      |--------------------------------------------------------------------------
+      */
+
+      const refundAmount = Number(
+        dealer.securityAmount ?? 0,
+      );
+
+      if (
+        !Number.isFinite(refundAmount) ||
+        refundAmount <= 0
+      ) {
+        const error = new Error(
+          "No refundable security amount available.",
+        );
+        error.statusCode = 400;
+        throw error;
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | Update security amount
+      |--------------------------------------------------------------------------
+      */
+
+      dealer.securityAmount = 0;
+
+      await dealer.save({ session });
+
+      /*
+      |--------------------------------------------------------------------------
+      | Create refund log
+      |--------------------------------------------------------------------------
+      */
+
+      const [createdRefund] =
+        await SecurityRefund.create(
+          [
+            {
+              dealerId: dealer._id,
+
+              refundAmount,
+
+              securityAmountBefore: refundAmount,
+              securityAmountAfter: 0,
+
+              dateOfLeaving: leavingDate,
+              eligibleRefundDate,
+
+              refundDate: now,
+
+              paymentMode,
+
+              transactionReference:
+                String(transactionReference).trim(),
+
+              remark: String(remark).trim(),
+
+              refundedBy: req.user._id,
+            },
+          ],
+          { session },
+        );
+
+      refundRecord = createdRefund;
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Security amount refunded successfully",
+      data: refundRecord,
+    });
+  } catch (error) {
+    console.error("Security refund error:", error);
+
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message:
+        error.statusCode
+          ? error.message
+          : "Failed to refund security amount",
+      ...(error.eligibleRefundDate && {
+        eligibleRefundDate:
+          error.eligibleRefundDate,
+      }),
+    });
+  } finally {
+    await session.endSession();
+  }
+};
+
+export const getDealerSecurityRefunds = async (
+  req,
+  res,
+) => {
+  try {
+    const { dealerId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(dealerId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid dealer ID",
+      });
+    }
+
+    const refunds = await SecurityRefund.find({
+      dealerId,
+    })
+      .populate("refundedBy", "name email")
+      .sort({ refundDate: -1 })
+      .lean();
+
+    return res.status(200).json({
+      success: true,
+      message: "Security refund history fetched",
+      data: refunds,
+    });
+  } catch (error) {
+    console.error("Refund history error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch refund history",
+    });
+  }
+};
+
+export const getRefundsByDealer = async (req, res) => {
+  try {
+    const { dealerId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(dealerId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid dealer ID",
+      });
+    }
+
+    const dealer = await Dealer.findById(dealerId)
+      .select(
+        "headCode technicianFirmName securityAmount dateOfLeaving lastRejoiningDate rejoiningDates status",
+      )
+      .lean();
+
+    if (!dealer) {
+      return res.status(404).json({
+        success: false,
+        message: "Dealer not found",
+      });
+    }
+
+    const refunds = await SecurityRefund.find({
+      dealerId,
+    })
+      .populate("refundedBy", "name email")
+      .sort({ refundDate: -1, createdAt: -1 })
+      .lean();
+
+    const now = new Date();
+    const leavingDate = dealer.dateOfLeaving
+      ? new Date(dealer.dateOfLeaving)
+      : null;
+
+    const eligibleRefundDate = leavingDate
+      ? getEligibleRefundDate(leavingDate)
+      : null;
+
+    const rejoinedAfterLeaving =
+      Boolean(
+        leavingDate &&
+          dealer.lastRejoiningDate &&
+          new Date(dealer.lastRejoiningDate) > leavingDate,
+      ) ||
+      Boolean(
+        leavingDate &&
+          dealer.rejoiningDates?.some(
+            (date) => new Date(date) > leavingDate,
+          ),
+      );
+
+    const securityAmount = Number(
+      dealer.securityAmount ?? 0,
+    );
+
+    let reason = "";
+
+    if (!leavingDate) {
+      reason = "Dealer leaving date is not available.";
+    } else if (dealer.status === "ACTIVE" || rejoinedAfterLeaving) {
+      reason = "Dealer is active or has rejoined after leaving.";
+    } else if (now < eligibleRefundDate) {
+      reason = "Three months have not completed since leaving.";
+    } else if (securityAmount <= 0) {
+      reason = "No refundable security amount available.";
+    }
+
+    const canRefund = reason === "";
+
+    return res.status(200).json({
+      success: true,
+      message: "Dealer security refunds fetched successfully",
+      data: {
+        dealerId: dealer._id,
+        securityAmount,
+        dateOfLeaving: leavingDate,
+        eligibleRefundDate,
+        canRefund,
+        reason,
+        refunds,
+      },
+    });
+  } catch (error) {
+    console.error("Get dealer refunds error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch dealer refunds",
     });
   }
 };
