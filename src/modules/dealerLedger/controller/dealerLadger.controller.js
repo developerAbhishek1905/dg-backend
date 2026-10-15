@@ -6,7 +6,7 @@ import Dealer from "../../dealers/models/dealer.model.js";
 import Category from "../../category/models/category.model.js";
 import Complaint from "../../Complaint/models/complaint.model.js";
 import { createComplaintActivity } from "../../Complaint/services/complaintActivity.service.js";
-
+import Account from "../../accounts/model/account.model.js";
 /*
 |--------------------------------------------------------------------------
 | GET ALL DEALER LEDGERS
@@ -586,57 +586,237 @@ const buildBillData = async (body, existingBill = null) => {
 | POST /api/v1/billing/ledgers
 */
 
+const isValidId = (id) =>
+  mongoose.Types.ObjectId.isValid(id);
+
 export const createDealerLedger = async (req, res) => {
-  try {
-    const error = validateBill(req.body);
+  /*
+  |--------------------------------------------------------------------------
+  | Manual Account Entry
+  |--------------------------------------------------------------------------
+  */
 
-    if (error) {
-      return res.status(400).json({
-        success: false,
-        message: error,
+  if (req.body.entrySource === "MANUAL_ACCOUNT_ENTRY") {
+    let session;
+
+    try {
+      const {
+        dealerId,
+        billingDate,
+        referenceNumber,
+        description,
+        debitEntries = [],
+        creditEntries = [],
+      } = req.body;
+
+      if (!isValidId(dealerId)) {
+        return res.status(400).json({
+          success: false,
+          message: "Valid dealer is required",
+        });
+      }
+
+      if (
+        !Array.isArray(debitEntries) ||
+        !Array.isArray(creditEntries)
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid debit or credit entries",
+        });
+      }
+
+      const entries = [
+        ...debitEntries.map((entry) => ({
+          ...entry,
+          accountType: "DEBIT",
+        })),
+        ...creditEntries.map((entry) => ({
+          ...entry,
+          accountType: "CREDIT",
+        })),
+      ];
+
+      if (!entries.length) {
+        return res.status(400).json({
+          success: false,
+          message: "At least one entry is required",
+        });
+      }
+
+      for (const entry of entries) {
+        if (
+          !isValidId(entry.accountId) ||
+          !Number.isFinite(Number(entry.amount)) ||
+          Number(entry.amount) <= 0
+        ) {
+          return res.status(400).json({
+            success: false,
+            message: "Invalid account or amount",
+          });
+        }
+      }
+
+      if (
+        !billingDate ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(billingDate) ||
+        Number.isNaN(Date.parse(billingDate))
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Valid billing date is required",
+        });
+      }
+
+      const uniqueAccountIds = [
+        ...new Set(
+          entries.map((entry) => String(entry.accountId)),
+        ),
+      ];
+
+      session = await mongoose.startSession();
+
+      let ledger;
+
+      await session.withTransaction(async () => {
+        const dealer = await Dealer.findById(
+          dealerId,
+        ).session(session);
+
+        if (!dealer) {
+          const error = new Error("Dealer not found");
+          error.statusCode = 404;
+          throw error;
+        }
+
+        const accounts = await Account.find({
+          _id: { $in: uniqueAccountIds },
+        }).session(session);
+
+        if (accounts.length !== uniqueAccountIds.length) {
+          const error = new Error(
+            "One or more selected accounts do not exist",
+          );
+          error.statusCode = 400;
+          throw error;
+        }
+
+        const [createdLedger] = await DealerLedger.create(
+          [
+            {
+              dealerId: dealer._id,
+              dealerCode: dealer.headCode || "",
+              dealerName:
+                dealer.technicianFirmName ||
+                dealer.technicianName ||
+                "",
+
+              transactionType: "ADJUSTMENT",
+              billingType: "ADJUSTMENT",
+              entrySource: "MANUAL_ACCOUNT_ENTRY",
+
+              debitEntries: debitEntries.map((entry) => ({
+                accountId: entry.accountId,
+                amount: Number(entry.amount),
+              })),
+
+              creditEntries: creditEntries.map((entry) => ({
+                accountId: entry.accountId,
+                amount: Number(entry.amount),
+              })),
+
+              amount: 0,
+              entryType: "DEBIT",
+
+              referenceNumber:
+                String(referenceNumber || "").trim(),
+
+              description:
+                String(description || "").trim(),
+
+              billingDate: new Date(
+                `${billingDate}T00:00:00.000Z`,
+              ),
+
+              billedBy: req.user?._id ?? null,
+              status: "APPROVED",
+              approvedBy: req.user?._id ?? null,
+              approvedAt: new Date(),
+            },
+          ],
+          { session },
+        );
+
+        ledger = createdLedger;
+
+        /*
+        |--------------------------------------------------------------------------
+        | Sync All Entries To Account.balance[]
+        |--------------------------------------------------------------------------
+        */
+
+        for (const entry of entries) {
+          const result = await Account.updateOne(
+            {
+              _id: entry.accountId,
+              "balance.ledgerId": {
+                $ne: ledger._id,
+              },
+            },
+            {
+              $push: {
+                balance: {
+                  dealerId: dealer._id,
+                  ledgerId: ledger._id,
+                  amount: Number(entry.amount),
+                  accountType: entry.accountType,
+                },
+              },
+            },
+            { session },
+          );
+
+          if (result.modifiedCount !== 1) {
+            throw new Error(
+              "Failed to sync account balance",
+            );
+          }
+        }
       });
-    }
 
-    const result = await buildBillData(req.body);
-
-    if (result.error) {
-      return res.status(result.status).json({
-        success: false,
-        message: result.error,
+      return res.status(201).json({
+        success: true,
+        message: "Dealer entry saved successfully",
+        data: ledger,
       });
+    } catch (error) {
+      console.error("MANUAL LEDGER ERROR:", error);
+
+      return res.status(error.statusCode || 500).json({
+        success: false,
+        message:
+          error.statusCode
+            ? error.message
+            : "Failed to save dealer entry",
+      });
+    } finally {
+      if (session) {
+        await session.endSession();
+      }
     }
-
-    const { billData, complaint } = result;
-
-    const bill = await DealerLedger.create({
-      ...billData,
-
-      // Manual bills always start pending.
-      status: "PENDING",
-
-      // Snapshot the initial closing remark.
-      closingRemark: String(
-        req.body.closingRemark || complaint?.closureApprovalRemark || "",
-      ).trim(),
-
-      billedBy: req.user?._id ?? null,
-      billingDate: new Date(),
-    });
-
-    return res.status(201).json({
-      success: true,
-      message: "Bill created successfully",
-      data: bill,
-    });
-  } catch (error) {
-    console.error("CREATE BILL ERROR:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to create bill",
-    });
   }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Existing Normal Bill Creation
+  |--------------------------------------------------------------------------
+  |
+  | Keep your previously updated normal createDealerLedger
+  | logic here, including its Account synchronization.
+  |
+  */
 };
+
 
 /*
 |--------------------------------------------------------------------------

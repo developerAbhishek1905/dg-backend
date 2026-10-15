@@ -17,14 +17,16 @@ import areaRoutes from "./modules/address/routes/area.routes.js";
 import brandRoutes from "./modules/brand/routes/brand.routes.js";
 import productRoutes from "./modules/product/routes/product.routes.js";
 import productTypeRoutes from "./modules/productType/routes/productType.routes.js";
-import customerRoutes from "./modules/Customer/routes/customer.routes.js"
-import complaintRoutes from "./modules/Complaint/routes/complaint.routes.js"
+import customerRoutes from "./modules/Customer/routes/customer.routes.js";
+import complaintRoutes from "./modules/Complaint/routes/complaint.routes.js";
 import { testWhatsApp } from "./services/smartpingWhatsapp.service.js";
 import appointmentRoutes from "./modules/appointment/router/appointment.route.js";
 import reasonRoutes from "./modules/reason/routes/reason.routes.js";
-import dealerLedgerRoutes from "./modules/dealerLedger/routes/dealerLadger.route.js"
+import dealerLedgerRoutes from "./modules/dealerLedger/routes/dealerLadger.route.js";
 import ratingReviewRoutes from "./modules/dealers/routes/ratingReview.routes.js";
 import dealerPaymentRoutes from "./modules/dealerLedger/routes/dealerPayment.routes.js";
+import accountRoutes from "./modules/accounts/routes/account.routes.js";
+
 const app = express();
 
 app.use(
@@ -53,7 +55,6 @@ app.get("/", (req, res) => {
   });
 });
 
-
 // app.use("/uploads", express.static("uploads"));
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/roles", roleRoutes);
@@ -71,39 +72,20 @@ app.use("/api/v1/reasons", reasonRoutes);
 app.use("/api/v1/products", productRoutes);
 app.use("/api/v1/product-types", productTypeRoutes);
 app.use("/api/v1/ratings", ratingReviewRoutes);
-app.use(
-  "/api/v1/customers",
-  customerRoutes,
-);
+app.use("/api/v1/customers", customerRoutes);
 
+app.use("/api/v1/complaints", complaintRoutes);
 
-app.use(
-  "/api/v1/complaints",
-  complaintRoutes,
-);
+app.post("/api/v1/test-whatsapp", testWhatsApp);
 
-
-app.post(
-  "/api/v1/test-whatsapp",
-  testWhatsApp,
-);
-
-app.use(
-  "/api/v1/appointments",
-  appointmentRoutes,
-);
+app.use("/api/v1/appointments", appointmentRoutes);
 
 app.use("/api/v1/verification", verificationRouter);
 app.use("/api/v1/ledger", ledgerRouter);
-app.use(
-  "/api/v1/dealer-ledger",
-  dealerLedgerRoutes,
-);
+app.use("/api/v1/dealer-ledger", dealerLedgerRoutes);
 
+app.use("/api/v1/dealer-payments", dealerPaymentRoutes);
 
+app.use("/api/v1/accounts", accountRoutes);
 
-app.use(
-  "/api/v1/dealer-payments",
-  dealerPaymentRoutes,
-);
 export default app;

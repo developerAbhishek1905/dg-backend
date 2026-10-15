@@ -1,10 +1,42 @@
+
 import mongoose from "mongoose";
+
+/*
+|--------------------------------------------------------------------------
+| Account Entry Sub Schema
+|--------------------------------------------------------------------------
+*/
+
+const accountEntrySchema = new mongoose.Schema(
+  {
+    accountId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Account",
+      required: true,
+    },
+
+    amount: {
+      type: Number,
+      required: true,
+      min: 0.01,
+    },
+  },
+  {
+    _id: true,
+  },
+);
+
+/*
+|--------------------------------------------------------------------------
+| Dealer Ledger Schema
+|--------------------------------------------------------------------------
+*/
 
 const dealerLedgerSchema = new mongoose.Schema(
   {
     /*
     |--------------------------------------------------------------------------
-    | Dealer
+    | Dealer Information
     |--------------------------------------------------------------------------
     */
 
@@ -31,7 +63,7 @@ const dealerLedgerSchema = new mongoose.Schema(
 
     /*
     |--------------------------------------------------------------------------
-    | Complaint
+    | Complaint Information
     |--------------------------------------------------------------------------
     */
 
@@ -54,16 +86,17 @@ const dealerLedgerSchema = new mongoose.Schema(
     |--------------------------------------------------------------------------
     | Transaction Type
     |--------------------------------------------------------------------------
-    |
-    | CLOSURE      -> normal complaint closure billing
-    | CANCELLATION -> approved cancellation billing
-    | ADJUSTMENT   -> manual debit/credit adjustment
-    |
     */
 
     transactionType: {
       type: String,
-      enum: ["OPENING_BALANCE", "CLOSURE", "CANCELLATION", "ADJUSTMENT","PAYMENT"],
+      enum: [
+        "OPENING_BALANCE",
+        "CLOSURE",
+        "CANCELLATION",
+        "ADJUSTMENT",
+        "PAYMENT",
+      ],
       required: true,
       index: true,
     },
@@ -77,10 +110,70 @@ const dealerLedgerSchema = new mongoose.Schema(
         "PROFIT_SHARING",
         "CANCELLATION",
         "ADJUSTMENT",
-        "PAYMENT"
+        "PAYMENT",
       ],
       required: true,
       index: true,
+    },
+
+    /*
+    |--------------------------------------------------------------------------
+    | Entry Source
+    |--------------------------------------------------------------------------
+    */
+
+    entrySource: {
+      type: String,
+      enum: ["SYSTEM", "MANUAL_ACCOUNT_ENTRY"],
+      default: "SYSTEM",
+      index: true,
+    },
+
+    referenceNumber: {
+      type: String,
+      trim: true,
+      default: "",
+      index: true,
+    },
+
+    /*
+    |--------------------------------------------------------------------------
+    | Multiple Debit / Credit Account Entries
+    |--------------------------------------------------------------------------
+    |
+    | Used for MANUAL_ACCOUNT_ENTRY.
+    |
+    | Example:
+    |
+    | Debit:
+    | OUTSTANDING A/C       3000
+    | SECURITY DEPOSIT A/C  2000
+    |
+    | Credit:
+    | PAYMENT A/C           5000
+    |
+    */
+
+    debitEntries: {
+      type: [accountEntrySchema],
+      default: [],
+    },
+
+    creditEntries: {
+      type: [accountEntrySchema],
+      default: [],
+    },
+
+    totalDebit: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+
+    totalCredit: {
+      type: Number,
+      min: 0,
+      default: 0,
     },
 
     /*
@@ -126,26 +219,24 @@ const dealerLedgerSchema = new mongoose.Schema(
     |--------------------------------------------------------------------------
     */
 
-    // Amount on which percentage calculation is performed.
-    // Example: dealer collected ₹5000 from customer.
-
     customerAmount: {
       type: Number,
       min: 0,
       default: 0,
     },
+
     profitAmount: {
       type: Number,
       min: 0,
       default: 0,
     },
+
     baseAmount: {
       type: Number,
       min: 0,
       default: 0,
     },
 
-    // Billing percentage configured at the time of billing.
     percentage: {
       type: Number,
       min: 0,
@@ -153,8 +244,6 @@ const dealerLedgerSchema = new mongoose.Schema(
       default: 0,
     },
 
-    // Fixed service rate snapshot.
-    // Example: AC Installation = ₹300
     serviceRate: {
       type: Number,
       min: 0,
@@ -163,8 +252,14 @@ const dealerLedgerSchema = new mongoose.Schema(
 
     /*
     |--------------------------------------------------------------------------
-    | Final Ledger Amount
+    | Existing Single Ledger Amount
     |--------------------------------------------------------------------------
+    |
+    | Used by existing billing/payment functionality.
+    |
+    | For manual account entries, use debitEntries/creditEntries
+    | instead of treating this amount as the voucher total.
+    |
     */
 
     amount: {
@@ -172,19 +267,6 @@ const dealerLedgerSchema = new mongoose.Schema(
       min: 0,
       required: true,
     },
-
-    /*
-    |--------------------------------------------------------------------------
-    | Debit / Credit
-    |--------------------------------------------------------------------------
-    |
-    | DEBIT:
-    | DG is charging dealer.
-    |
-    | CREDIT:
-    | DG is giving adjustment/credit to dealer.
-    |
-    */
 
     entryType: {
       type: String,
@@ -224,7 +306,7 @@ const dealerLedgerSchema = new mongoose.Schema(
 
     /*
     |--------------------------------------------------------------------------
-    | Source / Calculation Snapshot
+    | Calculation Snapshot
     |--------------------------------------------------------------------------
     */
 
@@ -252,7 +334,7 @@ const dealerLedgerSchema = new mongoose.Schema(
 
     /*
     |--------------------------------------------------------------------------
-    | Description
+    | Description / Remarks
     |--------------------------------------------------------------------------
     */
 
@@ -276,14 +358,20 @@ const dealerLedgerSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["PENDING", "APPROVED", "BILLED", "REVERSED", "CANCELLED"],
+      enum: [
+        "PENDING",
+        "APPROVED",
+        "BILLED",
+        "REVERSED",
+        "CANCELLED",
+      ],
       default: "APPROVED",
       index: true,
     },
 
     /*
     |--------------------------------------------------------------------------
-    | Billing Date
+    | Billing Date / Created By
     |--------------------------------------------------------------------------
     */
 
@@ -310,48 +398,54 @@ const dealerLedgerSchema = new mongoose.Schema(
       default: null,
     },
 
+    /*
+    |--------------------------------------------------------------------------
+    | Units / Closure Remark
+    |--------------------------------------------------------------------------
+    */
+
     units: {
-  type: Number,
-  min: 1,
-  default: 1,
-},
+      type: Number,
+      min: 1,
+      default: 1,
+    },
 
-closingRemark: {
-  type: String,
-  trim: true,
-  default: "",
-},
+    closingRemark: {
+      type: String,
+      trim: true,
+      default: "",
+    },
 
-/*
-|--------------------------------------------------------------------------
-| Payment Tracking
-|--------------------------------------------------------------------------
-*/
+    /*
+    |--------------------------------------------------------------------------
+    | Payment Tracking
+    |--------------------------------------------------------------------------
+    */
 
-paymentId: {
-  type: mongoose.Schema.Types.ObjectId,
-  ref: "DealerPayment",
-  default: null,
-  index: true,
-},
+    paymentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "DealerPayment",
+      default: null,
+      index: true,
+    },
 
-paidAmount: {
-  type: Number,
-  min: 0,
-  default: 0,
-},
+    paidAmount: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
 
-paymentStatus: {
-  type: String,
-  enum: ["UNPAID", "PARTIALLY_PAID", "PAID"],
-  default: "UNPAID",
-  index: true,
-},
+    paymentStatus: {
+      type: String,
+      enum: ["UNPAID", "PARTIALLY_PAID", "PAID"],
+      default: "UNPAID",
+      index: true,
+    },
 
-lastPaymentAt: {
-  type: Date,
-  default: null,
-},
+    lastPaymentAt: {
+      type: Date,
+      default: null,
+    },
 
     /*
     |--------------------------------------------------------------------------
@@ -388,22 +482,67 @@ lastPaymentAt: {
 
 /*
 |--------------------------------------------------------------------------
+| Calculate Manual Debit / Credit Totals
+|--------------------------------------------------------------------------
+*/
+
+dealerLedgerSchema.pre("validate", function () {
+  if (this.entrySource !== "MANUAL_ACCOUNT_ENTRY") {
+    return;
+  }
+
+  const debitEntries = this.debitEntries ?? [];
+  const creditEntries = this.creditEntries ?? [];
+
+  const calculateTotal = (entries) =>
+    Math.round(
+      entries.reduce(
+        (sum, entry) => sum + Number(entry.amount || 0),
+        0,
+      ) * 100,
+    ) / 100;
+
+  this.totalDebit = calculateTotal(debitEntries);
+  this.totalCredit = calculateTotal(creditEntries);
+
+  if (
+    debitEntries.length === 0 &&
+    creditEntries.length === 0
+  ) {
+    this.invalidate(
+      "debitEntries",
+      "At least one debit or credit entry is required",
+    );
+  }
+
+  // Existing single-sided amount is not applicable to
+  // a manual multi-account voucher.
+  this.amount = 0;
+  this.entryType = "DEBIT";
+
+  // Intentionally no debit === credit validation here.
+  // Enable that rule if only balanced journal entries
+  // should be allowed.
+});
+
+/*
+|--------------------------------------------------------------------------
 | Indexes
 |--------------------------------------------------------------------------
 */
 
-// Fast dealer ledger/history
+// Dealer ledger history
 dealerLedgerSchema.index({
   dealerId: 1,
   billingDate: -1,
 });
 
-// Complaint billing lookup
+// Complaint billing
 dealerLedgerSchema.index({
   complaintId: 1,
 });
 
-// Reports
+// Dealer transaction reports
 dealerLedgerSchema.index({
   dealerId: 1,
   transactionType: 1,
@@ -417,4 +556,26 @@ dealerLedgerSchema.index({
   billingDate: -1,
 });
 
-export default mongoose.model("DealerLedger", dealerLedgerSchema);
+// Account-wise debit lookup
+dealerLedgerSchema.index({
+  "debitEntries.accountId": 1,
+  billingDate: -1,
+});
+
+// Account-wise credit lookup
+dealerLedgerSchema.index({
+  "creditEntries.accountId": 1,
+  billingDate: -1,
+});
+
+// Manual entry reports
+dealerLedgerSchema.index({
+  entrySource: 1,
+  dealerId: 1,
+  billingDate: -1,
+});
+
+export default mongoose.model(
+  "DealerLedger",
+  dealerLedgerSchema,
+);

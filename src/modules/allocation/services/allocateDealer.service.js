@@ -97,8 +97,13 @@ export const syncDealerAllocation = async ({
   allocation.dealerName =
     dealer.technicianFirmName || dealer.technicianName || "";
 
+  // Sync latest dealer credit limit
+  allocation.creditLimit = dealer.creditLimit ?? 0;
+
+  // Update capacity rules
   allocation.rules = newRules;
 
+  // Update allocation status
   allocation.status = dealer.status === "ACTIVE" ? "ACTIVE" : "INACTIVE";
 
   await allocation.save();
@@ -286,9 +291,7 @@ export const allocateDealerForComplaint = async ({
       $in: dealerIds,
     },
   })
-    .select(
-      "_id status dateOfJoining dateOfLeaving rejoiningDates leaves ",
-    )
+    .select("_id status dateOfJoining dateOfLeaving rejoiningDates leaves ")
     .lean();
 
   const activeDealerIds = new Set(

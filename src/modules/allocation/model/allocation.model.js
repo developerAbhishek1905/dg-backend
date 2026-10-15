@@ -1,32 +1,3 @@
-// import mongoose from "mongoose";
-
-// const allocationSchema = mongoose.Schema({
-//   dealers: [
-//     {
-//       dealerId: { type: mongoose.Schema.Types.ObjectId, ref: "Dealer" },
-//       from:{
-//         type:Date
-//       },
-//       to:{
-//         type:Date
-//       },
-//       rule:{
-//         cityId:Number,
-//         cityName:String,
-//         services:[
-//             {type:String}
-//         ],
-//         capacity:{},
-//         status:{
-//             type:String,
-//             enum:['ACTIVE','INACTIVE','LEAVE'],
-//             default: 'ACTIVE'
-//         }
-//       }
-//     },
-//   ],
-// });
-
 import mongoose from "mongoose";
 
 const allocationServiceSchema = new mongoose.Schema(
@@ -221,6 +192,11 @@ const allocationSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    creditLimit: {
+  type: Number,
+  min: 0,
+  default: 0,
+},
 
     allocationMonth: {
       type: Number,

@@ -8,7 +8,7 @@ import { syncDealerAllocation } from "../../allocation/services/allocateDealer.s
 import DealerLedger from "../../dealerLedger/model/dealerLedger.model.js";
 import { getLeaveStatus } from "../helpers/dealerLeave.utils.js";
 import DealerLifecycleLog from "../models/dealerLifecycleLog.model.js";
-import SecurityRefund from "../models/securityRefund.model.js"
+import SecurityRefund from "../models/securityRefund.model.js";
 import mongoose from "mongoose";
 
 /* =========================================================
@@ -657,11 +657,22 @@ export const createDealer = async (req, res) => {
 
       allocationYear,
 
+      creditLimit: dealer.creditLimit ?? 0,
+
       average_amount: 0,
 
       from,
 
       to,
+
+      performanceSnapshot: {
+        totalAmount: 0,
+        average_amount: 0,
+        rating: 0,
+        totalAllocated: 0,
+        totalCompleted: 0,
+        performanceScore: 0,
+      },
 
       rules: allocationRules,
 
@@ -1409,16 +1420,17 @@ export const updateDealer = async (req, res) => {
 
     let allocation = null;
 
-    const allocationRelatedChanged =
-      req.body.productServices !== undefined ||
-      req.body.combinedCapacity !== undefined ||
-      req.body.individualCapacities !== undefined ||
-      req.body.technicianStatus !== undefined ||
-      req.body.technicianCode !== undefined ||
-      req.body.technicianFirmName !== undefined ||
-      req.body.technicianName !== undefined ||
-      req.body.dateOfJoining !== undefined ||
-      req.body.dateOfLeaving !== undefined;
+const allocationRelatedChanged =
+  req.body.productServices !== undefined ||
+  req.body.combinedCapacity !== undefined ||
+  req.body.individualCapacities !== undefined ||
+  req.body.technicianStatus !== undefined ||
+  req.body.technicianCode !== undefined ||
+  req.body.technicianFirmName !== undefined ||
+  req.body.technicianName !== undefined ||
+  req.body.dateOfJoining !== undefined ||
+  req.body.dateOfLeaving !== undefined ||
+  req.body.creditLimit !== undefined;
 
     if (allocationRelatedChanged) {
       allocation = await syncDealerAllocation({
@@ -1433,7 +1445,26 @@ export const updateDealer = async (req, res) => {
 
         individualCapacities: dealer.individualCapacities ?? [],
       });
+      
     }
+
+    if (req.body.creditLimit !== undefined) {
+  const now = new Date();
+
+  await Allocation.updateOne(
+    {
+      dealerId: dealer._id,
+      allocationMonth: now.getMonth() + 1,
+      allocationYear: now.getFullYear(),
+    },
+    {
+      $set: {
+        creditLimit: dealer.creditLimit ?? 0,
+      },
+    },
+  );
+}
+
 
     return res.status(200).json({
       success: true,
@@ -2084,16 +2115,10 @@ const getEligibleRefundDate = (leavingDate) => {
   const month = date.getUTCMonth() + 3;
   const day = date.getUTCDate();
 
-  const targetMonth = new Date(
-    Date.UTC(year, month, 1),
-  );
+  const targetMonth = new Date(Date.UTC(year, month, 1));
 
   const lastDay = new Date(
-    Date.UTC(
-      targetMonth.getUTCFullYear(),
-      targetMonth.getUTCMonth() + 1,
-      0,
-    ),
+    Date.UTC(targetMonth.getUTCFullYear(), targetMonth.getUTCMonth() + 1, 0),
   ).getUTCDate();
 
   targetMonth.setUTCDate(Math.min(day, lastDay));
@@ -2117,11 +2142,7 @@ const getEligibleRefundDate = (leavingDate) => {
 export const refundDealerSecurity = async (req, res) => {
   const { dealerId } = req.params;
 
-  const {
-    paymentMode,
-    transactionReference = "",
-    remark = "",
-  } = req.body;
+  const { paymentMode, transactionReference = "", remark = "" } = req.body;
 
   if (!mongoose.Types.ObjectId.isValid(dealerId)) {
     return res.status(400).json({
@@ -2130,12 +2151,7 @@ export const refundDealerSecurity = async (req, res) => {
     });
   }
 
-  const validModes = [
-    "CASH",
-    "UPI",
-    "BANK_TRANSFER",
-    "CHEQUE",
-  ];
+  const validModes = ["CASH", "UPI", "BANK_TRANSFER", "CHEQUE"];
 
   if (!validModes.includes(paymentMode)) {
     return res.status(400).json({
@@ -2157,8 +2173,7 @@ export const refundDealerSecurity = async (req, res) => {
     let refundRecord;
 
     await session.withTransaction(async () => {
-      const dealer = await Dealer.findById(dealerId)
-        .session(session);
+      const dealer = await Dealer.findById(dealerId).session(session);
 
       if (!dealer) {
         const error = new Error("Dealer not found");
@@ -2180,16 +2195,11 @@ export const refundDealerSecurity = async (req, res) => {
         throw error;
       }
 
-      const leavingDate = new Date(
-        dealer.dateOfLeaving,
-      );
+      const leavingDate = new Date(dealer.dateOfLeaving);
 
       const now = new Date();
 
-      if (
-        Number.isNaN(leavingDate.getTime()) ||
-        leavingDate > now
-      ) {
+      if (Number.isNaN(leavingDate.getTime()) || leavingDate > now) {
         const error = new Error(
           "Dealer leaving date is invalid or in the future.",
         );
@@ -2205,11 +2215,8 @@ export const refundDealerSecurity = async (req, res) => {
 
       const hasRejoinedAfterLeaving =
         (dealer.lastRejoiningDate &&
-          new Date(dealer.lastRejoiningDate) >
-            leavingDate) ||
-        dealer.rejoiningDates?.some(
-          (date) => new Date(date) > leavingDate,
-        );
+          new Date(dealer.lastRejoiningDate) > leavingDate) ||
+        dealer.rejoiningDates?.some((date) => new Date(date) > leavingDate);
 
       if (hasRejoinedAfterLeaving) {
         const error = new Error(
@@ -2221,9 +2228,7 @@ export const refundDealerSecurity = async (req, res) => {
 
       // Do not refund a currently active dealer.
       if (dealer.status === "ACTIVE") {
-        const error = new Error(
-          "Active dealer security cannot be refunded.",
-        );
+        const error = new Error("Active dealer security cannot be refunded.");
         error.statusCode = 400;
         throw error;
       }
@@ -2234,8 +2239,7 @@ export const refundDealerSecurity = async (req, res) => {
       |--------------------------------------------------------------------------
       */
 
-      const eligibleRefundDate =
-        getEligibleRefundDate(leavingDate);
+      const eligibleRefundDate = getEligibleRefundDate(leavingDate);
 
       if (now < eligibleRefundDate) {
         const error = new Error(
@@ -2243,8 +2247,7 @@ export const refundDealerSecurity = async (req, res) => {
         );
 
         error.statusCode = 400;
-        error.eligibleRefundDate =
-          eligibleRefundDate;
+        error.eligibleRefundDate = eligibleRefundDate;
 
         throw error;
       }
@@ -2255,17 +2258,10 @@ export const refundDealerSecurity = async (req, res) => {
       |--------------------------------------------------------------------------
       */
 
-      const refundAmount = Number(
-        dealer.securityAmount ?? 0,
-      );
+      const refundAmount = Number(dealer.securityAmount ?? 0);
 
-      if (
-        !Number.isFinite(refundAmount) ||
-        refundAmount <= 0
-      ) {
-        const error = new Error(
-          "No refundable security amount available.",
-        );
+      if (!Number.isFinite(refundAmount) || refundAmount <= 0) {
+        const error = new Error("No refundable security amount available.");
         error.statusCode = 400;
         throw error;
       }
@@ -2286,34 +2282,32 @@ export const refundDealerSecurity = async (req, res) => {
       |--------------------------------------------------------------------------
       */
 
-      const [createdRefund] =
-        await SecurityRefund.create(
-          [
-            {
-              dealerId: dealer._id,
+      const [createdRefund] = await SecurityRefund.create(
+        [
+          {
+            dealerId: dealer._id,
 
-              refundAmount,
+            refundAmount,
 
-              securityAmountBefore: refundAmount,
-              securityAmountAfter: 0,
+            securityAmountBefore: refundAmount,
+            securityAmountAfter: 0,
 
-              dateOfLeaving: leavingDate,
-              eligibleRefundDate,
+            dateOfLeaving: leavingDate,
+            eligibleRefundDate,
 
-              refundDate: now,
+            refundDate: now,
 
-              paymentMode,
+            paymentMode,
 
-              transactionReference:
-                String(transactionReference).trim(),
+            transactionReference: String(transactionReference).trim(),
 
-              remark: String(remark).trim(),
+            remark: String(remark).trim(),
 
-              refundedBy: req.user._id,
-            },
-          ],
-          { session },
-        );
+            refundedBy: req.user._id,
+          },
+        ],
+        { session },
+      );
 
       refundRecord = createdRefund;
     });
@@ -2328,13 +2322,11 @@ export const refundDealerSecurity = async (req, res) => {
 
     return res.status(error.statusCode || 500).json({
       success: false,
-      message:
-        error.statusCode
-          ? error.message
-          : "Failed to refund security amount",
+      message: error.statusCode
+        ? error.message
+        : "Failed to refund security amount",
       ...(error.eligibleRefundDate && {
-        eligibleRefundDate:
-          error.eligibleRefundDate,
+        eligibleRefundDate: error.eligibleRefundDate,
       }),
     });
   } finally {
@@ -2342,10 +2334,7 @@ export const refundDealerSecurity = async (req, res) => {
   }
 };
 
-export const getDealerSecurityRefunds = async (
-  req,
-  res,
-) => {
+export const getDealerSecurityRefunds = async (req, res) => {
   try {
     const { dealerId } = req.params;
 
@@ -2421,19 +2410,15 @@ export const getRefundsByDealer = async (req, res) => {
     const rejoinedAfterLeaving =
       Boolean(
         leavingDate &&
-          dealer.lastRejoiningDate &&
-          new Date(dealer.lastRejoiningDate) > leavingDate,
+        dealer.lastRejoiningDate &&
+        new Date(dealer.lastRejoiningDate) > leavingDate,
       ) ||
       Boolean(
         leavingDate &&
-          dealer.rejoiningDates?.some(
-            (date) => new Date(date) > leavingDate,
-          ),
+        dealer.rejoiningDates?.some((date) => new Date(date) > leavingDate),
       );
 
-    const securityAmount = Number(
-      dealer.securityAmount ?? 0,
-    );
+    const securityAmount = Number(dealer.securityAmount ?? 0);
 
     let reason = "";
 
