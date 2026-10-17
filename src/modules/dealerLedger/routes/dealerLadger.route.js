@@ -8,6 +8,7 @@ import {
   getDealerUnpaidBills,
   getDealerLedgerOverview,
 } from "../controller/dealerLadger.controller.js";
+import { createDummyBill } from "../controller/dummyBill.controller.js";
 import { protect } from "../../auth/middleware/auth.middleware.js";
 // import { createDealerPayment } from "../controller/dealerPayment.controller.js";
 
@@ -23,6 +24,8 @@ router.get("/overview", protect, getDealerLedgerOverview);
 router.get("/", protect, getAllDealerLedgers);
 
 router.patch("/:id/approve", protect, approveDealerLedger);
+
+router.post("/dummy-bills", protect, createDummyBill);
 
 router.post("/", protect, createDealerLedger);
 

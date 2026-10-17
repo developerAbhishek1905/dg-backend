@@ -96,6 +96,7 @@ const dealerLedgerSchema = new mongoose.Schema(
         "CANCELLATION",
         "ADJUSTMENT",
         "PAYMENT",
+        "DUMMY_BILL",
       ],
       required: true,
       index: true,
@@ -111,6 +112,7 @@ const dealerLedgerSchema = new mongoose.Schema(
         "CANCELLATION",
         "ADJUSTMENT",
         "PAYMENT",
+        "DUMMY_BILL",
       ],
       required: true,
       index: true,
@@ -174,6 +176,18 @@ const dealerLedgerSchema = new mongoose.Schema(
       type: Number,
       min: 0,
       default: 0,
+    },
+
+    /*
+    |--------------------------------------------------------------------------
+    | Customer Information (used by DUMMY_BILL)
+    |--------------------------------------------------------------------------
+    */
+
+    customerInfo: {
+      name: { type: String, trim: true, default: "" },
+      mobile: { type: String, trim: true, default: "" },
+      address: { type: String, trim: true, default: "" },
     },
 
     /*
