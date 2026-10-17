@@ -277,6 +277,67 @@ const allocationSchema = new mongoose.Schema(
         type: Number,
         default: 0,
       },
+
+      totalCancelled: {
+        type: Number,
+        default: 0,
+      },
+
+      completionPercentage: {
+        type: Number,
+        default: 0,
+      },
+
+      cancellationPercentage: {
+        type: Number,
+        default: 0,
+      },
+
+      periodFrom: {
+        type: Date,
+        default: null,
+      },
+
+      periodTo: {
+        type: Date,
+        default: null,
+      },
+    },
+
+    // Rating set by hand; when present it wins over the calculated rating
+    ratingOverride: {
+      type: Number,
+      min: 0,
+      max: 5,
+      default: null,
+    },
+
+    ratingOverriddenAt: {
+      type: Date,
+      default: null,
+    },
+
+    ratingOverriddenBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+
+    // Set when the auto-allocation settings were last applied
+    performanceUpdatedAt: {
+      type: Date,
+      default: null,
+    },
+
+    // Dealer outstanding had reached the credit limit when settings were applied
+    creditBlocked: {
+      type: Boolean,
+      default: false,
+    },
+
+    outstandingAtApply: {
+      type: Number,
+      default: 0,
     },
 
     rules: {

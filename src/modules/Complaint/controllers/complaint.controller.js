@@ -356,6 +356,12 @@ export const createComplaint = async (req, res) => {
         capacityRuleId: parentComplaint.allocationRuleId || null,
 
         allocationType: "WARRANTY",
+
+        allocationReason: {
+          code: "WARRANTY_SAME_DEALER",
+          label: "Warranty complaint, same dealer as the previous complaint",
+          details: { parentComplaintNumber: parentComplaint.complaintNumber },
+        },
       };
     } else {
       /*
@@ -497,6 +503,7 @@ export const createComplaint = async (req, res) => {
       description: description?.trim() || "",
       allocatedDealerId: dealerAllocation?.dealerId ?? null,
       allocationType: dealerAllocation?.dealerId ? "AUTO" : "NONE",
+      allocationReason: dealerAllocation?.allocationReason ?? undefined,
       allocationId: dealerAllocation?.allocationId ?? null,
       allocationRuleId: dealerAllocation?.capacityRuleId ?? null,
       allocatedAt: dealerAllocation ? new Date() : null,
@@ -558,6 +565,8 @@ export const createComplaint = async (req, res) => {
             ? "Warranty complaint assigned to previous complaint dealer"
             : "Complaint automatically allocated to dealer",
 
+        reason: dealerAllocation.allocationReason?.label || "",
+
         dealerId: dealerAllocation.dealerId,
 
         user: req.user,
@@ -569,6 +578,8 @@ export const createComplaint = async (req, res) => {
 
           // allocationType: "AUTO",
           allocationType: dealerAllocation.allocationType || "AUTO",
+
+          allocationReason: dealerAllocation.allocationReason || null,
 
           allocatedAt: complaint.allocatedAt,
         },
@@ -1417,6 +1428,23 @@ export const updateComplaint = async (req, res) => {
 
           complaint.allocatedAt = new Date();
 
+          complaint.allocationReason = newAllocation.allocationReason ?? undefined;
+
+          await createComplaintActivity({
+            complaint,
+            activityType: "DEALER_CHANGED",
+            title: "Dealer Re-allocated",
+            description: "Complaint automatically re-allocated after its details changed",
+            reason: newAllocation.allocationReason?.label || "",
+            dealerId: newAllocation.dealerId,
+            user: req.user,
+            metadata: {
+              allocationId: newAllocation.allocationId,
+              allocationType: "AUTO",
+              allocationReason: newAllocation.allocationReason || null,
+            },
+          });
+
           /*
     |--------------------------------------------------------------------------
     | Status
@@ -1591,6 +1619,23 @@ export const updateComplaint = async (req, res) => {
 
         complaint.allocationType = "AUTO";
         complaint.allocatedAt = new Date();
+
+        complaint.allocationReason = newAllocation.allocationReason ?? undefined;
+
+        await createComplaintActivity({
+          complaint,
+          activityType: "DEALER_CHANGED",
+          title: "Dealer Re-allocated",
+          description: "Complaint automatically re-allocated after its details changed",
+          reason: newAllocation.allocationReason?.label || "",
+          dealerId: newAllocation.dealerId,
+          user: req.user,
+          metadata: {
+            allocationId: newAllocation.allocationId,
+            allocationType: "AUTO",
+            allocationReason: newAllocation.allocationReason || null,
+          },
+        });
 
         if (
           complaint.status === "REGISTERED" ||
@@ -2211,7 +2256,30 @@ export const assignDealerToComplaint = async (req, res) => {
 
     complaint.allocationType = "MANUAL";
 
+    complaint.allocationReason = {
+      code: "MANUAL",
+      label: `Manually assigned by ${
+        req.user?.name || req.user?.fullName || req.user?.username || "a user"
+      }`,
+      details: { assignedBy: req.user?._id || req.user?.id || null },
+    };
+
     await complaint.save();
+
+    await createComplaintActivity({
+      complaint,
+      activityType: "DEALER_CHANGED",
+      title: "Dealer Assigned Manually",
+      description: "Dealer assigned manually",
+      reason: complaint.allocationReason.label,
+      dealerId: dealer._id,
+      dealerName: dealer.technicianFirmName || dealer.technicianName || "",
+      user: req.user,
+      metadata: {
+        allocationType: "MANUAL",
+        allocationReason: complaint.allocationReason,
+      },
+    });
 
     /* =========================================
       WHATSAPP NOTIFICATION

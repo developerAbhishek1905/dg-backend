@@ -24,6 +24,7 @@ import appointmentRoutes from "./modules/appointment/router/appointment.route.js
 import reasonRoutes from "./modules/reason/routes/reason.routes.js";
 import dealerLedgerRoutes from "./modules/dealerLedger/routes/dealerLadger.route.js";
 import ratingReviewRoutes from "./modules/dealers/routes/ratingReview.routes.js";
+import allocationSettingsRoutes from "./modules/allocation/routes/allocationSettings.routes.js";
 import dealerAccountRoutes from "./modules/dealerLedger/routes/dealerAccount.routes.js";
 import dealerPaymentRoutes from "./modules/dealerLedger/routes/dealerPayment.routes.js";
 import accountRoutes from "./modules/accounts/routes/account.routes.js";
@@ -87,6 +88,7 @@ app.use("/api/v1/dealer-ledger", dealerLedgerRoutes);
 
 app.use("/api/v1/dealer-payments", dealerPaymentRoutes);
 app.use("/api/v1/dealer-accounts", dealerAccountRoutes);
+app.use("/api/v1/allocation-settings", allocationSettingsRoutes);
 
 app.use("/api/v1/accounts", accountRoutes);
 

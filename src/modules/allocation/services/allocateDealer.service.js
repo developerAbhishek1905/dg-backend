@@ -4,6 +4,10 @@ import DailyCapacityUsage from "../model/dailyCapacityUsage.model.js";
 import { buildAllocationRules } from "../../dealers/controllers/dealer.controller.js";
 import { canDealerReceiveComplaint } from "../../dealers/helpers/dealerAvailability.js";
 import { isDealerOnLeave } from "../../dealers/helpers/dealerLeave.utils.js";
+import {
+  getAllocationSettings,
+  isOverCreditLimit,
+} from "./allocationSettings.service.js";
 
 //----------
 
@@ -233,6 +237,67 @@ const getTodayKey = () => {
   return `${year}-${month}-${day}`;
 };
 
+const NEUTRAL_RATING = 2.5;
+
+const inr = (value) =>
+  `₹${Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+
+/*
+|--------------------------------------------------------------------------
+| ALLOCATION REASON
+|--------------------------------------------------------------------------
+|
+| Explains which factor decided the dealer. Saved with the complaint and the
+| activity log so the history can show it.
+|
+|  ONLY_ELIGIBLE    - only one dealer had free capacity
+|  LOWEST_LOAD      - fewest complaints so far today
+|  HIGHER_RATING    - same complaints today, higher rating gets the share
+|  HIGHEST_PAYMENT  - tied on load, highest payment received
+|  RATING_TIEBREAK  - tied on load and payment, higher rating
+|  FIRST_AVAILABLE  - every factor tied, first dealer in order
+|  CAPACITY_FALLBACK- preferred dealer's capacity filled meanwhile
+|
+*/
+const buildAllocationReason = ({ selected, index, ordered, creditSkipped }) => {
+  const next = ordered[1];
+
+  const details = {
+    usedToday: selected.usedCapacity,
+    dailyCapacity: selected.dailyCapacity,
+    rating: selected.rating,
+    totalAmount: selected.totalAmount,
+    eligibleDealers: ordered.length,
+    creditSkipped,
+  };
+
+  let code = "FIRST_AVAILABLE";
+  let label = "All factors were equal, first available dealer chosen";
+
+  if (index > 0) {
+    code = "CAPACITY_FALLBACK";
+    label = "Preferred dealer's capacity was filled, next eligible dealer chosen";
+  } else if (!next) {
+    code = "ONLY_ELIGIBLE";
+    label = "Only eligible dealer with free capacity";
+  } else if (selected.usedCapacity !== next.usedCapacity) {
+    code = "LOWEST_LOAD";
+    label = `Fewest complaints today (${selected.usedCapacity} of ${selected.dailyCapacity} capacity used)`;
+  } else if ((selected.rating || 0) !== (next.rating || 0)) {
+    code = "HIGHER_RATING";
+    label = `Same load as other dealers, higher rating (${Number(selected.rating).toFixed(1)}) gets the share`;
+  } else if (selected.totalAmount !== next.totalAmount) {
+    code = "HIGHEST_PAYMENT";
+    label = `Tied on load and rating, highest payment received (${inr(selected.totalAmount)})`;
+  }
+
+  const text = creditSkipped
+    ? `${label}. ${creditSkipped} dealer(s) skipped: credit limit reached`
+    : label;
+
+  return { code, label: text, details };
+};
+
 export const allocateDealerForComplaint = async ({
   cityId,
   productId,
@@ -247,7 +312,29 @@ export const allocateDealerForComplaint = async ({
 
   const today = getTodayKey();
 
-  console.log("gggggggggg", cityId, productId, categoryId, category);
+  /*
+  |--------------------------------------------------------------------------
+  | AUTO ALLOCATION SETTINGS
+  |--------------------------------------------------------------------------
+  |
+  | OFF  -> nothing is allocated automatically (manual allocation).
+  | City excluded -> no automatic allocation for that city.
+  */
+
+  const settings = await getAllocationSettings();
+
+  if (!settings.autoAllocationEnabled) {
+    return null;
+  }
+
+  if (
+    (settings.excludedCities || []).some(
+      (item) => Number(item.cityId) === Number(cityId),
+    )
+  ) {
+    return null;
+  }
+
   /*
     |--------------------------------------------------------------------------
     | STEP 1
@@ -291,12 +378,25 @@ export const allocateDealerForComplaint = async ({
       $in: dealerIds,
     },
   })
-    .select("_id status dateOfJoining dateOfLeaving rejoiningDates leaves ")
+    .select(
+      "_id status dateOfJoining dateOfLeaving rejoiningDates leaves creditLimit openingBalance openingBalanceType",
+    )
     .lean();
 
+  const availableDealers = dealers.filter((dealer) =>
+    canDealerReceiveComplaint(dealer, now),
+  );
+
+  // Optional: skip dealers who have used up their credit limit
+  const creditSkipped = settings.useCreditLimit
+    ? availableDealers.filter((dealer) => isOverCreditLimit(dealer)).length
+    : 0;
+
   const activeDealerIds = new Set(
-    dealers
-      .filter((dealer) => canDealerReceiveComplaint(dealer, now))
+    availableDealers
+      .filter(
+        (dealer) => !(settings.useCreditLimit && isOverCreditLimit(dealer)),
+      )
       .map((dealer) => String(dealer._id)),
   );
 
@@ -431,7 +531,10 @@ export const allocateDealerForComplaint = async ({
 
         totalAmount: Number(allocation.performanceSnapshot?.totalAmount ?? 0),
 
-        rating: Number(allocation.performanceSnapshot?.rating ?? 0),
+        // A manually set rating wins over the calculated one
+        rating: Number(
+          allocation.ratingOverride ?? allocation.performanceSnapshot?.rating ?? 0,
+        ),
       });
     }
   }
@@ -531,10 +634,18 @@ export const allocateDealerForComplaint = async ({
 
   availableCandidates.sort((a, b) => {
     /*
-     * Round-robin priority
+     * Weighted round-robin: a higher rated dealer gets a larger share.
+     * Unrated dealers (rating 0) use a neutral weight, so when no
+     * ratings exist this is the plain round-robin.
      */
-    if (a.usedCapacity !== b.usedCapacity) {
-      return a.usedCapacity - b.usedCapacity;
+    const weightA = a.rating > 0 ? a.rating : NEUTRAL_RATING;
+    const weightB = b.rating > 0 ? b.rating : NEUTRAL_RATING;
+
+    const loadA = a.usedCapacity / weightA;
+    const loadB = b.usedCapacity / weightB;
+
+    if (loadA !== loadB) {
+      return loadA - loadB;
     }
 
     /*
@@ -562,7 +673,7 @@ export const allocateDealerForComplaint = async ({
     |--------------------------------------------------------------------------
     */
 
-  for (const selected of availableCandidates) {
+  for (const [index, selected] of availableCandidates.entries()) {
     const usageFilter = {
       allocationId: selected.allocation._id,
 
@@ -626,6 +737,13 @@ export const allocateDealerForComplaint = async ({
     }
 
     return {
+      allocationReason: buildAllocationReason({
+        selected,
+        index,
+        ordered: availableCandidates,
+        creditSkipped,
+      }),
+
       dealerId: selected.dealerId,
 
       allocationId: selected.allocation._id,

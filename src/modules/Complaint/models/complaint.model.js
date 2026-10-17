@@ -425,6 +425,13 @@ const complaintSchema = new mongoose.Schema(
       default: "NONE",
     },
 
+    // Which factor decided the dealer (see allocateDealer.service.js)
+    allocationReason: {
+      code: { type: String, default: "" },
+      label: { type: String, default: "" },
+      details: { type: mongoose.Schema.Types.Mixed, default: null },
+    },
+
     complaintType: {
       type: String,
       enum: ["REGULAR", "REPEAT", "WARRANTY", "INQUIRY"],
