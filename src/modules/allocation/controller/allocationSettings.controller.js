@@ -228,7 +228,18 @@ export const saveSettings = async (req, res) => {
       useCreditLimit,
       rangeFrom,
       rangeTo,
+      monthlyRecalcEnabled,
+      monthlyRecalcDay,
     } = req.body;
+
+    const recalcDay = Number(monthlyRecalcDay ?? 1);
+
+    if (!Number.isInteger(recalcDay) || recalcDay < 1 || recalcDay > 28) {
+      return res.status(400).json({
+        success: false,
+        message: "Monthly recalculation day must be between 1 and 28",
+      });
+    }
 
     const from = parseDate(rangeFrom);
     const to = parseDate(rangeTo, true);
@@ -265,6 +276,8 @@ export const saveSettings = async (req, res) => {
           useCreditLimit: Boolean(useCreditLimit),
           rangeFrom: from,
           rangeTo: to,
+          monthlyRecalcEnabled: Boolean(monthlyRecalcEnabled),
+          monthlyRecalcDay: recalcDay,
           updatedBy: req.user?._id || null,
         },
       },
@@ -284,6 +297,125 @@ export const saveSettings = async (req, res) => {
       message: error.message || "Failed to save allocation settings",
     });
   }
+};
+
+/*
+| Recalculates every dealer's allocation performance for [from, to] and
+| stores it on the current month's allocation documents.
+| Used by the Apply button and by the monthly scheduler.
+*/
+export const recalculatePerformance = async ({ from, to, settings }) => {
+  const now = new Date();
+
+  const allocations = await Allocation.find({
+    allocationMonth: now.getMonth() + 1,
+    allocationYear: now.getFullYear(),
+  })
+    .select("_id dealerId")
+    .lean();
+
+  if (!allocations.length) {
+    throw Object.assign(new Error("No dealer allocations found for the current month"), {
+      status: 404,
+    });
+  }
+
+  const dealerIds = allocations.map((item) => item.dealerId);
+
+  const complaintMap = await getPeriodStats(dealerIds, new Date(from), new Date(to));
+
+  const dealers = await Dealer.find({ _id: { $in: dealerIds } })
+    .select("creditLimit openingBalance openingBalanceType")
+    .lean();
+
+  const dealerMap = new Map(dealers.map((item) => [String(item._id), item]));
+
+  let creditBlocked = 0;
+
+  const operations = allocations.map((allocation) => {
+    const key = String(allocation.dealerId);
+    const stats = complaintMap.get(key);
+    const dealer = dealerMap.get(key);
+
+    const totalAllocated = stats?.totalAllocated || 0;
+    const totalCompleted = stats?.totalCompleted || 0;
+    const totalCancelled = stats?.totalCancelled || 0;
+
+    const totalAmount = stats?.totalAmount || 0;
+    const averageAmount = stats?.averageAmount || 0;
+
+    const completionPercentage = totalAllocated
+      ? round2((totalCompleted / totalAllocated) * 100)
+      : 0;
+
+    const cancellationPercentage = totalAllocated
+      ? round2((totalCancelled / totalAllocated) * 100)
+      : 0;
+
+    const performanceScore = Math.max(
+      0,
+      round2(completionPercentage - cancellationPercentage),
+    );
+
+    const rating = round2(performanceScore / 20);
+
+    const blocked = Boolean(settings.useCreditLimit && dealer && isOverCreditLimit(dealer));
+
+    if (blocked) creditBlocked += 1;
+
+    return {
+      updateOne: {
+        filter: { _id: allocation._id },
+        update: {
+          $set: {
+            average_amount: averageAmount,
+            creditLimit: Number(dealer?.creditLimit || 0),
+            creditBlocked: blocked,
+            outstandingAtApply: dealer ? dealerOutstanding(dealer) : 0,
+            performanceUpdatedAt: now,
+            "performanceSnapshot.totalAmount": totalAmount,
+            "performanceSnapshot.average_amount": averageAmount,
+            "performanceSnapshot.rating": rating,
+            "performanceSnapshot.totalAllocated": totalAllocated,
+            "performanceSnapshot.totalCompleted": totalCompleted,
+            "performanceSnapshot.totalCancelled": totalCancelled,
+            "performanceSnapshot.completionPercentage": completionPercentage,
+            "performanceSnapshot.cancellationPercentage": cancellationPercentage,
+            "performanceSnapshot.performanceScore": performanceScore,
+            "performanceSnapshot.periodFrom": new Date(from),
+            "performanceSnapshot.periodTo": new Date(to),
+          },
+        },
+      },
+    };
+  });
+
+  await Allocation.bulkWrite(operations);
+
+  const summary = {
+    from: new Date(from),
+    to: new Date(to),
+    dealersUpdated: operations.length,
+    creditBlocked,
+    excludedCities: settings.excludedCities.length,
+    autoAllocationEnabled: settings.autoAllocationEnabled,
+    useCreditLimit: settings.useCreditLimit,
+  };
+
+  await AllocationSettings.updateOne(
+    { key: "DEFAULT" },
+    {
+      $set: {
+        lastAppliedAt: now,
+        lastAppliedSummary: summary,
+        rangeFrom: new Date(from),
+        rangeTo: new Date(to),
+      },
+    },
+    { upsert: true },
+  );
+
+  return summary;
 };
 
 /*
@@ -327,126 +459,17 @@ export const applySettings = async (req, res) => {
       });
     }
 
-    const now = new Date();
-
-    const allocations = await Allocation.find({
-      allocationMonth: now.getMonth() + 1,
-      allocationYear: now.getFullYear(),
-    })
-      .select("_id dealerId")
-      .lean();
-
-    if (!allocations.length) {
-      return res.status(404).json({
-        success: false,
-        message: "No dealer allocations found for the current month",
-      });
-    }
-
-    const dealerIds = allocations.map((item) => item.dealerId);
-
-    const complaintMap = await getPeriodStats(dealerIds, new Date(from), new Date(to));
-
-    const dealers = await Dealer.find({ _id: { $in: dealerIds } })
-      .select("creditLimit openingBalance openingBalanceType")
-      .lean();
-
-    const dealerMap = new Map(dealers.map((item) => [String(item._id), item]));
-
-    let creditBlocked = 0;
-
-    const operations = allocations.map((allocation) => {
-      const key = String(allocation.dealerId);
-      const stats = complaintMap.get(key);
-      const dealer = dealerMap.get(key);
-
-      const totalAllocated = stats?.totalAllocated || 0;
-      const totalCompleted = stats?.totalCompleted || 0;
-      const totalCancelled = stats?.totalCancelled || 0;
-
-      const totalAmount = stats?.totalAmount || 0;
-      const averageAmount = stats?.averageAmount || 0;
-
-      const completionPercentage = totalAllocated
-        ? round2((totalCompleted / totalAllocated) * 100)
-        : 0;
-
-      const cancellationPercentage = totalAllocated
-        ? round2((totalCancelled / totalAllocated) * 100)
-        : 0;
-
-      const performanceScore = Math.max(
-        0,
-        round2(completionPercentage - cancellationPercentage),
-      );
-
-      const rating = round2(performanceScore / 20);
-
-      const blocked = Boolean(settings.useCreditLimit && dealer && isOverCreditLimit(dealer));
-
-      if (blocked) creditBlocked += 1;
-
-      return {
-        updateOne: {
-          filter: { _id: allocation._id },
-          update: {
-            $set: {
-              average_amount: averageAmount,
-              creditLimit: Number(dealer?.creditLimit || 0),
-              creditBlocked: blocked,
-              outstandingAtApply: dealer ? dealerOutstanding(dealer) : 0,
-              performanceUpdatedAt: now,
-              "performanceSnapshot.totalAmount": totalAmount,
-              "performanceSnapshot.average_amount": averageAmount,
-              "performanceSnapshot.rating": rating,
-              "performanceSnapshot.totalAllocated": totalAllocated,
-              "performanceSnapshot.totalCompleted": totalCompleted,
-              "performanceSnapshot.totalCancelled": totalCancelled,
-              "performanceSnapshot.completionPercentage": completionPercentage,
-              "performanceSnapshot.cancellationPercentage": cancellationPercentage,
-              "performanceSnapshot.performanceScore": performanceScore,
-              "performanceSnapshot.periodFrom": new Date(from),
-              "performanceSnapshot.periodTo": new Date(to),
-            },
-          },
-        },
-      };
-    });
-
-    await Allocation.bulkWrite(operations);
-
-    const summary = {
-      from: new Date(from),
-      to: new Date(to),
-      dealersUpdated: operations.length,
-      creditBlocked,
-      excludedCities: settings.excludedCities.length,
-      autoAllocationEnabled: settings.autoAllocationEnabled,
-      useCreditLimit: settings.useCreditLimit,
-    };
-
-    await AllocationSettings.updateOne(
-      { key: "DEFAULT" },
-      {
-        $set: {
-          lastAppliedAt: now,
-          lastAppliedSummary: summary,
-          rangeFrom: new Date(from),
-          rangeTo: new Date(to),
-        },
-      },
-      { upsert: true },
-    );
+    const summary = await recalculatePerformance({ from, to, settings });
 
     return res.json({
       success: true,
-      message: `Allocation updated for ${operations.length} dealer(s)`,
+      message: `Allocation updated for ${summary.dealersUpdated} dealer(s)`,
       data: summary,
     });
   } catch (error) {
     console.error("Apply allocation settings error:", error);
 
-    return res.status(500).json({
+    return res.status(error.status || 500).json({
       success: false,
       message: error.message || "Failed to apply allocation settings",
     });

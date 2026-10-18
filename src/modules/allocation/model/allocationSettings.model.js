@@ -44,6 +44,13 @@ const allocationSettingsSchema = new mongoose.Schema(
     rangeFrom: { type: Date, default: null },
     rangeTo: { type: Date, default: null },
 
+    // Monthly automatic recalculation (previous one month)
+    monthlyRecalcEnabled: { type: Boolean, default: false },
+    monthlyRecalcDay: { type: Number, min: 1, max: 28, default: 1 },
+    lastScheduledRunKey: { type: String, default: "" },
+    lastScheduledRunAt: { type: Date, default: null },
+    lastScheduledRunStatus: { type: String, default: "" },
+
     lastAppliedAt: { type: Date, default: null },
 
     lastAppliedSummary: {

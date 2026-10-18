@@ -6,6 +6,10 @@ export const DEFAULT_SETTINGS = {
   useCreditLimit: false,
   rangeFrom: null,
   rangeTo: null,
+  monthlyRecalcEnabled: false,
+  monthlyRecalcDay: 1,
+  lastScheduledRunAt: null,
+  lastScheduledRunStatus: "",
   lastAppliedAt: null,
   lastAppliedSummary: null,
 };
