@@ -1,6 +1,7 @@
 
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
+import { encryptPassword } from "../utils/passwordVault.js";
 
 const userSchema = new mongoose.Schema(
   {
@@ -23,6 +24,11 @@ const userSchema = new mongoose.Schema(
       type: String,
       trim: true,
       default: "",
+    },
+
+    passwordEnc: {
+      type: String,
+      select: false,
     },
 
     password: {
@@ -64,6 +70,7 @@ const userSchema = new mongoose.Schema(
 userSchema.pre("save", async function () {
   if (!this.isModified("password")) return;
 
+  this.passwordEnc = encryptPassword(this.password);
   this.password = await bcrypt.hash(this.password, 12);
 });
 

@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 
 import User from "../models/user.model.js";
+import { decryptPassword } from "../utils/passwordVault.js";
 import Role from "../../accessControl/models/role.model.js";
 
 
@@ -126,7 +127,12 @@ export const createUser = async (req, res) => {
 
 export const getUsers = async (req, res) => {
   try {
+    const canViewPasswords = (req.user?.permissions || []).includes(
+      "users.update",
+    );
+
     const users = await User.find()
+      .select("+passwordEnc")
       .populate(
         "roleId",
         "name code permissions status",
@@ -138,7 +144,12 @@ export const getUsers = async (req, res) => {
     return res.status(200).json({
       success: true,
       count: users.length,
-      data: users.map(formatUser),
+      data: users.map((u) => ({
+        ...formatUser(u),
+        ...(canViewPasswords && {
+          password: decryptPassword(u.passwordEnc),
+        }),
+      })),
     });
   } catch (error) {
     console.error("Get Users Error:", error);
@@ -198,12 +209,23 @@ export const updateUser = async (req, res) => {
       roleId,
       dealerId,
       status,
+      password,
     } = req.body;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
         success: false,
         message: "Invalid user ID",
+      });
+    }
+
+    if (
+      password !== undefined &&
+      (typeof password !== "string" || password.length < 6)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Password must be at least 6 characters",
       });
     }
 
@@ -279,6 +301,12 @@ export const updateUser = async (req, res) => {
       user.status = status;
     }
 
+    if (password !== undefined) {
+      // hashed by the model's pre("save") hook
+      user.password = password;
+      user.tokenVersion = (user.tokenVersion || 0) + 1;
+    }
+
     await user.save();
 
     const updatedUser = await User.findById(user._id).populate(
@@ -309,6 +337,13 @@ export const deleteUser = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Invalid user ID",
+      });
+    }
+
+    if (String(req.user?._id || req.user?.id) === String(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "You cannot delete your own account",
       });
     }
 

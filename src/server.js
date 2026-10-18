@@ -1,6 +1,7 @@
 import dotenv from "dotenv";
 import app from "./app.js";
 import connectDB from "./config/db.js";
+import { startAllocationScheduler } from "./modules/allocation/services/allocationScheduler.service.js";
 
 dotenv.config();
 
@@ -12,6 +13,8 @@ const startServer = async () => {
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
   });
+
+  startAllocationScheduler();
 };
 
 startServer();
