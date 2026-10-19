@@ -1,6 +1,7 @@
 import dotenv from "dotenv";
 import app from "./app.js";
 import connectDB from "./config/db.js";
+import { startNoActionScheduler } from "./modules/allocation/services/noActionPenalty.service.js";
 import { startAllocationScheduler } from "./modules/allocation/services/allocationScheduler.service.js";
 
 dotenv.config();
@@ -15,6 +16,7 @@ const startServer = async () => {
   });
 
   startAllocationScheduler();
+  startNoActionScheduler();
 };
 
 startServer();

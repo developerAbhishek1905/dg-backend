@@ -194,7 +194,7 @@ console.log("kjhhhhhhhhh",uniqueBillIds)
           dealerId: dealer._id,
 
           transactionType: {
-            $in: ["CLOSURE", "CANCELLATION"],
+            $in: ["CLOSURE", "CANCELLATION", "PENALTY"],
           },
 
           entryType: "DEBIT",

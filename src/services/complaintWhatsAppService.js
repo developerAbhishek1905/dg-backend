@@ -1,5 +1,6 @@
 import Dealer from "../modules/dealers/models/dealer.model.js";
 import { sendWhatsAppMessage } from "./whatsappService.js";
+import { complaintLink as buildComplaintLink } from "./appLinks.js";
 
 export const sendComplaintAllocationNotifications = async ({
   complaint,
@@ -56,8 +57,7 @@ const customerAddress = [
   .filter(Boolean)
   .join(", ");
 
-const complaintLink =
-  `https://dg-iota-tawny.vercel.app/appointments/${complaint._id}`;
+const complaintLink = buildComplaintLink(complaint._id);
 
 /*
 |--------------------------------------------------------------------------

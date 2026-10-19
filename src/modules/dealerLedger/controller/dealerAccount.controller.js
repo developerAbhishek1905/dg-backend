@@ -30,7 +30,7 @@ const CREDIT_REASONS = [
   "OTHER",
 ];
 
-const BILL_TRANSACTION_TYPES = ["CLOSURE", "CANCELLATION", "DUMMY_BILL"];
+const BILL_TRANSACTION_TYPES = ["CLOSURE", "CANCELLATION", "DUMMY_BILL", "PENALTY"];
 
 const refTypeOf = (bill) =>
   bill.transactionType === "DUMMY_BILL" ? "DUMMY_BILL_REF" : "BILL_REF";
@@ -49,7 +49,7 @@ const unpaidBillFilter = (extra = {}) => ({
   $or: [
     // Real complaint bills must be linked to a complaint
     {
-      transactionType: { $in: ["CLOSURE", "CANCELLATION"] },
+      transactionType: { $in: ["CLOSURE", "CANCELLATION", "PENALTY"] },
       complaintId: { $ne: null },
     },
     { transactionType: "DUMMY_BILL" },
@@ -802,7 +802,7 @@ export const getDealerStatement = async (req, res) => {
         reversed: false,
         $or: [
           {
-            transactionType: { $in: ["CLOSURE", "CANCELLATION"] },
+            transactionType: { $in: ["CLOSURE", "CANCELLATION", "PENALTY"] },
             complaintId: { $ne: null },
           },
           { transactionType: "DUMMY_BILL" },
@@ -845,7 +845,9 @@ export const getDealerStatement = async (req, res) => {
             ? "Dummy Bill"
             : bill.transactionType === "CANCELLATION"
               ? "Cancellation"
-              : "Sales",
+              : bill.transactionType === "PENALTY"
+                ? "Penalty"
+                : "Sales",
         debitPaise: toPaise(bill.amount),
         creditPaise: 0,
         children: [],
@@ -1050,7 +1052,7 @@ export const getDealerAllBills = async (req, res) => {
       reversed: false,
       $or: [
         {
-          transactionType: { $in: ["CLOSURE", "CANCELLATION"] },
+          transactionType: { $in: ["CLOSURE", "CANCELLATION", "PENALTY"] },
           complaintId: { $ne: null },
         },
         { transactionType: "DUMMY_BILL" },

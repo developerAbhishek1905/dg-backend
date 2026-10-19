@@ -230,7 +230,32 @@ export const saveSettings = async (req, res) => {
       rangeTo,
       monthlyRecalcEnabled,
       monthlyRecalcDay,
+      noActionReminderEnabled,
+      noActionReminderMinutes,
+      noActionPenaltyEnabled,
+      noActionPenaltyAfterMinutes,
+      noActionPenaltyAmount,
     } = req.body;
+
+    const noActionFields = {};
+
+    if (noActionReminderEnabled !== undefined)
+      noActionFields.noActionReminderEnabled = Boolean(noActionReminderEnabled);
+    if (noActionPenaltyEnabled !== undefined)
+      noActionFields.noActionPenaltyEnabled = Boolean(noActionPenaltyEnabled);
+
+    for (const [key, value, min] of [
+      ["noActionReminderMinutes", noActionReminderMinutes, 1],
+      ["noActionPenaltyAfterMinutes", noActionPenaltyAfterMinutes, 1],
+      ["noActionPenaltyAmount", noActionPenaltyAmount, 0],
+    ]) {
+      if (value === undefined) continue;
+      const n = Number(value);
+      if (!Number.isFinite(n) || n < min || n > 1440 * (key === "noActionPenaltyAmount" ? 1000 : 1)) {
+        return res.status(400).json({ success: false, message: `Invalid value for ${key}` });
+      }
+      noActionFields[key] = n;
+    }
 
     const recalcDay = Number(monthlyRecalcDay ?? 1);
 
@@ -278,6 +303,7 @@ export const saveSettings = async (req, res) => {
           rangeTo: to,
           monthlyRecalcEnabled: Boolean(monthlyRecalcEnabled),
           monthlyRecalcDay: recalcDay,
+          ...noActionFields,
           updatedBy: req.user?._id || null,
         },
       },

@@ -11,6 +11,8 @@ import {
   getPendingFollowUpStatuses,
   saveComplaintFollowUp,
   getComplaintFollowUpRemarks,
+  getDealerComplaintRemarks,
+  getDealerRemarkNotifications,
   saveCancellationRemark,
   cancelComplaint,
   approveClosure
@@ -28,6 +30,8 @@ router.get("/closed", getClosedComplaints);
 
 router.get("/complaint/:complaintId", getComplaintActivityByComplaintId);
 
+router.get("/dealer-remarks", protect, getDealerRemarkNotifications);
+
 router.get("/", protect, getAppointmentComplaints);
 
 router.patch("/:id/status", protect, updateAppointmentStatus);
@@ -40,6 +44,12 @@ router.get(
   "/complaints/:id/follow-up-remarks",
   protect,
   getComplaintFollowUpRemarks,
+);
+
+router.get(
+  "/complaints/:id/dealer-remarks",
+  protect,
+  getDealerComplaintRemarks,
 );
 
 router.post(

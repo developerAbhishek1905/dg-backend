@@ -44,6 +44,18 @@ const allocationSettingsSchema = new mongoose.Schema(
     rangeFrom: { type: Date, default: null },
     rangeTo: { type: Date, default: null },
 
+    // No-action reminder + automatic penalty
+    noActionReminderEnabled: { type: Boolean, default: true },
+    noActionReminderMinutes: { type: Number, min: 1, max: 1440, default: 30 },
+    noActionPenaltyEnabled: { type: Boolean, default: true },
+    // minutes after the reminder before the penalty bill is raised
+    noActionPenaltyAfterMinutes: { type: Number, min: 1, max: 1440, default: 30 },
+    // 0 = use the dealer's cancellation charge
+    noActionPenaltyAmount: { type: Number, min: 0, default: 0 },
+
+    // Set once, on first run: complaints allocated before this are ignored
+    noActionStartedAt: { type: Date, default: null },
+
     // Monthly automatic recalculation (previous one month)
     monthlyRecalcEnabled: { type: Boolean, default: false },
     monthlyRecalcDay: { type: Number, min: 1, max: 28, default: 1 },

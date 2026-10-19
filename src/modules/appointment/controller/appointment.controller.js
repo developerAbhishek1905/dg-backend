@@ -238,6 +238,7 @@ export const updateAppointmentStatus = async (req, res) => {
       // Billing popup values
       customerAmount,
       profitAmount,
+      warrantyAssured,
     } = req.body;
 
     const allowedStatuses = [
@@ -359,6 +360,26 @@ export const updateAppointmentStatus = async (req, res) => {
     const isWarrantyComplaint = complaint.complaintType === "WARRANTY";
 
     if (status === "CLOSE_ON_BILLING") {
+      if (warrantyAssured !== undefined && warrantyAssured !== null) {
+        const warrantyValue = Number(warrantyAssured.value);
+        const warrantyUnit =
+          warrantyAssured.unit === "DAYS" ? "DAYS" : "MONTHS";
+
+        if (!Number.isFinite(warrantyValue) || warrantyValue < 0) {
+          return res.status(400).json({
+            success: false,
+            message: "Warranty assured must be 0 or more",
+          });
+        }
+
+        complaint.warrantyAssured = {
+          value: warrantyValue,
+          unit: warrantyUnit,
+          assuredAt: new Date(),
+          assuredBy: req.user?.name || "",
+        };
+      }
+
       // const dealer = await Dealer.findById(
       //   complaint.allocatedDealerId || complaint.dealerId,
       // );
@@ -2047,6 +2068,56 @@ export const getDealerComplaintRemarks = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to fetch dealer remarks",
+      error: error.message,
+    });
+  }
+};
+
+export const getDealerRemarkNotifications = async (req, res) => {
+  try {
+    const roleCode = req.user?.role?.code || req.user?.roleCode || req.user?.role;
+
+    if (roleCode !== "DEALER" || !req.user?.dealerId) {
+      return res.status(200).json({ success: true, data: [] });
+    }
+
+    const complaints = await Complaint.find({
+      allocatedDealerId: req.user.dealerId,
+      "followUpRemarks.sentToDealer": true,
+    })
+      .select("complaintNumber followUpRemarks")
+      .lean();
+
+    const items = [];
+
+    for (const complaint of complaints) {
+      for (const remark of complaint.followUpRemarks || []) {
+        if (!remark.sentToDealer) continue;
+
+        items.push({
+          id: `${complaint._id}-${remark._id}`,
+          title: `Remark on complaint ${complaint.complaintNumber}`,
+          message: [remark.followUpStatus, remark.remark]
+            .filter(Boolean)
+            .join(" — "),
+          type: "COMPLAINT",
+          priority: "MEDIUM",
+          isRead: false,
+          createdAt: remark.createdAt,
+          actionUrl: `/appointments/${complaint._id}`,
+          entityId: String(complaint._id),
+          entityType: "COMPLAINT",
+        });
+      }
+    }
+
+    items.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    return res.status(200).json({ success: true, data: items.slice(0, 100) });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch notifications",
       error: error.message,
     });
   }

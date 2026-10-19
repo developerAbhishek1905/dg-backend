@@ -580,6 +580,31 @@ const complaintSchema = new mongoose.Schema(
       default: null,
     },
 
+    // Warranty the dealer assured the customer when closing the complaint
+    warrantyAssured: {
+      type: new mongoose.Schema(
+        {
+          value: { type: Number, min: 0, required: true },
+          unit: { type: String, enum: ["DAYS", "MONTHS"], default: "MONTHS" },
+          assuredAt: { type: Date, default: Date.now },
+          assuredBy: { type: String, default: "" },
+        },
+        { _id: false },
+      ),
+      default: null,
+    },
+
+    // No-action reminder / penalty tracking (compared against allocatedAt)
+    noActionReminderSentAt: {
+      type: Date,
+      default: null,
+    },
+
+    noActionPenaltyAppliedAt: {
+      type: Date,
+      default: null,
+    },
+
     appointmentDate: {
       type: Date,
       default: null,

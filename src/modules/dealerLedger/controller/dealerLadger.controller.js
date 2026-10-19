@@ -1287,7 +1287,7 @@ export const getDealerUnpaidBills = async (req, res) => {
       dealerId: dealerObjectId,
 
       transactionType: {
-        $in: ["CLOSURE", "CANCELLATION"],
+        $in: ["CLOSURE", "CANCELLATION", "PENALTY"],
       },
 
       status: {
@@ -1427,7 +1427,7 @@ export const getDealerLedgerOverview = async (req, res) => {
       {
         $match: {
           dealerId: { $in: dealerIds },
-          transactionType: { $in: ["CLOSURE", "CANCELLATION"] },
+          transactionType: { $in: ["CLOSURE", "CANCELLATION", "PENALTY"] },
           entryType: "DEBIT",
           status: { $in: ["APPROVED", "BILLED"] },
           reversed: false,
