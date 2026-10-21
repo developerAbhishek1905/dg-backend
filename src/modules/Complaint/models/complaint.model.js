@@ -581,6 +581,9 @@ const complaintSchema = new mongoose.Schema(
     },
 
     // Warranty the dealer assured the customer when closing the complaint
+    // Amount taken from the customer when a FIXED-billing complaint is closed
+    closureCustomerAmount: { type: Number, min: 0 },
+
     warrantyAssured: {
       type: new mongoose.Schema(
         {

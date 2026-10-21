@@ -1,5 +1,6 @@
 import Allocation from "../model/allocation.model.js";
 import Dealer from "../../dealers/models/dealer.model.js";
+import Complaint from "../../Complaint/models/complaint.model.js";
 import DailyCapacityUsage from "../model/dailyCapacityUsage.model.js";
 import { buildAllocationRules } from "../../dealers/controllers/dealer.controller.js";
 import { canDealerReceiveComplaint } from "../../dealers/helpers/dealerAvailability.js";
@@ -303,6 +304,7 @@ export const allocateDealerForComplaint = async ({
   productId,
   categoryId,
   category,
+  customerId = null,
 }) => {
   const now = new Date();
 
@@ -612,6 +614,53 @@ export const allocateDealerForComplaint = async ({
 
   /*
     |--------------------------------------------------------------------------
+    | SAME CUSTOMER, SAME DAY
+    |--------------------------------------------------------------------------
+    |
+    | If this customer already got a complaint allocated today, prefer that
+    | same dealer, but only when the dealer also provides this service (it is
+    | one of the available candidates). Otherwise the normal allocation runs
+    | and another dealer is picked.
+    */
+
+  let sameCustomerDealerIds = null;
+
+  if (customerId) {
+    const startOfDay = new Date(now);
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const todaysComplaints = await Complaint.find({
+      customerId,
+      complaintDateTime: { $gte: startOfDay },
+      allocatedDealerId: { $ne: null },
+      status: { $nin: ["CANCELLED"] },
+    })
+      .select("allocatedDealerId")
+      .lean();
+
+    const earlierDealerIds = new Set(
+      todaysComplaints.map((item) => String(item.allocatedDealerId)),
+    );
+
+    const preferred = availableCandidates.filter((candidate) =>
+      earlierDealerIds.has(String(candidate.dealerId)),
+    );
+
+    if (preferred.length) {
+      sameCustomerDealerIds = new Set(
+        preferred.map((candidate) => String(candidate.dealerId)),
+      );
+
+      availableCandidates.splice(
+        0,
+        availableCandidates.length,
+        ...preferred,
+      );
+    }
+  }
+
+  /*
+    |--------------------------------------------------------------------------
     | STEP 7
     | ROUND ROBIN + PERFORMANCE PRIORITY
     |--------------------------------------------------------------------------
@@ -736,13 +785,21 @@ export const allocateDealerForComplaint = async ({
       continue;
     }
 
+    const allocationReason = buildAllocationReason({
+      selected,
+      index,
+      ordered: availableCandidates,
+      creditSkipped,
+    });
+
+    if (sameCustomerDealerIds) {
+      allocationReason.code = "SAME_CUSTOMER_SAME_DAY";
+      allocationReason.label =
+        "Same customer already had a complaint today with this dealer, and the dealer provides this service";
+    }
+
     return {
-      allocationReason: buildAllocationReason({
-        selected,
-        index,
-        ordered: availableCandidates,
-        creditSkipped,
-      }),
+      allocationReason,
 
       dealerId: selected.dealerId,
 

@@ -376,6 +376,7 @@ export const createComplaint = async (req, res) => {
           productId: Number(productId),
           categoryId,
           category,
+          customerId: customer._id,
         });
 
         if (dealerAllocation) {

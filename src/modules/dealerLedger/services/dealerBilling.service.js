@@ -118,7 +118,10 @@ export const createClosureLedger = async ({ complaint, user }) => {
       );
     }
 
-    console.log(complaint)
+    // Final billing amount = units x service rate
+    const units = Math.max(Number(complaint.units) || 1, 1);
+    const totalAmount = Number((rate * units).toFixed(2));
+
     const ledger = await DealerLedger.create({
       dealerId: dealer._id,
 
@@ -148,24 +151,27 @@ export const createClosureLedger = async ({ complaint, user }) => {
 
       serviceRate: rate,
 
-      baseAmount: rate,
+      units,
+
+      baseAmount: totalAmount,
 
       percentage: 0,
 
-      amount: rate,
+      amount: totalAmount,
 
       entryType: "DEBIT",
 
       calculation: {
         fixedRate: rate,
-        customerAmount: 0,
+        customerAmount: Number(complaint.closureCustomerAmount || 0),
         profitAmount: 0,
         percentage: 0,
       },
 
-      description: `Fixed billing for complaint ${complaint.complaintNumber}`,
+      description: `Fixed billing for complaint ${complaint.complaintNumber} (${units} x ${rate})`,
 
-      status: "APPROVED",
+      // Every closure bill is approved manually from the billing table
+      status: "PENDING",
 
       billingDate: new Date(),
 

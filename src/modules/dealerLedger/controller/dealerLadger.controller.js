@@ -811,10 +811,53 @@ export const createDealerLedger = async (req, res) => {
   | Existing Normal Bill Creation
   |--------------------------------------------------------------------------
   |
-  | Keep your previously updated normal createDealerLedger
-  | logic here, including its Account synchronization.
+  | Manual bill from the billing module (create bill form).
+  | Created as PENDING and approved later from the billing table.
   |
   */
+
+  try {
+    const error = validateBill(req.body);
+
+    if (error) {
+      return res.status(400).json({
+        success: false,
+        message: error,
+      });
+    }
+
+    const result = await buildBillData(req.body);
+
+    if (result.error) {
+      return res.status(result.status).json({
+        success: false,
+        message: result.error,
+      });
+    }
+
+    const { billData } = result;
+
+    const ledger = await DealerLedger.create({
+      ...billData,
+      entrySource: "SYSTEM",
+      status: "PENDING",
+      billingDate: new Date(),
+      billedBy: req.user?._id || req.user?.id || null,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "Bill created successfully",
+      data: ledger,
+    });
+  } catch (error) {
+    console.error("CREATE BILL ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Failed to create bill",
+    });
+  }
 };
 
 
@@ -1015,12 +1058,28 @@ export const approveDealerLedger = async (req, res) => {
     |--------------------------------------------------------------------------
     */
 
-    if (ledger.transactionType !== "CLOSURE") {
-      await session.abortTransaction();
+    /*
+     * Manual bills that are not a complaint closure (opening balance,
+     * adjustment, cancellation, or no complaint) have no complaint flow:
+     * just approve the bill.
+     */
+    if (ledger.transactionType !== "CLOSURE" || !ledger.complaintId) {
+      ledger.status = "APPROVED";
 
-      return res.status(400).json({
-        success: false,
-        message: "Only closure billing can be approved from this API",
+      ledger.remarks = remarks;
+
+      ledger.approvedAt = new Date();
+
+      ledger.approvedBy = req.user?._id || req.user?.id || null;
+
+      await ledger.save({ session });
+
+      await session.commitTransaction();
+
+      return res.status(200).json({
+        success: true,
+        message: "Bill approved successfully",
+        data: { ledger },
       });
     }
 
@@ -1052,7 +1111,10 @@ export const approveDealerLedger = async (req, res) => {
 
     console.log("aaaaaaaaaaaaaa",complaint.billingReview)
 
-    if (!complaint.billingReview) {
+    // FIXED billing has no billing review, it only needs manual approval
+    const isFixedBilling = ledger.billingType === "FIXED";
+
+    if (!complaint.billingReview && !isFixedBilling) {
       await session.abortTransaction();
 
       return res.status(400).json({
@@ -1061,14 +1123,13 @@ export const approveDealerLedger = async (req, res) => {
       });
     }
 
-    if (complaint.billingReview.status === "VERIFIED") {
-      await session.abortTransaction();
-
-      return res.status(409).json({
-        success: false,
-        message: "Complaint billing is already verified",
-      });
-    }
+    /*
+     * The complaint billing is already verified (for example a manually
+     * created extra bill for the same complaint). Only this bill is
+     * approved, the complaint is not touched again.
+     */
+    const complaintAlreadyVerified =
+      complaint.billingReview?.status === "VERIFIED";
 
     /*
     |--------------------------------------------------------------------------
@@ -1076,7 +1137,43 @@ export const approveDealerLedger = async (req, res) => {
     |--------------------------------------------------------------------------
     */
 
+    /*
+    |--------------------------------------------------------------------------
+    | The complaint must be approved (closed) from Closure History first
+    |--------------------------------------------------------------------------
+    */
+
+    if (complaint.status !== "CLOSED") {
+      await session.abortTransaction();
+
+      return res.status(400).json({
+        success: false,
+        message:
+          "Approve this complaint from Closure History first. The bill can be approved only after the complaint is CLOSED.",
+      });
+    }
+
     const previousStatus = complaint.status;
+
+    if (complaintAlreadyVerified) {
+      ledger.status = "APPROVED";
+
+      ledger.remarks = remarks;
+
+      ledger.approvedAt = new Date();
+
+      ledger.approvedBy = req.user?._id || req.user?.id || null;
+
+      await ledger.save({ session });
+
+      await session.commitTransaction();
+
+      return res.status(200).json({
+        success: true,
+        message: "Bill approved successfully",
+        data: { ledger, complaint },
+      });
+    }
 
     /*
     |--------------------------------------------------------------------------
@@ -1102,15 +1199,18 @@ export const approveDealerLedger = async (req, res) => {
     |--------------------------------------------------------------------------
     */
 
-    complaint.billingReview.status = "VERIFIED";
+    if (complaint.billingReview) {
+      complaint.billingReview.status = "VERIFIED";
 
-    complaint.billingReview.reviewedAt = new Date();
+      complaint.billingReview.reviewedAt = new Date();
 
-    complaint.billingReview.reviewedBy = req.user?.name || "DG";
+      complaint.billingReview.reviewedBy = req.user?.name || "DG";
 
-    complaint.billingReview.reviewerId = req.user?._id || req.user?.id || null;
+      complaint.billingReview.reviewerId =
+        req.user?._id || req.user?.id || null;
 
-    complaint.billingReview.remarks = remarks;
+      complaint.billingReview.remarks = remarks;
+    }
 
     /*
     |--------------------------------------------------------------------------

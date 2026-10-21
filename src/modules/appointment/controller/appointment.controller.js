@@ -472,13 +472,29 @@ export const updateAppointmentStatus = async (req, res) => {
     */
 
       if (dealer.billingType === "FIXED") {
+        const fixedCustomerAmount = Number(customerAmount);
+
+        if (!Number.isFinite(fixedCustomerAmount) || fixedCustomerAmount <= 0) {
+          return res.status(400).json({
+            success: false,
+            message: "Customer amount is required to close the complaint",
+          });
+        }
+
+        complaint.closureCustomerAmount = fixedCustomerAmount;
+
         const ledger = await createClosureLedger({
           complaint,
           user: req.user,
         });
 
-        complaint.status = "CLOSE_ON_BILLING";
-        console.log(complaint.status);
+        // Waits for manual approval of the bill in the billing table
+        complaint.status = "CLOSE_ON_VERIFICATION";
+
+        // Save the closing reason selected by the dealer
+        complaint.closingReason = closingReason;
+        complaint.pendingReason = "";
+        complaint.cancellationReason = "";
         complaint.closedAt = new Date();
 
         complaint.pendingReason = "";
@@ -500,11 +516,12 @@ export const updateAppointmentStatus = async (req, res) => {
 
           previousStatus: complaint.status,
 
-          newStatus: "CLOSE_ON_BILLING",
+          newStatus: "CLOSE_ON_VERIFICATION",
 
           title: "Complaint Closed",
 
-          description: "Complaint closed with fixed billing",
+          description:
+            "Complaint closed with fixed billing, waiting for bill approval",
 
           user: req.user,
 
@@ -518,7 +535,7 @@ export const updateAppointmentStatus = async (req, res) => {
         return res.status(200).json({
           success: true,
 
-          message: "Complaint closed and ledger approved automatically",
+          message: "Complaint closed, bill sent for approval",
 
           data: complaint,
 
@@ -635,6 +652,11 @@ export const updateAppointmentStatus = async (req, res) => {
       */
 
         complaint.status = "CLOSE_ON_VERIFICATION";
+
+        // Save the closing reason selected by the dealer
+        complaint.closingReason = closingReason;
+        complaint.pendingReason = "";
+        complaint.cancellationReason = "";
 
         console.log("hkhkhdkhkhkdhkhkwhkhkhkhkjhk", complaint.billingReview);
 
@@ -766,6 +788,11 @@ export const updateAppointmentStatus = async (req, res) => {
         });
 
         complaint.status = "CLOSE_ON_VERIFICATION";
+
+        // Save the closing reason selected by the dealer
+        complaint.closingReason = closingReason;
+        complaint.pendingReason = "";
+        complaint.cancellationReason = "";
 
         await complaint.save();
 
@@ -1332,6 +1359,8 @@ const getComplaintsByStatuses = async ({
       categoryId,
       startDate,
       endDate,
+      status: statusParam,
+      reason: reasonParam,
     } = req.query;
 
     const pageNumber = Math.max(Number(page) || 1, 1);
@@ -1466,6 +1495,21 @@ if (dealerId) {
     };
 
     /*
+     * Optional tab / card filters (e.g. On Call Cancel vs After Call Cancel).
+     * The summary counts keep using `filter`, so the tabs always show
+     * their own totals; only the list and its total use `listFilter`.
+     */
+    const listFilter = { ...filter };
+
+    if (statusParam && statuses.includes(String(statusParam))) {
+      listFilter.status = String(statusParam);
+    }
+
+    if (reasonParam && reasonParam !== "ALL") {
+      listFilter[reasonField] = String(reasonParam);
+    }
+
+    /*
     |--------------------------------------------------------------------------
     | Queries
     |--------------------------------------------------------------------------
@@ -1478,7 +1522,7 @@ if (dealerId) {
       reasonAggregation,
       closureAggregation,
     ] = await Promise.all([
-      Complaint.find(filter)
+      Complaint.find(listFilter)
         .populate(
           "allocatedDealerId",
           "technicianCode technicianFirmName technicianName mobileNumber status",
@@ -1493,7 +1537,7 @@ if (dealerId) {
         .limit(limitNumber)
         .lean(),
 
-      Complaint.countDocuments(filter),
+      Complaint.countDocuments(listFilter),
 
       Complaint.aggregate([
         { $match: filter },
@@ -2437,6 +2481,13 @@ export const approveClosure = async (req, res) => {
     complaint.closureApprovedAt = now;
 
     complaint.closureApprovedBy = req.user?._id || req.user?.id;
+
+    // Approving the closure closes the complaint
+    complaint.status = "CLOSED";
+
+    if (!complaint.closedAt) {
+      complaint.closedAt = now;
+    }
 
     await complaint.save();
 

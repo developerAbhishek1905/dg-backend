@@ -1057,9 +1057,23 @@ export const updateDealer = async (req, res) => {
       "openingBalanceType",
     ];
 
+    // Unique + sparse fields must be removed when empty. Saving "" makes
+    // every dealer without a value collide on the unique index.
+    const uniqueOptionalFields = ["technicianCode"];
+
     stringFields.forEach((field) => {
       if (req.body[field] !== undefined) {
-        dealer[field] = req.body[field];
+        const value = req.body[field];
+
+        if (
+          uniqueOptionalFields.includes(field) &&
+          (value === null || String(value).trim() === "")
+        ) {
+          dealer[field] = undefined;
+          return;
+        }
+
+        dealer[field] = value;
       }
     });
 

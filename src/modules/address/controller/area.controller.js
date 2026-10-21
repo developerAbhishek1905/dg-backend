@@ -5,6 +5,8 @@ import State from "../model/state.model.js";
 import District from "../model/district.model.js";
 import City from "../model/city.model.js";
 import Pincode from "../model/pincode.model.js";
+import { getNextPincodeId } from "../utils/pincodeId.util.js";
+import Counter from "../model/counter.model.js";
 import { escapeRegex } from "../../../helper/escapeRegex.js";
 
 
@@ -2580,6 +2582,8 @@ export const importLocationExcel = async (
       "stateid",
       "districtid",
       "cityid",
+      "pincode_id",
+      "pincodeid",
     ];
 
     const foundForbidden =
@@ -2624,454 +2628,261 @@ export const importLocationExcel = async (
 
     const summary = {
       totalRows: rows.length,
-
       processedRows: 0,
       skippedRows: 0,
       failedRows: 0,
-
       statesCreated: 0,
       statesExisting: 0,
-
       districtsCreated: 0,
       districtsExisting: 0,
-
       citiesCreated: 0,
       citiesExisting: 0,
+      pincodesCreated: 0,
+      pincodesExisting: 0,
     };
 
+    /*
+     * Only failed rows are returned (max 1000) so a 30,000+ row import
+     * does not produce a huge response.
+     */
     const results = [];
+    const warnings = [];
+
+    const addFailure = (row, message, extra = {}) => {
+      summary.failedRows++;
+
+      if (results.length < 1000) {
+        results.push({ row, status: "FAILED", ...extra, message });
+      }
+    };
 
     /*
     |--------------------------------------------------------------------------
-    | Process Rows
+    | Load existing data ONCE (no per-row database queries)
     |--------------------------------------------------------------------------
     */
+    const [dbStates, dbDistricts, dbCities, dbPincodes] = await Promise.all([
+      State.find({}).select("state_id state_name -_id").lean(),
+      District.find({}).select("district_id district_name state_id -_id").lean(),
+      City.find({}).select("city_id city_name state_id district_id -_id").lean(),
+      Pincode.find({}).select("city_id pincode_name -_id").lean(),
+    ]);
 
-    for (
-      let index = 0;
-      index < rows.length;
-      index++
-    ) {
+    const stateMap = new Map();
+    const districtMap = new Map();
+    const cityMap = new Map();
+    const pincodeSet = new Set();
+
+    let maxStateId = 0;
+    let maxDistrictId = 0;
+    let maxCityId = 0;
+
+    for (const item of dbStates) {
+      stateMap.set(normalizeName(item.state_name), item);
+      maxStateId = Math.max(maxStateId, Number(item.state_id) || 0);
+    }
+
+    for (const item of dbDistricts) {
+      districtMap.set(`${item.state_id}|${normalizeName(item.district_name)}`, item);
+      maxDistrictId = Math.max(maxDistrictId, Number(item.district_id) || 0);
+    }
+
+    for (const item of dbCities) {
+      cityMap.set(
+        `${item.state_id}|${item.district_id}|${normalizeName(item.city_name)}`,
+        item,
+      );
+      maxCityId = Math.max(maxCityId, Number(item.city_id) || 0);
+    }
+
+    for (const item of dbPincodes) {
+      pincodeSet.add(`${item.city_id}|${item.pincode_name}`);
+    }
+
+    const newStates = [];
+    const newDistricts = [];
+    const newCities = [];
+    const newPincodes = [];
+
+    // unique "already existed" counters (each record counted once)
+    const seenExisting = new Set();
+    const createdNow = new Set();
+
+    const countExisting = (key, field) => {
+      if (seenExisting.has(key)) return;
+      seenExisting.add(key);
+      summary[field]++;
+    };
+
+    /*
+    |--------------------------------------------------------------------------
+    | Process rows in memory
+    |--------------------------------------------------------------------------
+    */
+    for (let index = 0; index < rows.length; index++) {
       const row = rows[index];
-
-      /*
-       * +2 because:
-       *
-       * index 0 = first JSON row
-       * Excel row 1 = header
-       * Excel row 2 = first data
-       */
-
-      const excelRow =
-        index + 2;
-
-      try {
-        /*
-        |--------------------------------------------------------------------------
-        | Read ONLY Names
-        |--------------------------------------------------------------------------
-        */
-
-        const stateName =
-          cleanName(
-            row.state_name,
-          );
-
-        const districtName =
-          cleanName(
-            row.district_name,
-          );
-
-        const cityName =
-          cleanName(
-            row.city_name,
-          );
-
-        /*
-        |--------------------------------------------------------------------------
-        | Validation
-        |--------------------------------------------------------------------------
-        */
-
-        if (!stateName) {
-          summary.failedRows++;
-
-          results.push({
-            row: excelRow,
-            status: "FAILED",
-            message:
-              "state_name is required",
-          });
-
-          continue;
-        }
-
-        /*
-         * City cannot exist without District.
-         */
-
-        if (
-          cityName &&
-          !districtName
-        ) {
-          summary.failedRows++;
-
-          results.push({
-            row: excelRow,
-
-            status: "FAILED",
-
-            state_name:
-              stateName,
-
-            city_name:
-              cityName,
-
-            message:
-              "district_name is required when city_name is provided",
-          });
-
-          continue;
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | STEP 1: STATE
-        |--------------------------------------------------------------------------
-        */
-
-        let state =
-          await findStateByName(
-            stateName,
-          );
-
-        let stateStatus =
-          "EXISTING";
-
-        if (!state) {
-          const nextStateId =
-            await getNextId(
-              State,
-              "state_id",
-            );
-
-          state =
-            await State.create({
-              state_id:
-                nextStateId,
-
-              state_name:
-                stateName,
-            });
-
-          stateStatus =
-            "CREATED";
-
-          summary.statesCreated++;
-        } else {
-          summary.statesExisting++;
-
-          /*
-           * Optional normalization/update.
-           *
-           * Example database:
-           * "MADHYA PRADESH"
-           *
-           * Excel:
-           * "Madhya Pradesh"
-           *
-           * Same logical state because lookup
-           * is case-insensitive.
-           *
-           * Update display value from Excel.
-           */
-
-          if (
-            normalizeName(
-              state.state_name,
-            ) ===
-              normalizeName(
-                stateName,
-              ) &&
-            state.state_name !==
-              stateName
-          ) {
-            state.state_name =
-              stateName;
-
-            await state.save();
-          }
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | STATE ONLY
-        |--------------------------------------------------------------------------
-        */
-
-        if (!districtName) {
-          summary.processedRows++;
-
-          results.push({
-            row: excelRow,
-
-            status: "SUCCESS",
-
-            state_name:
-              state.state_name,
-
-            stateStatus,
-
-            district_name: null,
-            city_name: null,
-
-            message:
-              stateStatus ===
-              "CREATED"
-                ? "State created"
-                : "State already exists",
-          });
-
-          continue;
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | STEP 2: DISTRICT
-        |--------------------------------------------------------------------------
-        */
-
-        let district =
-          await findDistrictByName(
-            {
-              stateId:
-                state.state_id,
-
-              districtName,
-            },
-          );
-
-        let districtStatus =
-          "EXISTING";
-
-        if (!district) {
-          const nextDistrictId =
-            await getNextId(
-              District,
-              "district_id",
-            );
-
-          district =
-            await District.create({
-              district_id:
-                nextDistrictId,
-
-              district_name:
-                districtName,
-
-              state_id:
-                state.state_id,
-            });
-
-          districtStatus =
-            "CREATED";
-
-          summary.districtsCreated++;
-        } else {
-          summary.districtsExisting++;
-
-          /*
-           * Update name formatting/casing
-           * using Excel value.
-           */
-
-          if (
-            normalizeName(
-              district.district_name,
-            ) ===
-              normalizeName(
-                districtName,
-              ) &&
-            district.district_name !==
-              districtName
-          ) {
-            district.district_name =
-              districtName;
-
-            await district.save();
-          }
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | STATE + DISTRICT ONLY
-        |--------------------------------------------------------------------------
-        */
-
-        if (!cityName) {
-          summary.processedRows++;
-
-          results.push({
-            row: excelRow,
-
-            status: "SUCCESS",
-
-            state_name:
-              state.state_name,
-
-            district_name:
-              district.district_name,
-
-            city_name: null,
-
-            stateStatus,
-            districtStatus,
-
-            message:
-              districtStatus ===
-              "CREATED"
-                ? "District created"
-                : "District already exists",
-          });
-
-          continue;
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | STEP 3: CITY
-        |--------------------------------------------------------------------------
-        */
-
-        let city =
-          await findCityByName({
-            stateId:
-              state.state_id,
-
-            districtId:
-              district.district_id,
-
-            cityName,
-          });
-
-        let cityStatus =
-          "EXISTING";
-
-        if (!city) {
-          const nextCityId =
-            await getNextId(
-              City,
-              "city_id",
-            );
-
-          city =
-            await City.create({
-              city_id:
-                nextCityId,
-
-              city_name:
-                cityName,
-
-              state_id:
-                state.state_id,
-
-              district_id:
-                district.district_id,
-            });
-
-          cityStatus =
-            "CREATED";
-
-          summary.citiesCreated++;
-        } else {
-          summary.citiesExisting++;
-
-          /*
-           * Update display name from Excel.
-           */
-
-          if (
-            normalizeName(
-              city.city_name,
-            ) ===
-              normalizeName(
-                cityName,
-              ) &&
-            city.city_name !==
-              cityName
-          ) {
-            city.city_name =
-              cityName;
-
-            await city.save();
-          }
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | SUCCESS
-        |--------------------------------------------------------------------------
-        */
-
-        summary.processedRows++;
-
-        results.push({
-          row: excelRow,
-
-          status: "SUCCESS",
-
-          state_name:
-            state.state_name,
-
-          district_name:
-            district.district_name,
-
-          city_name:
-            city.city_name,
-
-          stateStatus,
-          districtStatus,
-          cityStatus,
-
-          message:
-            cityStatus ===
-            "CREATED"
-              ? "City created"
-              : "Location already exists",
-        });
-      } catch (error) {
-        console.error(
-          `Location import row ${excelRow}:`,
-          error,
-        );
-
-        summary.failedRows++;
-
-        results.push({
-          row: excelRow,
-
-          status: "FAILED",
-
-          state_name:
-            cleanName(
-              row.state_name,
-            ),
-
-          district_name:
-            cleanName(
-              row.district_name,
-            ),
-
-          city_name:
-            cleanName(
-              row.city_name,
-            ),
-
-          message:
-            error.message ||
-            "Failed to process row",
-        });
+      const excelRow = index + 2;
+
+      const stateName = cleanName(row.state_name);
+      const districtName = cleanName(row.district_name);
+      const cityName = cleanName(row.city_name);
+
+      const pincodeKey = Object.keys(row).find((key) =>
+        ["pincode_name", "pincode", "pin_code"].includes(
+          key.trim().toLowerCase(),
+        ),
+      );
+
+      const pincodeName = pincodeKey
+        ? cleanName(row[pincodeKey]).replace(/\.0+$/, "")
+        : "";
+
+      const base = {
+        state_name: stateName,
+        district_name: districtName,
+        city_name: cityName,
+        pincode_name: pincodeName,
+      };
+
+      if (!stateName && !districtName && !cityName && !pincodeName) {
+        summary.skippedRows++;
+        continue;
       }
+
+      if (!stateName) {
+        addFailure(excelRow, "state_name is required", base);
+        continue;
+      }
+
+      if (cityName && !districtName) {
+        addFailure(excelRow, "district_name is required when city_name is provided", base);
+        continue;
+      }
+
+      if (pincodeName && !cityName) {
+        addFailure(excelRow, "city_name is required when pincode is provided", base);
+        continue;
+      }
+
+      if (pincodeName && !/^\d{6}$/.test(pincodeName)) {
+        addFailure(excelRow, "pincode must be exactly 6 digits", base);
+        continue;
+      }
+
+      /* STATE */
+      const stateKey = normalizeName(stateName);
+      let state = stateMap.get(stateKey);
+
+      if (!state) {
+        state = { state_id: ++maxStateId, state_name: stateName };
+        createdNow.add(state);
+        stateMap.set(stateKey, state);
+        newStates.push(state);
+        summary.statesCreated++;
+      } else if (!createdNow.has(state)) {
+        countExisting(`s|${stateKey}`, "statesExisting");
+      }
+
+      if (!districtName) {
+        summary.processedRows++;
+        continue;
+      }
+
+      /* DISTRICT */
+      const districtKey = `${state.state_id}|${normalizeName(districtName)}`;
+      let district = districtMap.get(districtKey);
+
+      if (!district) {
+        district = {
+          district_id: ++maxDistrictId,
+          district_name: districtName,
+          state_id: state.state_id,
+        };
+        districtMap.set(districtKey, district);
+        createdNow.add(district);
+        newDistricts.push(district);
+        summary.districtsCreated++;
+      } else if (!createdNow.has(district)) {
+        countExisting(`d|${districtKey}`, "districtsExisting");
+      }
+
+      if (!cityName) {
+        summary.processedRows++;
+        continue;
+      }
+
+      /* CITY */
+      const cityKey = `${state.state_id}|${district.district_id}|${normalizeName(cityName)}`;
+      let city = cityMap.get(cityKey);
+
+      if (!city) {
+        city = {
+          city_id: ++maxCityId,
+          city_name: cityName,
+          state_id: state.state_id,
+          district_id: district.district_id,
+        };
+        cityMap.set(cityKey, city);
+        createdNow.add(city);
+        newCities.push(city);
+        summary.citiesCreated++;
+      } else if (!createdNow.has(city)) {
+        countExisting(`c|${cityKey}`, "citiesExisting");
+      }
+
+      /* PINCODE */
+      if (pincodeName) {
+        const pinKey = `${city.city_id}|${pincodeName}`;
+
+        if (pincodeSet.has(pinKey)) {
+          countExisting(`p|${pinKey}`, "pincodesExisting");
+        } else {
+          pincodeSet.add(pinKey);
+          newPincodes.push({ pincode_name: pincodeName, city_id: city.city_id });
+          summary.pincodesCreated++;
+        }
+      }
+
+      summary.processedRows++;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Bulk insert (chunks of 5000)
+    |--------------------------------------------------------------------------
+    */
+    const bulkInsert = async (Model, docs, label) => {
+      for (let i = 0; i < docs.length; i += 5000) {
+        try {
+          await Model.insertMany(docs.slice(i, i + 5000), { ordered: false });
+        } catch (error) {
+          warnings.push(
+            `${label}: some records were not saved (${error.message})`,
+          );
+        }
+      }
+    };
+
+    await bulkInsert(State, newStates, "States");
+    await bulkInsert(District, newDistricts, "Districts");
+    await bulkInsert(City, newCities, "Cities");
+
+    if (newPincodes.length > 0) {
+      // Reserve a block of ids from the shared pincode counter
+      const firstId = await getNextPincodeId();
+
+      if (newPincodes.length > 1) {
+        await Counter.findOneAndUpdate(
+          { name: "pincode_id" },
+          { $inc: { sequence: newPincodes.length - 1 } },
+        );
+      }
+
+      newPincodes.forEach((item, i) => {
+        item.pincode_id = firstId + i;
+      });
+
+      await bulkInsert(Pincode, newPincodes, "Pincodes");
     }
 
     /*
@@ -3079,29 +2890,19 @@ export const importLocationExcel = async (
     | Response
     |--------------------------------------------------------------------------
     */
-
     return res.status(200).json({
       success: true,
-
-      message:
-        "Location Excel import completed",
-
+      message: "Location Excel import completed",
       summary,
-
       results,
+      warnings,
     });
   } catch (error) {
-    console.error(
-      "Import location Excel error:",
-      error,
-    );
+    console.error("Import location Excel error:", error);
 
     return res.status(500).json({
       success: false,
-
-      message:
-        error.message ||
-        "Failed to import Excel file",
+      message: error.message || "Failed to import Excel file",
     });
   }
 };
@@ -3153,7 +2954,7 @@ export const exportLocationExcel = async (
     const cities =
       await City.find({})
         .select(
-          "city_name state_id district_id -_id",
+          "city_id city_name state_id district_id -_id",
         )
         .lean();
 
@@ -3163,8 +2964,20 @@ export const exportLocationExcel = async (
     |--------------------------------------------------------------------------
     */
 
-    const districtsByState =
-      new Map();
+    const pincodes = await Pincode.find({})
+      .select("city_id pincode_name -_id")
+      .sort({ pincode_name: 1 })
+      .lean();
+
+    const pincodesByCity = new Map();
+
+    for (const pincode of pincodes) {
+      const list = pincodesByCity.get(pincode.city_id) || [];
+      list.push(pincode.pincode_name);
+      pincodesByCity.set(pincode.city_id, list);
+    }
+
+    const districtsByState = new Map();
 
     const citiesByDistrict =
       new Map();
@@ -3285,16 +3098,16 @@ export const exportLocationExcel = async (
           const city of
             districtCities
         ) {
-          exportRows.push({
-            state_name:
-              state.state_name,
+          const cityPincodes = pincodesByCity.get(city.city_id) || [""];
 
-            district_name:
-              district.district_name,
-
-            city_name:
-              city.city_name,
-          });
+          for (const pincodeName of cityPincodes) {
+            exportRows.push({
+              state_name: state.state_name,
+              district_name: district.district_name,
+              city_name: city.city_name,
+              pincode_name: pincodeName,
+            });
+          }
         }
       }
     }
@@ -3313,6 +3126,7 @@ export const exportLocationExcel = async (
             "state_name",
             "district_name",
             "city_name",
+            "pincode_name",
           ],
         },
       );
@@ -3330,9 +3144,8 @@ export const exportLocationExcel = async (
       {
         wch: 25,
       },
-      {
-        wch: 25,
-      },
+      { wch: 25, },
+      { wch: 14, },
     ];
 
     /*
@@ -3437,11 +3250,19 @@ export const downloadLocationSampleExcel = async (req, res) => {
         state_name: "Madhya Pradesh",
         district_name: "Indore",
         city_name: "Indore",
+        pincode_name: "452001",
+      },
+      {
+        state_name: "Madhya Pradesh",
+        district_name: "Indore",
+        city_name: "Indore",
+        pincode_name: "452002",
       },
       {
         state_name: "Madhya Pradesh",
         district_name: "Indore",
         city_name: "Mhow",
+        pincode_name: "453441",
       },
       {
         state_name: "Madhya Pradesh",
@@ -3476,6 +3297,7 @@ export const downloadLocationSampleExcel = async (req, res) => {
         "state_name",
         "district_name",
         "city_name",
+        "pincode_name",
       ],
     });
 
@@ -3489,6 +3311,7 @@ export const downloadLocationSampleExcel = async (req, res) => {
       { wch: 25 },
       { wch: 25 },
       { wch: 25 },
+      { wch: 14 },
     ];
 
     /*
@@ -3514,9 +3337,14 @@ export const downloadLocationSampleExcel = async (req, res) => {
           "Fill state_name, district_name and city_name.",
       },
       {
+        type: "State + District + City + Pincode",
+        instruction:
+          "Fill all four columns. pincode_name must be 6 digits. A city can have many pincodes: repeat the city on another row with the next pincode.",
+      },
+      {
         type: "Important",
         instruction:
-          "Do not add _id, state_id, district_id or city_id columns.",
+          "Do not add _id, state_id, district_id, city_id or pincode_id columns.",
       },
       {
         type: "Matching",

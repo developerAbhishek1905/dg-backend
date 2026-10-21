@@ -947,7 +947,8 @@ export const getCategoryDropdown = async (req, res) => {
   try {
     const { product_id, search = "" } = req.query;
 
-    const filter = {};
+    // Inactive categories must not appear in the dropdown
+    const filter = { status: { $ne: "INACTIVE" } };
 
     // ==========================================
     // PRODUCT ID - OPTIONAL
