@@ -9,36 +9,55 @@ const PERCENTAGE_BILLING_TYPES = ["PARTIAL_PAYMENT", "PROFIT_SHARING"];
 |--------------------------------------------------------------------------
 */
 
+/*
+ * The service category used for billing: the one chosen at closing time
+ * (closureCategory) or, if none was chosen, the registered complaint category.
+ */
+export const billingCategoryOf = (complaint) => ({
+  id: complaint.closureCategoryId || complaint.categoryId || null,
+  name: complaint.closureCategory || complaint.category || "",
+});
+
+// The dealer has no rate for the chosen category. The caller may decide to
+// close without a bill and let DG pick another category in Closure History.
+export const rateNotConfigured = (message) => {
+  const error = new Error(message);
+  error.code = "RATE_NOT_CONFIGURED";
+  return error;
+};
+
 const findServiceRate = (dealer, complaint) => {
+  const billingCategory = billingCategoryOf(complaint);
+
   const product = dealer.productServices?.find(
     (item) => Number(item.productId) === Number(complaint.productId),
   );
 
   if (!product) {
-    throw new Error(
+    throw rateNotConfigured(
       `Product ${complaint.productName} is not configured for this dealer`,
     );
   }
 
   const category = product.categories?.find((item) => {
     // Prefer category ID when both sides have it.
-    if (complaint.categoryId && item.categoryId) {
-      return String(item.categoryId) === String(complaint.categoryId);
+    if (billingCategory.id && item.categoryId) {
+      return String(item.categoryId) === String(billingCategory.id);
     }
 
     return (
       String(item.categoryName || "")
         .trim()
         .toLowerCase() ===
-      String(complaint.category || "")
+      String(billingCategory.name || "")
         .trim()
         .toLowerCase()
     );
   });
 
   if (!category) {
-    throw new Error(
-      `Service ${complaint.category} is not configured for this dealer`,
+    throw rateNotConfigured(
+      `Service ${billingCategory.name} is not configured for this dealer`,
     );
   }
 
@@ -113,8 +132,8 @@ export const createClosureLedger = async ({ complaint, user }) => {
     const { rate, category } = findServiceRate(dealer, complaint);
 
     if (rate <= 0) {
-      throw new Error(
-        `Billing rate is not configured for ${complaint.category}`,
+      throw rateNotConfigured(
+        `Billing rate is not configured for ${billingCategoryOf(complaint).name}`,
       );
     }
 
@@ -143,9 +162,9 @@ export const createClosureLedger = async ({ complaint, user }) => {
 
       productName: complaint.productName,
 
-      categoryId: complaint.categoryId || null,
+      categoryId: billingCategoryOf(complaint).id,
 
-      category: complaint.category,
+      category: billingCategoryOf(complaint).name,
 
       serviceDescription: category.description || "",
 
@@ -407,10 +426,10 @@ if (PERCENTAGE_BILLING_TYPES.includes(dealer.billingType)) {
       complaint.productName,
 
     categoryId:
-      complaint.categoryId || null,
+      billingCategoryOf(complaint).id,
 
     category:
-      complaint.category,
+      billingCategoryOf(complaint).name,
 
     /*
      * Snapshot values
@@ -663,6 +682,76 @@ export const createCancellationLedger = async ({
     "Cancellation ledger created:",
     ledger._id,
   );
+
+  return ledger;
+};
+
+/*
+|--------------------------------------------------------------------------
+| Recalculate a pending closure bill after the closure category changed
+|--------------------------------------------------------------------------
+| FIXED billing: amount = units x rate of the new category.
+| Percentage billing: amount depends on the customer amount, only the
+| category on the bill is updated.
+*/
+
+export const recalculateClosureLedger = async ({ complaint }) => {
+  const ledger = await DealerLedger.findOne({
+    complaintId: complaint._id,
+    transactionType: "CLOSURE",
+    status: "PENDING",
+  });
+
+  if (!ledger) {
+    // Closed earlier without a bill (dealer had no rate for the category):
+    // create it now from the category selected in Closure History.
+    const existing = await getExistingComplaintBilling(complaint._id);
+
+    if (existing) {
+      return null;
+    }
+
+    return createClosureLedger({
+      complaint,
+      user: { dealerId: complaint.allocatedDealerId },
+    });
+  }
+
+  const billingCategory = billingCategoryOf(complaint);
+
+  if (ledger.billingType === "FIXED") {
+    const dealer = await Dealer.findById(ledger.dealerId);
+
+    if (!dealer) {
+      throw new Error("Dealer not found");
+    }
+
+    const { rate, category } = findServiceRate(dealer, complaint);
+
+    if (rate <= 0) {
+      throw rateNotConfigured(
+        `Billing rate is not configured for ${billingCategory.name}`,
+      );
+    }
+
+    const units = Math.max(Number(complaint.units) || 1, 1);
+    const totalAmount = Number((rate * units).toFixed(2));
+
+    ledger.serviceRate = rate;
+    ledger.serviceDescription = category.description || "";
+    ledger.baseAmount = totalAmount;
+    ledger.amount = totalAmount;
+    ledger.calculation = {
+      ...(ledger.calculation?.toObject?.() ?? ledger.calculation ?? {}),
+      fixedRate: rate,
+    };
+    ledger.description = `Fixed billing for complaint ${complaint.complaintNumber} (${units} x ${rate})`;
+  }
+
+  ledger.categoryId = billingCategory.id;
+  ledger.category = billingCategory.name;
+
+  await ledger.save();
 
   return ledger;
 };

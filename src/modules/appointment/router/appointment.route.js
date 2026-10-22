@@ -15,7 +15,8 @@ import {
   getDealerRemarkNotifications,
   saveCancellationRemark,
   cancelComplaint,
-  approveClosure
+  approveClosure,
+  updateClosureCategory
 } from "../controller/appointment.controller.js";
 import { protect } from "../../auth/middleware/auth.middleware.js";
 
@@ -69,6 +70,12 @@ router.patch(
   "/complaints/:id/approve-closure",
   protect,
   approveClosure,
+);
+
+router.patch(
+  "/complaints/:id/closure-category",
+  protect,
+  updateClosureCategory,
 );
 
 export default router;

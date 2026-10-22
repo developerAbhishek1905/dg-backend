@@ -10,6 +10,8 @@ import {
   createCancellationLedger,
 } from "../../dealerLedger/services/dealerBilling.service.js";
 import Dealer from "../../dealers/models/dealer.model.js";
+import Category from "../../category/models/category.model.js";
+import { recalculateClosureLedger } from "../../dealerLedger/services/dealerBilling.service.js";
 import DealerLedger from "../../dealerLedger/model/dealerLedger.model.js";
 import Reason from "../../reason/models/reason.model.js";
 import {escapeRegex} from "../../../helper/escapeRegex.js"
@@ -239,6 +241,7 @@ export const updateAppointmentStatus = async (req, res) => {
       customerAmount,
       profitAmount,
       warrantyAssured,
+      closureCategoryId,
     } = req.body;
 
     const allowedStatuses = [
@@ -360,6 +363,38 @@ export const updateAppointmentStatus = async (req, res) => {
     const isWarrantyComplaint = complaint.complaintType === "WARRANTY";
 
     if (status === "CLOSE_ON_BILLING") {
+      /*
+       * Service category done by the dealer (must belong to the product).
+       * Billing is decided from this category.
+       */
+      if (closureCategoryId) {
+        if (!mongoose.isValidObjectId(closureCategoryId)) {
+          return res.status(400).json({
+            success: false,
+            message: "Invalid closure category",
+          });
+        }
+
+        const closureCategory = await Category.findById(closureCategoryId).lean();
+
+        if (
+          !closureCategory ||
+          Number(closureCategory.product_id) !== Number(complaint.productId)
+        ) {
+          return res.status(400).json({
+            success: false,
+            message: "Selected category does not belong to this product",
+          });
+        }
+
+        complaint.closureCategoryId = closureCategory._id;
+        complaint.closureCategory = closureCategory.category;
+
+        // Remember what the dealer selected
+        complaint.dealerClosureCategoryId = closureCategory._id;
+        complaint.dealerClosureCategory = closureCategory.category;
+      }
+
       if (warrantyAssured !== undefined && warrantyAssured !== null) {
         const warrantyValue = Number(warrantyAssured.value);
         const warrantyUnit =
@@ -483,10 +518,21 @@ export const updateAppointmentStatus = async (req, res) => {
 
         complaint.closureCustomerAmount = fixedCustomerAmount;
 
-        const ledger = await createClosureLedger({
-          complaint,
-          user: req.user,
-        });
+        let ledger = null;
+
+        try {
+          ledger = await createClosureLedger({
+            complaint,
+            user: req.user,
+          });
+        } catch (ledgerError) {
+          // The dealer has no rate for the selected category: still close
+          // the complaint, DG sets the right category (and so the bill) from
+          // Closure History.
+          if (ledgerError.code !== "RATE_NOT_CONFIGURED") {
+            throw ledgerError;
+          }
+        }
 
         // Waits for manual approval of the bill in the billing table
         complaint.status = "CLOSE_ON_VERIFICATION";
@@ -535,7 +581,9 @@ export const updateAppointmentStatus = async (req, res) => {
         return res.status(200).json({
           success: true,
 
-          message: "Complaint closed, bill sent for approval",
+          message: ledger
+            ? "Complaint closed, bill sent for approval"
+            : "Complaint closed. The bill amount will be set by DG from Closure History",
 
           data: complaint,
 
@@ -1345,7 +1393,8 @@ const getComplaintsByStatuses = async ({
   statuses,
   label,
   reasonField,
-  sortBy = "updatedAt",
+  // createdAt is stable: acting on a row must not move it (updatedAt would)
+  sortBy = "createdAt",
   sortOrder = -1,
 }) => {
   try {
@@ -1531,7 +1580,7 @@ if (dealerId) {
         .populate("createdBy", "name")
         .sort({
           [sortBy]: sortOrder,
-          updatedAt: -1,
+          _id: -1,
         })
         .skip(skip)
         .limit(limitNumber)
@@ -2482,6 +2531,14 @@ export const approveClosure = async (req, res) => {
 
     complaint.closureApprovedBy = req.user?._id || req.user?.id;
 
+    // The category in force at approval is the verified one
+    if (!complaint.verifiedCategory) {
+      complaint.verifiedCategoryId =
+        complaint.closureCategoryId || complaint.categoryId || null;
+      complaint.verifiedCategory =
+        complaint.closureCategory || complaint.category || "";
+    }
+
     // Approving the closure closes the complaint
     complaint.status = "CLOSED";
 
@@ -2502,6 +2559,121 @@ export const approveClosure = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to approve closure",
+      error: error.message,
+    });
+  }
+};
+
+/*
+|--------------------------------------------------------------------------
+| Change the closure category from Closure History
+|--------------------------------------------------------------------------
+| PATCH /appointments/complaints/:id/closure-category
+| Allowed until the closure is approved. The pending bill is recalculated
+| from the selected category.
+*/
+
+export const updateClosureCategory = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { categoryId } = req.body;
+
+    if (!mongoose.isValidObjectId(id) || !mongoose.isValidObjectId(categoryId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid complaint and category are required",
+      });
+    }
+
+    const complaint = await Complaint.findById(id);
+
+    if (!complaint) {
+      return res.status(404).json({
+        success: false,
+        message: "Complaint not found",
+      });
+    }
+
+    if (
+      !["CLOSE_ON_BILLING", "CLOSE_ON_VERIFICATION"].includes(complaint.status)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Category can be changed only for a closed complaint",
+      });
+    }
+
+    if (complaint.closureApproved) {
+      return res.status(400).json({
+        success: false,
+        message: "Closure is already approved, category cannot be changed",
+      });
+    }
+
+    const category = await Category.findById(categoryId).lean();
+
+    if (
+      !category ||
+      Number(category.product_id) !== Number(complaint.productId)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Selected category does not belong to this product",
+      });
+    }
+
+    const previousCategory =
+      complaint.closureCategory || complaint.category || "";
+
+    complaint.closureCategoryId = category._id;
+    complaint.closureCategory = category.category;
+
+    // Remember what was selected at verification time
+    complaint.verifiedCategoryId = category._id;
+    complaint.verifiedCategory = category.category;
+
+    // Recalculate first: it throws when the dealer has no rate for the
+    // category, in which case nothing is saved.
+    let ledger = null;
+
+    try {
+      ledger = await recalculateClosureLedger({ complaint });
+    } catch (error) {
+      return res.status(400).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
+    await complaint.save();
+
+    await createComplaintActivity({
+      complaint,
+      activityType: "COMPLAINT_UPDATED",
+      previousStatus: complaint.status,
+      newStatus: complaint.status,
+      title: "Closure Category Changed",
+      description: `Closure category changed from ${previousCategory || "-"} to ${category.category}`,
+      user: req.user,
+      metadata: {
+        categoryId: category._id,
+        ledgerId: ledger?._id,
+        amount: ledger?.amount,
+      },
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Closure category updated",
+      data: complaint,
+      ledger,
+    });
+  } catch (error) {
+    console.error("Update closure category error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update closure category",
       error: error.message,
     });
   }

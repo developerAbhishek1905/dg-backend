@@ -581,6 +581,31 @@ const complaintSchema = new mongoose.Schema(
     },
 
     // Warranty the dealer assured the customer when closing the complaint
+    // Service category actually done, chosen by the dealer when closing and
+    // changeable from Closure History. Billing is decided from this category.
+    closureCategoryId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Category",
+      default: null,
+    },
+    closureCategory: { type: String, default: "" },
+
+    // Category picked by the dealer when closing (kept as history)
+    dealerClosureCategoryId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Category",
+      default: null,
+    },
+    dealerClosureCategory: { type: String, default: "" },
+
+    // Category picked at verification time in Closure History
+    verifiedCategoryId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Category",
+      default: null,
+    },
+    verifiedCategory: { type: String, default: "" },
+
     // Amount taken from the customer when a FIXED-billing complaint is closed
     closureCustomerAmount: { type: Number, min: 0 },
 
