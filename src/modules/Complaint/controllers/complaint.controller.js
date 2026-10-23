@@ -1,3 +1,4 @@
+import { getDealerCityProfile } from "../../dealers/helpers/dealerCity.js";
 import mongoose from "mongoose";
 import { closingStatuses, percentageMethods } from "../../billing/rules.js";
 import BillingDealer from "../../dealers/models/dealer.model.js";
@@ -5,7 +6,10 @@ import Complaint from "../models/complaint.model.js";
 import Customer from "../../Customer/models/customer.model.js";
 import Dealer from "../../dealers/models/dealer.model.js";
 import { getIsWarranty } from "../../../helper/warranty.util.js";
-import { allocateDealerForComplaint } from "../../allocation/services/allocateDealer.service.js";
+import {
+  allocateDealerForComplaint,
+  explainNoAllocation,
+} from "../../allocation/services/allocateDealer.service.js";
 import { createComplaintActivity } from "../services/complaintActivity.service.js";
 import { escapeRegex } from "../../../helper/escapeRegex.js";
 import { sendComplaintAllocationNotifications } from "../../../services/complaintWhatsAppService.js";
@@ -585,6 +589,44 @@ export const createComplaint = async (req, res) => {
           allocatedAt: complaint.allocatedAt,
         },
       });
+    }
+
+    /*
+    | Not allocated: record WHY in the complaint history.
+    */
+    if (!dealerAllocation?.dealerId) {
+      try {
+        const failure = await explainNoAllocation({
+          cityId: complaint.address?.cityId,
+          cityName: complaint.address?.city,
+          productId: complaint.productId,
+          productName: complaint.productName,
+          categoryId: complaint.categoryId,
+          category: complaint.category,
+        });
+
+        await createComplaintActivity({
+          complaint,
+
+          activityType: "ALLOCATION_FAILED",
+
+          previousStatus: null,
+          newStatus: complaint.status,
+
+          title: "Dealer Not Allocated",
+
+          description:
+            "No dealer could be allocated automatically. The complaint stays registered until it is allocated manually.",
+
+          reason: failure.label,
+
+          user: req.user,
+
+          metadata: { allocationFailure: failure },
+        });
+      } catch (error) {
+        console.error("Allocation failure log error:", error);
+      }
     }
 
     /*
@@ -1498,6 +1540,31 @@ export const updateComplaint = async (req, res) => {
           complaint.allocationType = "NONE";
           complaint.allocatedAt = null;
 
+          // Record why the complaint is no longer allocated
+          try {
+            const failure = await explainNoAllocation({
+              cityId: newCityId,
+              cityName: complaint.address?.city,
+              productId: newProductId,
+              productName: complaint.productName,
+              categoryId: newCategoryId,
+              category: newCategory,
+            });
+
+            await createComplaintActivity({
+              complaint,
+              activityType: "ALLOCATION_FAILED",
+              title: "Dealer Not Allocated",
+              description:
+                "Complaint details changed and no dealer could be allocated automatically",
+              reason: failure.label,
+              user: req.user,
+              metadata: { allocationFailure: failure },
+            });
+          } catch (error) {
+            console.error("Allocation failure log error:", error);
+          }
+
           /*
     |--------------------------------------------------------------------------
     | Keep Complaint Registered
@@ -1976,9 +2043,11 @@ export const getEligibleDealersForComplaint = async (req, res) => {
 
       accountDeactivated: false,
 
-      "businessAddress.cityId": cityId,
-
-      productServices: {
+      $or: [
+        // primary city
+        {
+          "businessAddress.cityId": cityId,
+          productServices: {
         $elemMatch: {
           productId,
 
@@ -2008,6 +2077,46 @@ export const getEligibleDealersForComplaint = async (req, res) => {
           },
         },
       },
+        },
+        // additional operating city (own services)
+        {
+          additionalCities: {
+            $elemMatch: {
+              cityId,
+              productServices: {
+        $elemMatch: {
+          productId,
+
+          categories: {
+            $elemMatch: {
+              $or: [
+                ...(categoryId
+                  ? [
+                      {
+                        categoryId,
+                      },
+                    ]
+                  : []),
+
+                ...(categoryName
+                  ? [
+                      {
+                        categoryName: {
+                          $regex: `^${escapeRegex(categoryName)}$`,
+                          $options: "i",
+                        },
+                      },
+                    ]
+                  : []),
+              ],
+            },
+          },
+        },
+      },
+            },
+          },
+        },
+      ],
     })
       .select(
         `
@@ -2025,6 +2134,7 @@ export const getEligibleDealersForComplaint = async (req, res) => {
           productServices
           combinedCapacity
           individualCapacities
+          additionalCities
         `,
       )
       .sort({
@@ -2038,7 +2148,10 @@ export const getEligibleDealersForComplaint = async (req, res) => {
     ========================================= */
 
     const eligibleDealers = dealers.map((dealer) => {
-      const service = dealer.productServices?.find(
+      // services of the city this complaint is in
+      const cityProfile = getDealerCityProfile(dealer, cityId);
+
+      const service = (cityProfile?.productServices ?? dealer.productServices)?.find(
         (item) => Number(item.productId) === productId,
       );
 
@@ -2074,9 +2187,9 @@ export const getEligibleDealersForComplaint = async (req, res) => {
 
         status: dealer.status,
 
-        cityId: dealer.businessAddress?.cityId,
+        cityId: cityProfile?.cityId ?? dealer.businessAddress?.cityId,
 
-        city: dealer.businessAddress?.city,
+        city: cityProfile?.city || dealer.businessAddress?.city,
 
         matchedService: {
           productId,
@@ -2189,9 +2302,10 @@ export const assignDealerToComplaint = async (req, res) => {
 
     const complaintCityId = Number(complaint.address?.cityId);
 
-    const dealerCityId = Number(dealer.businessAddress?.cityId);
+    // primary city or one of the dealer's additional cities
+    const cityProfile = getDealerCityProfile(dealer, complaintCityId);
 
-    if (!complaintCityId || complaintCityId !== dealerCityId) {
+    if (!complaintCityId || !cityProfile) {
       return res.status(400).json({
         success: false,
         message: "Dealer does not serve complaint city",
@@ -2210,7 +2324,7 @@ export const assignDealerToComplaint = async (req, res) => {
 
     const complaintCategory = complaint.category?.trim().toLowerCase();
 
-    const service = dealer.productServices?.find(
+    const service = cityProfile.productServices?.find(
       (item) => Number(item.productId) === complaintProductId,
     );
 

@@ -831,3 +831,228 @@ export const allocateDealerForComplaint = async ({
 
   return null;
 };
+
+/*
+|--------------------------------------------------------------------------
+| WHY WAS NO DEALER ALLOCATED?
+|--------------------------------------------------------------------------
+|
+| Called only after allocateDealerForComplaint returned null. It walks the
+| same checks in the same order and reports the first one that explains it,
+| so the complaint history can say why the complaint stayed unallocated.
+| Never throws: a diagnosis problem must not break complaint registration.
+*/
+
+export const explainNoAllocation = async ({
+  cityId,
+  cityName = "",
+  productId,
+  productName = "",
+  categoryId,
+  category,
+}) => {
+  const reason = (code, label, details = {}) => ({ code, label, details });
+
+  const cityText = cityName || `city ${cityId}`;
+  const productText = productName || `product ${productId}`;
+  const serviceText = category || "the selected service";
+
+  try {
+    if (!cityId) {
+      return reason(
+        "CITY_MISSING",
+        "Complaint has no city, so no dealer could be matched",
+      );
+    }
+
+    if (!productId) {
+      return reason(
+        "PRODUCT_MISSING",
+        "Complaint has no product, so no dealer could be matched",
+      );
+    }
+
+    if (!categoryId && !category) {
+      return reason(
+        "SERVICE_MISSING",
+        "Complaint has no service/category, so no dealer could be matched",
+      );
+    }
+
+    const settings = await getAllocationSettings();
+
+    if (!settings.autoAllocationEnabled) {
+      return reason(
+        "AUTO_ALLOCATION_OFF",
+        "Automatic allocation is turned off in allocation settings. Allocate manually",
+      );
+    }
+
+    if (
+      (settings.excludedCities || []).some(
+        (item) => Number(item.cityId) === Number(cityId),
+      )
+    ) {
+      return reason(
+        "CITY_EXCLUDED",
+        `${cityText} is excluded from automatic allocation in allocation settings`,
+      );
+    }
+
+    const now = new Date();
+
+    const allocations = await Allocation.find({
+      allocationMonth: now.getMonth() + 1,
+      allocationYear: now.getFullYear(),
+      status: "ACTIVE",
+      from: { $lte: now },
+      to: { $gte: now },
+      "rules.cityId": Number(cityId),
+    }).lean();
+
+    if (!allocations.length) {
+      const dealersInCity = await Dealer.countDocuments({
+        $or: [
+          { "businessAddress.cityId": Number(cityId) },
+          { "additionalCities.cityId": Number(cityId) },
+        ],
+      });
+
+      return dealersInCity === 0
+        ? reason(
+            "NO_DEALER_IN_CITY",
+            `No dealer is registered for ${cityText}`,
+          )
+        : reason(
+            "NO_ACTIVE_ALLOCATION",
+            `${dealersInCity} dealer(s) exist in ${cityText}, but none has an active allocation for this month (dealer inactive or suspended)`,
+            { dealersInCity },
+          );
+    }
+
+    const dealers = await Dealer.find({
+      _id: { $in: allocations.map((item) => item.dealerId) },
+    })
+      .select(
+        "_id status dateOfJoining dateOfLeaving rejoiningDates leaves creditLimit openingBalance openingBalanceType",
+      )
+      .lean();
+
+    const available = dealers.filter((dealer) =>
+      canDealerReceiveComplaint(dealer, now),
+    );
+
+    if (!available.length) {
+      return reason(
+        "DEALERS_UNAVAILABLE",
+        `All ${dealers.length} dealer(s) in ${cityText} are unavailable (on leave, suspended, inactive or not joined)`,
+        { dealers: dealers.length },
+      );
+    }
+
+    const usable = settings.useCreditLimit
+      ? available.filter((dealer) => !isOverCreditLimit(dealer))
+      : available;
+
+    if (!usable.length) {
+      return reason(
+        "CREDIT_LIMIT_REACHED",
+        `All ${available.length} available dealer(s) in ${cityText} have reached their credit limit`,
+        { dealers: available.length },
+      );
+    }
+
+    const usableIds = new Set(usable.map((dealer) => String(dealer._id)));
+
+    let productMatched = 0;
+    let serviceMatched = 0;
+    let withCapacity = 0;
+
+    for (const allocation of allocations) {
+      if (!usableIds.has(String(allocation.dealerId))) continue;
+
+      const cityRule = allocation.rules?.find(
+        (rule) => Number(rule.cityId) === Number(cityId),
+      );
+
+      let hasProduct = false;
+      let hasService = false;
+      let hasCapacity = false;
+
+      for (const capacityRule of cityRule?.capacityRules ?? []) {
+        if (capacityRule.status !== "ACTIVE") continue;
+
+        const product = capacityRule.products?.find(
+          (item) => Number(item.productId) === Number(productId),
+        );
+
+        if (!product) continue;
+
+        hasProduct = true;
+
+        const service = product.services?.find((item) => {
+          if (categoryId && item.categoryId) {
+            return String(item.categoryId) === String(categoryId);
+          }
+
+          return (
+            item.category?.trim().toLowerCase() ===
+            category?.trim().toLowerCase()
+          );
+        });
+
+        if (!service) continue;
+
+        hasService = true;
+
+        const capacity =
+          capacityRule.capacityType === "COMBINED"
+            ? Number(capacityRule.dailyCapacity ?? 0)
+            : Number(product.dailyCapacity ?? 0);
+
+        if (capacity > 0) hasCapacity = true;
+      }
+
+      if (hasProduct) productMatched += 1;
+      if (hasService) serviceMatched += 1;
+      if (hasCapacity) withCapacity += 1;
+    }
+
+    if (!productMatched) {
+      return reason(
+        "NO_DEALER_FOR_PRODUCT",
+        `None of the ${usable.length} available dealer(s) in ${cityText} provides ${productText}`,
+        { dealers: usable.length },
+      );
+    }
+
+    if (!serviceMatched) {
+      return reason(
+        "NO_DEALER_FOR_SERVICE",
+        `${productMatched} dealer(s) in ${cityText} provide ${productText}, but none provides the service "${serviceText}"`,
+        { dealers: productMatched },
+      );
+    }
+
+    if (!withCapacity) {
+      return reason(
+        "NO_CAPACITY_CONFIGURED",
+        `${serviceMatched} dealer(s) provide ${serviceText} for ${productText}, but none has a daily capacity set for it`,
+        { dealers: serviceMatched },
+      );
+    }
+
+    return reason(
+      "CAPACITY_FULL",
+      `All ${withCapacity} dealer(s) providing ${serviceText} for ${productText} in ${cityText} have reached today's daily capacity`,
+      { dealers: withCapacity },
+    );
+  } catch (error) {
+    console.error("explainNoAllocation failed:", error);
+
+    return reason(
+      "UNKNOWN",
+      "No dealer was available for this city, product and service",
+    );
+  }
+};

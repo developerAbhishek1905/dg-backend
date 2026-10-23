@@ -1,3 +1,4 @@
+import { getDealerCityProfile } from "../../dealers/helpers/dealerCity.js";
 import Dealer from "../../dealers/models/dealer.model.js";
 import DealerLedger from "../../dealerLedger/model/dealerLedger.model.js";
 
@@ -29,7 +30,10 @@ export const rateNotConfigured = (message) => {
 const findServiceRate = (dealer, complaint) => {
   const billingCategory = billingCategoryOf(complaint);
 
-  const product = dealer.productServices?.find(
+  // Services/rates of the city the complaint belongs to
+  const cityProfile = getDealerCityProfile(dealer, complaint.address?.cityId);
+
+  const product = (cityProfile?.productServices ?? dealer.productServices)?.find(
     (item) => Number(item.productId) === Number(complaint.productId),
   );
 

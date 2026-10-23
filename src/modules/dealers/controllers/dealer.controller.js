@@ -86,19 +86,88 @@ const getUploadedFiles = (files, fieldName) => {
   );
 };
 
-export const buildAllocationRules = ({
-  dealer,
-  productServices,
+// Parse + validate the "other cities" a dealer operates in.
+// Returns { additionalCities } or { error }.
+const parseAdditionalCities = (raw, primaryCityId) => {
+  const list = parseJSON(raw, []);
+
+  if (!Array.isArray(list)) return { additionalCities: [] };
+
+  const seen = new Set([Number(primaryCityId)]);
+  const additionalCities = [];
+
+  for (const item of list) {
+    const cityId = Number(item?.cityId);
+
+    if (!cityId) {
+      return { error: "Every additional city must have a city selected" };
+    }
+
+    if (seen.has(cityId)) {
+      return {
+        error: `City ${item.city || cityId} is added more than once`,
+      };
+    }
+
+    seen.add(cityId);
+
+    additionalCities.push({
+      cityId,
+      city: item.city ?? "",
+      productServices: Array.isArray(item.productServices)
+        ? item.productServices
+        : [],
+      combinedCapacity: {
+        products: item.combinedCapacity?.products ?? [],
+        capacity: parseNumber(item.combinedCapacity?.capacity),
+      },
+      individualCapacities: Array.isArray(item.individualCapacities)
+        ? item.individualCapacities
+        : [],
+    });
+  }
+
+  return { additionalCities };
+};
+
+// Mobile / alternative number must be unique across ALL dealers
+const findPhoneConflict = async (numbers, excludeId) => {
+  const list = [...new Set(numbers.map((n) => n?.trim()).filter(Boolean))];
+
+  if (list.length === 0) return null;
+
+  const filter = {
+    $or: [
+      { mobileNumber: { $in: list } },
+      { alternativeNumber: { $in: list } },
+    ],
+  };
+
+  if (excludeId) filter._id = { $ne: excludeId };
+
+  return Dealer.findOne(filter).select("_id mobileNumber alternativeNumber");
+};
+
+// Capacity rules for ONE city's services + capacity
+const buildCityCapacityRules = ({
+  productServices = [],
   combinedCapacity,
   individualCapacities,
 }) => {
   const capacityRules = [];
 
-  /*
-  |--------------------------------------------------------------------------
-  | COMBINED CAPACITY
-  |--------------------------------------------------------------------------
-  */
+  const servicesOf = (serviceProduct) =>
+    serviceProduct?.categories?.map((category) => ({
+      categoryId: category.categoryId,
+
+      category: category.categoryName ?? category.category ?? "",
+
+      description: category.description ?? "",
+
+      categoryDescription: category.categoryDescription ?? "",
+    })) ?? [];
+
+  /* COMBINED CAPACITY */
 
   if (
     combinedCapacity?.products?.length &&
@@ -117,16 +186,7 @@ export const buildAllocationRules = ({
           productName:
             capacityProduct.productName ?? serviceProduct?.productName ?? "",
 
-          services:
-            serviceProduct?.categories?.map((category) => ({
-              categoryId: category.categoryId,
-
-              category: category.categoryName ?? category.category ?? "",
-
-              description: category.description ?? "",
-
-              categoryDescription: category.categoryDescription ?? "",
-            })) ?? [],
+          services: servicesOf(serviceProduct),
 
           dailyCapacity: 0,
         };
@@ -149,17 +209,7 @@ export const buildAllocationRules = ({
     });
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | INDIVIDUAL CAPACITY
-  |--------------------------------------------------------------------------
-  */
-
-  /*
-|--------------------------------------------------------------------------
-| INDIVIDUAL CAPACITY
-|--------------------------------------------------------------------------
-*/
+  /* INDIVIDUAL CAPACITY */
 
   for (const individual of individualCapacities ?? []) {
     const productId = Number(individual.productId ?? individual.product_id);
@@ -167,14 +217,6 @@ export const buildAllocationRules = ({
     const individualDailyCapacity = Number(
       individual.capacity ?? individual.dailyCapacity ?? 0,
     );
-
-    console.log("INDIVIDUAL PRODUCT:", {
-      productId,
-      productName: individual.productName,
-      capacity: individual.capacity,
-      dailyCapacity: individual.dailyCapacity,
-      finalCapacity: individualDailyCapacity,
-    });
 
     if (!productId) {
       console.warn(
@@ -194,8 +236,7 @@ export const buildAllocationRules = ({
 
       ruleName: individual.productName ?? serviceProduct?.productName ?? "",
 
-      // Individual capacity is stored
-      // at product level.
+      // Individual capacity is stored at product level.
       dailyCapacity: 0,
 
       products: [
@@ -205,19 +246,9 @@ export const buildAllocationRules = ({
           productName:
             individual.productName ?? serviceProduct?.productName ?? "",
 
-          // IMPORTANT
           dailyCapacity: individualDailyCapacity,
 
-          services:
-            serviceProduct?.categories?.map((category) => ({
-              categoryId: category.categoryId,
-
-              category: category.categoryName ?? category.category ?? "",
-
-              description: category.description ?? "",
-
-              categoryDescription: category.categoryDescription ?? "",
-            })) ?? [],
+          services: servicesOf(serviceProduct),
         },
       ],
 
@@ -225,25 +256,55 @@ export const buildAllocationRules = ({
     });
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | DEALER CITY
-  |--------------------------------------------------------------------------
-  */
+  return capacityRules;
+};
 
-  const cityId =
+// One allocation rule per city the dealer operates in (primary first)
+export const buildAllocationRules = ({
+  dealer,
+  productServices,
+  combinedCapacity,
+  individualCapacities,
+}) => {
+  const primaryCityId =
     dealer.businessAddress?.cityId ?? dealer.residentialAddress?.cityId ?? null;
 
-  const cityName =
+  const primaryCityName =
     dealer.businessAddress?.city ?? dealer.residentialAddress?.city ?? "";
 
-  return [
+  const rules = [
     {
-      cityId,
-      cityName,
-      capacityRules,
+      cityId: primaryCityId,
+      cityName: primaryCityName,
+      capacityRules: buildCityCapacityRules({
+        productServices: productServices ?? [],
+        combinedCapacity,
+        individualCapacities,
+      }),
     },
   ];
+
+  const seen = new Set([Number(primaryCityId)]);
+
+  for (const extra of dealer.additionalCities ?? []) {
+    const extraCityId = Number(extra.cityId);
+
+    if (!extraCityId || seen.has(extraCityId)) continue;
+
+    seen.add(extraCityId);
+
+    rules.push({
+      cityId: extraCityId,
+      cityName: extra.city ?? "",
+      capacityRules: buildCityCapacityRules({
+        productServices: extra.productServices ?? [],
+        combinedCapacity: extra.combinedCapacity,
+        individualCapacities: extra.individualCapacities ?? [],
+      }),
+    });
+  }
+
+  return rules;
 };
 
 /* =========================================================
@@ -388,37 +449,37 @@ export const createDealer = async (req, res) => {
     const normalizedMobile = mobileNumber?.trim();
     const normalizedAlternative = alternativeNumber?.trim();
 
-    const phoneConditions = [];
-
-    // Check mobile against BOTH mobileNumber and alternativeNumber
-    if (normalizedMobile) {
-      phoneConditions.push(
-        { mobileNumber: normalizedMobile },
-        { alternativeNumber: normalizedMobile },
-      );
-    }
-
-    // Check alternative against BOTH mobileNumber and alternativeNumber
-    if (normalizedAlternative) {
-      phoneConditions.push(
-        { mobileNumber: normalizedAlternative },
-        { alternativeNumber: normalizedAlternative },
-      );
-    }
-
-    if (phoneConditions.length > 0) {
-      const existingDealer = await Dealer.findOne({
-        "businessAddress.cityId": Number(cityId),
-        $or: phoneConditions,
+    if (
+      normalizedAlternative &&
+      normalizedAlternative === normalizedMobile
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Alternative number must be different from the mobile number",
       });
+    }
 
-      if (existingDealer) {
-        return res.status(409).json({
-          success: false,
-          message:
-            "This mobile/alternative number is already registered with another dealer in the same city.",
-        });
-      }
+    const phoneConflict = await findPhoneConflict([
+      normalizedMobile,
+      normalizedAlternative,
+    ]);
+
+    if (phoneConflict) {
+      return res.status(409).json({
+        success: false,
+        message:
+          "This mobile/alternative number is already registered with another dealer. A dealer can work in multiple cities from a single profile.",
+      });
+    }
+
+    const { additionalCities, error: additionalCitiesError } =
+      parseAdditionalCities(req.body.additionalCities, cityId);
+
+    if (additionalCitiesError) {
+      return res.status(400).json({
+        success: false,
+        message: additionalCitiesError,
+      });
     }
 
     /* ===============================
@@ -539,6 +600,7 @@ export const createDealer = async (req, res) => {
         capacity: parseNumber(combinedCapacity?.capacity),
       },
       individualCapacities,
+      additionalCities,
       documents,
       technicianStatus: finalStatus === "ACTIVE" ? "ACTIVE" : "INACTIVE",
       securityAmount: parseNumber(req.body.securityAmount),
@@ -790,7 +852,16 @@ export const getDealers = async (req, res) => {
       const parsedCityId = Number(cityId);
 
       if (!Number.isNaN(parsedCityId)) {
-        filter["businessAddress.cityId"] = parsedCityId;
+        // primary city OR any additional operating city
+        filter.$and = [
+          ...(filter.$and ?? []),
+          {
+            $or: [
+              { "businessAddress.cityId": parsedCityId },
+              { "additionalCities.cityId": parsedCityId },
+            ],
+          },
+        ];
       }
     }
 
@@ -976,8 +1047,43 @@ export const updateDealer = async (req, res) => {
     }
 
     /* ===============================
-       DUPLICATE MOBILE
+       DUPLICATE MOBILE (unique across all dealers)
     =============================== */
+
+    {
+      const newMobile = req.body.mobileNumber?.trim();
+      const newAlternative = req.body.alternativeNumber?.trim();
+
+      const changed = [];
+
+      if (newMobile && newMobile !== dealer.mobileNumber) {
+        changed.push(newMobile);
+      }
+
+      if (newAlternative && newAlternative !== dealer.alternativeNumber) {
+        changed.push(newAlternative);
+      }
+
+      if (newMobile && newAlternative && newMobile === newAlternative) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Alternative number must be different from the mobile number",
+        });
+      }
+
+      if (changed.length > 0) {
+        const conflict = await findPhoneConflict(changed, dealer._id);
+
+        if (conflict) {
+          return res.status(409).json({
+            success: false,
+            message:
+              "This mobile/alternative number is already registered with another dealer.",
+          });
+        }
+      }
+    }
 
     // if (req.body.mobileNumber) {
     //   const existingMobile = await Dealer.findOne({
@@ -1156,6 +1262,22 @@ export const updateDealer = async (req, res) => {
         req.body.individualCapacities,
         [],
       );
+    }
+
+    if (req.body.additionalCities !== undefined) {
+      const primaryCityId =
+        dealer.businessAddress?.cityId ?? dealer.residentialAddress?.cityId;
+
+      const { additionalCities, error } = parseAdditionalCities(
+        req.body.additionalCities,
+        primaryCityId,
+      );
+
+      if (error) {
+        return res.status(400).json({ success: false, message: error });
+      }
+
+      dealer.additionalCities = additionalCities;
     }
 
     /* ===============================
@@ -1438,6 +1560,8 @@ const allocationRelatedChanged =
   req.body.productServices !== undefined ||
   req.body.combinedCapacity !== undefined ||
   req.body.individualCapacities !== undefined ||
+  req.body.additionalCities !== undefined ||
+  req.body.businessAddress !== undefined ||
   req.body.technicianStatus !== undefined ||
   req.body.technicianCode !== undefined ||
   req.body.technicianFirmName !== undefined ||
@@ -2007,7 +2131,15 @@ export const getDealerDropdown = async (req, res) => {
       const numericCityId = Number(cityId);
 
       if (!Number.isNaN(numericCityId)) {
-        filter["businessAddress.cityId"] = numericCityId;
+        filter.$and = [
+          ...(filter.$and ?? []),
+          {
+            $or: [
+              { "businessAddress.cityId": numericCityId },
+              { "additionalCities.cityId": numericCityId },
+            ],
+          },
+        ];
       }
     }
 

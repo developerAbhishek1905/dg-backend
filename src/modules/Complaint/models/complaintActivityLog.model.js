@@ -38,6 +38,7 @@ const complaintActivityLogSchema = new mongoose.Schema(
         "DEALER_ALLOCATED",
         "DEALER_CHANGED",
         "DEALER_REMOVED",
+        "ALLOCATION_FAILED",
 
         "TECHNICIAN_ASSIGNED",
         "TECHNICIAN_CHANGED",

@@ -736,7 +736,14 @@ export const getAllocationHistory = async (req, res) => {
     const search = String(req.query.search || "").trim();
 
     const filter = {
-      activityType: { $in: ["DEALER_ALLOCATED", "DEALER_CHANGED", "DEALER_REMOVED"] },
+      activityType: {
+        $in: [
+          "DEALER_ALLOCATED",
+          "DEALER_CHANGED",
+          "DEALER_REMOVED",
+          "ALLOCATION_FAILED",
+        ],
+      },
     };
 
     if (search) {
@@ -777,12 +784,20 @@ export const getAllocationHistory = async (req, res) => {
       complaintNumber: row.complaintNumber,
       activityType: row.activityType,
       dealerName:
-        row.activityType === "DEALER_REMOVED"
+        row.activityType === "DEALER_REMOVED" ||
+        row.activityType === "ALLOCATION_FAILED"
           ? "-"
           : dealerNames.get(String(row.dealerId)) || row.dealerName || "-",
       // Only a recorded deciding factor counts as a reason (older records have none)
-      reason: row.reason || row.metadata?.allocationReason?.label || "",
-      reasonCode: row.metadata?.allocationReason?.code || "",
+      reason:
+        row.reason ||
+        row.metadata?.allocationReason?.label ||
+        row.metadata?.allocationFailure?.label ||
+        "",
+      reasonCode:
+        row.metadata?.allocationReason?.code ||
+        row.metadata?.allocationFailure?.code ||
+        "",
       allocationType: row.metadata?.allocationType || "",
       performedBy: row.performedByName || "",
       createdAt: row.createdAt,

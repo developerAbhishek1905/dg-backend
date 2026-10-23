@@ -258,6 +258,46 @@ const individualCapacitySchema = new mongoose.Schema(
   },
 );
 
+//  ADDITIONAL OPERATING CITY
+//
+//  The dealer's primary city is businessAddress.cityId together with the
+//  top-level productServices / capacity fields. Every other city the dealer
+//  operates in lives here with its own services and capacity.
+
+const additionalCitySchema = new mongoose.Schema(
+  {
+    cityId: {
+      type: Number,
+      required: true,
+    },
+
+    city: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    productServices: {
+      type: [productServiceSchema],
+      default: [],
+    },
+
+    combinedCapacity: {
+      type: combinedCapacitySchema,
+      default: () => ({ products: [], capacity: 0 }),
+    },
+
+    individualCapacities: {
+      type: [individualCapacitySchema],
+      default: [],
+    },
+  },
+  {
+    _id: false,
+  },
+);
+
+
 //  DOCUMENTS
 
 const documentsSchema = new mongoose.Schema(
@@ -661,6 +701,12 @@ const dealerSchema = new mongoose.Schema(
 
     individualCapacities: {
       type: [individualCapacitySchema],
+      default: [],
+    },
+
+    // Other cities this dealer operates in (own services + capacity each)
+    additionalCities: {
+      type: [additionalCitySchema],
       default: [],
     },
 
