@@ -2,25 +2,32 @@ import mongoose from "mongoose";
 import Customer from "../models/customer.model.js";
 import Complaint from "../../Complaint/models/complaint.model.js";
 // import { getIsWarranty } from "../../../helper/warranty.util.js";
-export const getIsWarranty = (complaint) => {
-  if (complaint.status !== "CLOSE_ON_BILLING") {
-    console.log("kfhdkshskfhks", complaint.status )
-    return false;
+// Every closed complaint is under warranty for one month after the dealer
+// closed it (closedAt is stamped when the dealer closes the complaint).
+const CLOSED_STATUSES = ["CLOSE_ON_BILLING", "CLOSE_ON_VERIFICATION", "CLOSED"];
+
+export const getWarrantyEndDate = (complaint) => {
+  if (!CLOSED_STATUSES.includes(complaint.status)) {
+    return null;
   }
 
-  if (!complaint.closedAt) {
-    return false;
+  const closedAt = complaint.closedAt || complaint.closureApprovedAt;
+
+  if (!closedAt) {
+    return null;
   }
 
-  console.log("closeAt running")
-
-  const closedDate = new Date(complaint.closedAt);
-
-  const warrantyEndDate = new Date(closedDate);
+  const warrantyEndDate = new Date(closedAt);
 
   warrantyEndDate.setMonth(warrantyEndDate.getMonth() + 1);
 
-  return new Date() <= warrantyEndDate;
+  return warrantyEndDate;
+};
+
+export const getIsWarranty = (complaint) => {
+  const warrantyEndDate = getWarrantyEndDate(complaint);
+
+  return Boolean(warrantyEndDate) && new Date() <= warrantyEndDate;
 };
 
 /*
@@ -614,6 +621,8 @@ export const lookupCustomerByPhone = async (req, res) => {
       ...complaint,
 
       isWarranty: getIsWarranty(complaint),
+
+      warrantyEndDate: getWarrantyEndDate(complaint),
     }));
 
     return res.status(200).json({

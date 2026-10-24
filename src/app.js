@@ -28,6 +28,7 @@ import allocationSettingsRoutes from "./modules/allocation/routes/allocationSett
 import dealerAccountRoutes from "./modules/dealerLedger/routes/dealerAccount.routes.js";
 import dealerPaymentRoutes from "./modules/dealerLedger/routes/dealerPayment.routes.js";
 import accountRoutes from "./modules/accounts/routes/account.routes.js";
+import dealerLeaveRoutes from "./modules/leave/routes/dealerLeave.routes.js";
 
 const app = express();
 
@@ -91,5 +92,6 @@ app.use("/api/v1/dealer-accounts", dealerAccountRoutes);
 app.use("/api/v1/allocation-settings", allocationSettingsRoutes);
 
 app.use("/api/v1/accounts", accountRoutes);
+app.use("/api/v1/dealer-leaves", dealerLeaveRoutes);
 
 export default app;
