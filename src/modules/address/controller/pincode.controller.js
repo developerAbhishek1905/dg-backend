@@ -161,7 +161,14 @@ export const createPincode = async (req, res) => {
 
 export const getAllPincodes = async (req, res) => {
   try {
-    const { search = "", city_id, page = 1, limit = 20 } = req.query;
+    const {
+      search = "",
+      city_id,
+      state_id,
+      district_id,
+      page = 1,
+      limit = 20,
+    } = req.query;
 
     // ==========================================
     // PAGINATION
@@ -220,6 +227,58 @@ export const getAllPincodes = async (req, res) => {
       }
 
       match.city_id = cityId;
+    }
+
+    // ==========================================
+    // FILTER BY STATE / DISTRICT
+    // Pincodes only store city_id, so resolve the cities first.
+    // ==========================================
+
+    const hasStateFilter =
+      state_id !== undefined && state_id !== null && state_id !== "";
+
+    const hasDistrictFilter =
+      district_id !== undefined && district_id !== null && district_id !== "";
+
+    if (hasStateFilter || hasDistrictFilter) {
+      const cityFilter = {};
+
+      if (hasStateFilter) {
+        const stateId = Number(state_id);
+
+        if (!Number.isInteger(stateId) || stateId <= 0) {
+          return res.status(400).json({
+            success: false,
+            message: "Valid state_id is required",
+          });
+        }
+
+        cityFilter.state_id = stateId;
+      }
+
+      if (hasDistrictFilter) {
+        const districtId = Number(district_id);
+
+        if (!Number.isInteger(districtId) || districtId <= 0) {
+          return res.status(400).json({
+            success: false,
+            message: "Valid district_id is required",
+          });
+        }
+
+        cityFilter.district_id = districtId;
+      }
+
+      const matchingCityIds = await City.find(cityFilter).distinct("city_id");
+
+      if (match.city_id !== undefined) {
+        // City also selected: it must belong to the chosen state/district
+        if (!matchingCityIds.includes(match.city_id)) {
+          match.city_id = -1;
+        }
+      } else {
+        match.city_id = { $in: matchingCityIds };
+      }
     }
 
     // ==========================================
