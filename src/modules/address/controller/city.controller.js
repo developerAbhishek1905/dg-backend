@@ -1332,23 +1332,31 @@ export const getCityDropdown = async (req, res) => {
     // GET DISTRICTS + STATES
     // ==========================================
 
-    const [districts, states] = await Promise.all([
-      District.find({
-        district_id: {
-          $in: districtIds,
-        },
-      })
-        .select("district_id district_name state_id")
-        .lean(),
+    const districts = await District.find({
+      district_id: {
+        $in: districtIds,
+      },
+    })
+      .select("district_id district_name state_id")
+      .lean();
 
-      State.find({
-        state_id: {
-          $in: stateIds,
-        },
-      })
-        .select("state_id state_name")
-        .lean(),
-    ]);
+    // A city may not carry state_id itself - fall back to its district's state
+    const allStateIds = [
+      ...new Set([
+        ...stateIds,
+        ...districts
+          .map((district) => district.state_id)
+          .filter((value) => value !== null && value !== undefined),
+      ]),
+    ];
+
+    const states = await State.find({
+      state_id: {
+        $in: allStateIds,
+      },
+    })
+      .select("state_id state_name")
+      .lean();
 
     // ==========================================
     // CREATE MAPS
@@ -1370,9 +1378,11 @@ export const getCityDropdown = async (req, res) => {
           ? districtMap.get(city.district_id)
           : null;
 
+      const resolvedStateId = city.state_id ?? district?.state_id;
+
       const state =
-        city.state_id !== null && city.state_id !== undefined
-          ? stateMap.get(city.state_id)
+        resolvedStateId !== null && resolvedStateId !== undefined
+          ? stateMap.get(resolvedStateId)
           : null;
 
       return {
@@ -1384,7 +1394,7 @@ export const getCityDropdown = async (req, res) => {
 
         district_name: district?.district_name ?? null,
 
-        state_id: state?.state_id ?? city.state_id ?? null,
+        state_id: state?.state_id ?? resolvedStateId ?? null,
 
         state_name: state?.state_name ?? null,
       };

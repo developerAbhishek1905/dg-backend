@@ -24,6 +24,7 @@ import { protect } from "../../auth/middleware/auth.middleware.js";
 import {
   getDailyDealerActivity,
   getAllDealerActivity,
+  getDealerActivityRangeSummary,
 } from "../controllers/dailyDealerActivity.controller.js";
 
 const router = express.Router();
@@ -59,6 +60,11 @@ router.get(
 router.get("/dealer-activity/:dealerId/daily", protect, getDailyDealerActivity);
 
 router.get("/dealer-activity", protect, getAllDealerActivity);
+router.get(
+  "/dealer-activity/monthly-summary",
+  protect,
+  getDealerActivityRangeSummary,
+);
 
 router.get("/:id/lifecycle-logs", protect, getDealerLifecycleLogs);
 /* GET ALL */

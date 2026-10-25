@@ -1805,6 +1805,154 @@ export const getAllDealerActivity = async (req, res) => {
 
 /*
 |--------------------------------------------------------------------------
+| GET DEALER ACTIVITY - LAST N DAYS SUMMARY (default 30 days)
+|--------------------------------------------------------------------------
+|
+| GET /api/v1/dealers/dealer-activity/monthly-summary?search=&days=30
+|
+| Totals across ALL dealers matching the search (not paginated).
+| assigned / appointments / cancelled / closed are event based inside the
+| date range. Pending and rescheduled are the current status snapshot,
+| because complaints do not store historical status transitions.
+|
+*/
+
+export const getDealerActivityRangeSummary = async (req, res) => {
+  try {
+    const { search = "" } = req.query;
+
+    const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 92);
+
+    const todayKey = formatDateKey(new Date());
+
+    const end = new Date(`${todayKey}T23:59:59.999`);
+
+    const start = new Date(`${todayKey}T00:00:00.000`);
+    start.setDate(start.getDate() - (days - 1));
+
+    const dealerFilter = {};
+
+    const trimmedSearch = String(search).trim();
+
+    if (trimmedSearch) {
+      const searchRegex = new RegExp(escapeRegex(trimmedSearch), "i");
+
+      dealerFilter.$or = [
+        { dealerCode: searchRegex },
+        { headCode: searchRegex },
+        { technicianName: searchRegex },
+        { technicianFirmName: searchRegex },
+        { mobileNumber: searchRegex },
+        { alternativeNumber: searchRegex },
+        { "businessAddress.city": searchRegex },
+      ];
+    }
+
+    const dealerDocs = await Dealer.find(dealerFilter).select("_id status").lean();
+
+    const dealerIds = dealerDocs.map((dealer) => dealer._id);
+
+    const summary = {
+      totalDealers: dealerDocs.length,
+      activeDealers: dealerDocs.filter((d) => d.status === "ACTIVE").length,
+      onLeave: dealerDocs.filter((d) => d.status === "LEAVE").length,
+      assignedCalls: 0,
+      appointments: 0,
+      pending: 0,
+      rescheduled: 0,
+      cancelled: 0,
+      closed: 0,
+    };
+
+    if (dealerIds.length > 0) {
+      const inRange = (field) => ({
+        $and: [{ $gte: [`$${field}`, start] }, { $lte: [`$${field}`, end] }],
+      });
+
+      const range = (field) => ({ [field]: { $gte: start, $lte: end } });
+
+      const [row] = await Complaint.aggregate([
+        {
+          $match: {
+            $or: [
+              range("allocatedAt"),
+              range("appointmentDate"),
+              range("cancelledAt"),
+              range("closedAt"),
+              {
+                status: {
+                  $in: ["PENDING_ON_CALL", "PENDING_ON_VISIT", "RESCHEDULED"],
+                },
+              },
+            ],
+          },
+        },
+        {
+          $addFields: {
+            effectiveDealerId: { $ifNull: ["$allocatedDealerId", "$dealerId"] },
+          },
+        },
+        { $match: { effectiveDealerId: { $in: dealerIds } } },
+        {
+          $group: {
+            _id: null,
+            assignedCalls: {
+              $sum: { $cond: [inRange("allocatedAt"), 1, 0] },
+            },
+            appointments: {
+              $sum: { $cond: [inRange("appointmentDate"), 1, 0] },
+            },
+            cancelled: { $sum: { $cond: [inRange("cancelledAt"), 1, 0] } },
+            closed: { $sum: { $cond: [inRange("closedAt"), 1, 0] } },
+            pending: {
+              $sum: {
+                $cond: [
+                  { $in: ["$status", ["PENDING_ON_CALL", "PENDING_ON_VISIT"]] },
+                  1,
+                  0,
+                ],
+              },
+            },
+            rescheduled: {
+              $sum: { $cond: [{ $eq: ["$status", "RESCHEDULED"] }, 1, 0] },
+            },
+          },
+        },
+      ]);
+
+      if (row) {
+        summary.assignedCalls = row.assignedCalls;
+        summary.appointments = row.appointments;
+        summary.cancelled = row.cancelled;
+        summary.closed = row.closed;
+        summary.pending = row.pending;
+        summary.rescheduled = row.rescheduled;
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Dealer activity summary fetched successfully",
+      summary,
+      range: {
+        days,
+        from: formatDateKey(start),
+        to: todayKey,
+      },
+    });
+  } catch (error) {
+    console.error("GET DEALER ACTIVITY RANGE SUMMARY ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch dealer activity summary",
+      error: error.message,
+    });
+  }
+};
+
+/*
+|--------------------------------------------------------------------------
 | Get Complaint Dealer
 |--------------------------------------------------------------------------
 */
