@@ -1177,122 +1177,92 @@ export const getCalendarAppointments = async (req, res) => {
   try {
     const { startDate, endDate, status, dealerId } = req.query;
 
-    const filter = {
-      appointmentDate: {
-        $ne: null,
-      },
-    };
+    // Every complaint belongs on the calendar:
+    // - with an appointment  -> shown on its appointment date
+    // - without one          -> shown on its complaint date
+    const filter = {};
 
     /*
     |--------------------------------------------------------------------------
-    | Date Filter
+    | Dealer role: only own appointments
     |--------------------------------------------------------------------------
     */
 
-    if (startDate || endDate) {
-      filter.appointmentDate = {};
-
-      if (startDate) {
-        const start = new Date(startDate);
-        start.setHours(0, 0, 0, 0);
-
-        filter.appointmentDate.$gte = start;
+    if (req.user?.role?.code === "DEALER") {
+      if (!req.user.dealerId) {
+        return res.status(403).json({
+          success: false,
+          message: "Dealer account is not linked with any dealer",
+        });
       }
 
-      if (endDate) {
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
-
-        filter.appointmentDate.$lte = end;
-      }
+      filter.allocatedDealerId = req.user.dealerId;
     }
 
     /*
     |--------------------------------------------------------------------------
-    | Status Filter
+    | Date Filter
+    | Appointment dates are stored as UTC midnight, so compare in UTC.
     |--------------------------------------------------------------------------
     */
+
+    if (startDate || endDate) {
+      const appointmentRange = {};
+      const complaintRange = {};
+
+      if (startDate) {
+        appointmentRange.$gte = new Date(`${startDate}T00:00:00.000Z`);
+        // complaint dates carry a time, so use the India day boundary
+        complaintRange.$gte = new Date(`${startDate}T00:00:00.000+05:30`);
+      }
+
+      if (endDate) {
+        appointmentRange.$lte = new Date(`${endDate}T23:59:59.999Z`);
+        complaintRange.$lte = new Date(`${endDate}T23:59:59.999+05:30`);
+      }
+
+      filter.$or = [
+        { appointmentDate: appointmentRange },
+        { appointmentDate: null, complaintDateTime: complaintRange },
+      ];
+    }
 
     if (status) {
       filter.status = status;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Dealer Filter
-    |--------------------------------------------------------------------------
-    */
-
-    if (dealerId) {
+    if (dealerId && req.user?.role?.code !== "DEALER") {
       filter.allocatedDealerId = dealerId;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Get Appointments
-    |--------------------------------------------------------------------------
-    */
-
     const appointments = await Complaint.find(filter)
       .select(
-        `
-        complaintNumber
-        appointmentDate
-        appointmentTime
-        customerName
-        status
-        allocatedDealerId
-        dealerName
-        productName
-        phone
-        address
-        `,
+        "complaintNumber complaintDateTime appointmentDate appointmentTime customerName status allocatedDealerId dealerName productName phone address",
       )
       .populate({
         path: "allocatedDealerId",
-        select: "dealerName technicianFirmName technicianName mobileNumber",
+        select: "technicianCode technicianFirmName technicianName mobileNumber",
       })
       .sort({
         appointmentDate: 1,
         appointmentTime: 1,
+        complaintDateTime: 1,
       })
       .lean();
 
-    /*
-    |--------------------------------------------------------------------------
-    | Format Calendar Response
-    |--------------------------------------------------------------------------
-    */
-
+    // Keep the shape the Appointment type / list page already uses
+    // (_id + populated allocatedDealerId) and keep the older fields too.
     const data = appointments.map((complaint) => ({
+      ...complaint,
+
       id: complaint._id,
-
-      complaintNumber: complaint.complaintNumber,
-
-      appointmentDate: complaint.appointmentDate,
-
-      appointmentTime: complaint.appointmentTime,
-
-      customerName: complaint.customerName,
-
-      status: complaint.status,
 
       dealer: {
         id: complaint.allocatedDealerId?._id || null,
-
-        dealerName:
-          complaint.allocatedDealerId?.dealerName || complaint.dealerName || "",
-
+        dealerName: complaint.dealerName || "",
         firmName: complaint.allocatedDealerId?.technicianFirmName || "",
-
         technicianName: complaint.allocatedDealerId?.technicianName || "",
       },
-
-      productName: complaint.productName,
-
-      phone: complaint.phone,
-
-      address: complaint.address,
     }));
 
     return res.status(200).json({
