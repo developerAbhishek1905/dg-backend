@@ -727,6 +727,8 @@ export const getComplaints = async (req, res) => {
       customerId,
       technicianId,
       dealerId,
+      categoryId,
+      productId,
       fromDate,
       toDate,
       page = 1,
@@ -761,6 +763,15 @@ export const getComplaints = async (req, res) => {
 
     if (customerId && mongoose.Types.ObjectId.isValid(customerId)) {
       filter.customerId = customerId;
+    }
+
+    // Product / Service filter (service category chosen on the complaint)
+    if (categoryId && mongoose.Types.ObjectId.isValid(categoryId)) {
+      filter.categoryId = categoryId;
+    }
+
+    if (productId !== undefined && productId !== "" && !isNaN(Number(productId))) {
+      filter.productId = Number(productId);
     }
 
     /*
