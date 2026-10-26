@@ -23,6 +23,9 @@ import { getAllocationSettings } from "./allocationSettings.service.js";
 */
 
 const CHECK_EVERY_MS = 60 * 1000;
+
+// Master switch: the no-action penalty bill is turned off
+const PENALTY_ENABLED = false;
 const WAITING_STATUSES = ["REGISTERED", "ALLOCATED"];
 const minutes = (n) => n * 60 * 1000;
 
@@ -53,8 +56,8 @@ const release = (complaint, field) =>
 
 const sendReminder = async (complaint, dealer, settings) => {
   const link = complaintLink(complaint._id);
-  const penaltyNote = settings.noActionPenaltyEnabled
-    ? `\n\n⚠️ If no action is taken within *${settings.noActionPenaltyAfterMinutes} minutes*, a penalty will be billed automatically.`
+  const penaltyNote = settings.autoBillingEnabled
+    ? `\n\n⚠️ If no action is taken within *${Number(settings.autoBillingAfterReminderMinutes ?? 5)} minutes*, this complaint will be *billed to your account automatically at 11 PM*.`
     : "";
 
   await sendWhatsAppMessage({
@@ -124,7 +127,10 @@ const applyPenalty = async (complaint, dealer, settings) => {
 export const runNoActionChecks = async (now = new Date()) => {
   const settings = await getAllocationSettings();
 
-  if (!settings.noActionReminderEnabled && !settings.noActionPenaltyEnabled) return;
+  // The automatic penalty is switched off (unactioned complaints are
+  // auto-billed at 11 PM instead - see autoBilling.service.js).
+  // Only the reminder runs here.
+  if (!settings.noActionReminderEnabled) return;
 
   // Only complaints allocated after the feature first ran are considered,
   // so old untouched complaints are never penalised retroactively.
@@ -178,6 +184,7 @@ export const runNoActionChecks = async (now = new Date()) => {
 
       // 2. Penalty
       if (
+        PENALTY_ENABLED &&
         settings.noActionPenaltyEnabled &&
         age >= penaltyMs &&
         !done("noActionPenaltyAppliedAt")

@@ -47,7 +47,8 @@ const allocationSettingsSchema = new mongoose.Schema(
     // No-action reminder + automatic penalty
     noActionReminderEnabled: { type: Boolean, default: true },
     noActionReminderMinutes: { type: Number, min: 1, max: 1440, default: 30 },
-    noActionPenaltyEnabled: { type: Boolean, default: true },
+    // The penalty is switched off: unactioned complaints are auto-billed instead
+    noActionPenaltyEnabled: { type: Boolean, default: false },
     // minutes after the reminder before the penalty bill is raised
     noActionPenaltyAfterMinutes: { type: Number, min: 1, max: 1440, default: 30 },
     // 0 = use the dealer's cancellation charge
@@ -55,6 +56,17 @@ const allocationSettingsSchema = new mongoose.Schema(
 
     // Set once, on first run: complaints allocated before this are ignored
     noActionStartedAt: { type: Date, default: null },
+
+    // Daily 11 PM (IST) auto-billing of complaints nobody acted on
+    autoBillingEnabled: { type: Boolean, default: true },
+    // Still no action this many minutes AFTER the WhatsApp reminder
+    // (reminder = noActionReminderMinutes after allocation) -> billed at 11 PM
+    autoBillingAfterReminderMinutes: { type: Number, min: 0, max: 1440, default: 5 },
+    // Set once, on first run: complaints allocated before this are never billed
+    autoBillingStartedAt: { type: Date, default: null },
+    lastAutoBillRunKey: { type: String, default: "" },
+    lastAutoBillRunAt: { type: Date, default: null },
+    lastAutoBillRunStatus: { type: String, default: "" },
 
     // Monthly automatic recalculation (previous one month)
     monthlyRecalcEnabled: { type: Boolean, default: false },

@@ -128,7 +128,7 @@ const dealerLedgerSchema = new mongoose.Schema(
 
     entrySource: {
       type: String,
-      enum: ["SYSTEM", "MANUAL_ACCOUNT_ENTRY"],
+      enum: ["SYSTEM", "MANUAL_ACCOUNT_ENTRY", "AUTO_BILL"],
       default: "SYSTEM",
       index: true,
     },

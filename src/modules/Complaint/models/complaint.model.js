@@ -633,6 +633,12 @@ const complaintSchema = new mongoose.Schema(
       default: null,
     },
 
+    // Daily 11 PM auto-billing (compared against allocatedAt)
+    autoBilledAt: {
+      type: Date,
+      default: null,
+    },
+
     appointmentDate: {
       type: Date,
       default: null,

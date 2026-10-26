@@ -27,7 +27,7 @@ export const rateNotConfigured = (message) => {
   return error;
 };
 
-const findServiceRate = (dealer, complaint) => {
+export const findServiceRate = (dealer, complaint) => {
   const billingCategory = billingCategoryOf(complaint);
 
   // Services/rates of the city the complaint belongs to

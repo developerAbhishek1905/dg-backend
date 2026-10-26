@@ -660,14 +660,14 @@ export const createComplaint = async (req, res) => {
     |--------------------------------------------------------------------------
     */
 
-    if (dealerAllocation?.dealerId) {
-      sendComplaintAllocationNotifications({
-        complaint,
-        dealerId: dealerAllocation.dealerId,
-      }).catch((error) => {
-        console.error("WhatsApp notification error:", error);
-      });
-    }
+    // The customer always gets the "registered" message; the dealer gets
+    // theirs only when a dealer was allocated. The result is returned to the
+    // screen so a failed WhatsApp send can be shown right after registration.
+    // (It never throws, so registration is never failed because of WhatsApp.)
+    const whatsapp = await sendComplaintAllocationNotifications({
+      complaint,
+      dealerId: dealerAllocation?.dealerId || null,
+    });
 
     const populatedComplaint = await Complaint.findById(complaint._id)
       .populate(
@@ -692,6 +692,7 @@ export const createComplaint = async (req, res) => {
       success: true,
       message: "Complaint created successfully",
       data: populatedComplaint,
+      whatsapp,
     });
   } catch (error) {
     console.error("Create complaint error:", error);

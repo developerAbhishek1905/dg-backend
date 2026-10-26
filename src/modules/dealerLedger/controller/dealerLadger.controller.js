@@ -105,7 +105,10 @@ export const getAllDealerLedgers = async (req, res) => {
     |--------------------------------------------------------------------------
     */
 
-    if (billingType) {
+    if (billingType === "AUTO_BILL") {
+      // Auto bills are normal FIXED bills marked by their entry source
+      filter.entrySource = "AUTO_BILL";
+    } else if (billingType) {
       filter.billingType = billingType;
     }
 

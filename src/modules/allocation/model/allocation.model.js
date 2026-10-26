@@ -323,6 +323,32 @@ const allocationSchema = new mongoose.Schema(
       default: null,
     },
 
+    // The rating that was in force BEFORE the last change (kept for reference)
+    previousRating: {
+      type: Number,
+      min: 0,
+      max: 5,
+      default: null,
+    },
+
+    // Every rating change, newest last (capped to the latest 20)
+    ratingHistory: {
+      type: [
+        {
+          _id: false,
+          from: { type: Number, default: null },
+          to: { type: Number, default: null }, // null = back to automatic
+          changedAt: { type: Date, default: Date.now },
+          changedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            default: null,
+          },
+        },
+      ],
+      default: [],
+    },
+
     // Set when the auto-allocation settings were last applied
     performanceUpdatedAt: {
       type: Date,

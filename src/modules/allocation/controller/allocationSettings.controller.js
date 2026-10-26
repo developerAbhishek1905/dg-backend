@@ -573,7 +573,7 @@ export const getDealerAllocations = async (req, res) => {
         allocationMonth: now.getMonth() + 1,
         allocationYear: now.getFullYear(),
       })
-        .select("dealerId ratingOverride")
+        .select("dealerId ratingOverride previousRating")
         .lean(),
     ]);
 
@@ -581,6 +581,12 @@ export const getDealerAllocations = async (req, res) => {
       overrides
         .filter((item) => item.ratingOverride !== null && item.ratingOverride !== undefined)
         .map((item) => [String(item.dealerId), Number(item.ratingOverride)]),
+    );
+
+    const previousMap = new Map(
+      overrides
+        .filter((item) => item.previousRating !== null && item.previousRating !== undefined)
+        .map((item) => [String(item.dealerId), Number(item.previousRating)]),
     );
 
     const allocationMap = new Map();
@@ -635,6 +641,7 @@ export const getDealerAllocations = async (req, res) => {
         averageAmount: stats?.averageAmount || 0,
         calculatedRating: round2(performanceScore / 20),
         ratingOverridden: overrideMap.has(key),
+        previousRating: previousMap.has(key) ? previousMap.get(key) : null,
         rating: overrideMap.has(key) ? overrideMap.get(key) : round2(performanceScore / 20),
       };
     });
@@ -684,22 +691,64 @@ export const setDealerRating = async (req, res) => {
 
     const now = new Date();
 
-    const allocation = await Allocation.findOneAndUpdate(
-      {
-        dealerId,
-        allocationMonth: now.getMonth() + 1,
-        allocationYear: now.getFullYear(),
-      },
-      {
-        $set: {
-          ratingOverride: rating,
-          ratingOverriddenAt: rating === null ? null : now,
-          ratingOverriddenBy: rating === null ? null : req.user?._id || null,
-        },
-      },
-      { new: true },
-    )
+    const monthFilter = {
+      dealerId,
+      allocationMonth: now.getMonth() + 1,
+      allocationYear: now.getFullYear(),
+    };
+
+    // Rating in force before this change: what the screen showed (sent by the
+    // client), otherwise the current manual rating / calculated snapshot.
+    const existing = await Allocation.findOne(monthFilter)
       .select("performanceSnapshot.rating ratingOverride")
+      .lean();
+
+    let previousRating = null;
+
+    const sentPrevious = req.body?.previousRating;
+
+    if (sentPrevious !== null && sentPrevious !== undefined && sentPrevious !== "") {
+      const value = Math.round(Number(sentPrevious) * 10) / 10;
+
+      if (Number.isFinite(value) && value >= 0 && value <= 5) previousRating = value;
+    }
+
+    if (previousRating === null && existing) {
+      const fallback = existing.ratingOverride ?? existing.performanceSnapshot?.rating;
+
+      if (fallback !== null && fallback !== undefined && Number.isFinite(Number(fallback))) {
+        previousRating = Number(fallback);
+      }
+    }
+
+    const update = {
+      $set: {
+        ratingOverride: rating,
+        ratingOverriddenAt: rating === null ? null : now,
+        ratingOverriddenBy: rating === null ? null : req.user?._id || null,
+      },
+    };
+
+    if (previousRating !== null) {
+      update.$set.previousRating = previousRating;
+
+      update.$push = {
+        ratingHistory: {
+          $each: [
+            {
+              from: previousRating,
+              to: rating,
+              changedAt: now,
+              changedBy: req.user?._id || null,
+            },
+          ],
+          $slice: -20,
+        },
+      };
+    }
+
+    const allocation = await Allocation.findOneAndUpdate(monthFilter, update, { new: true })
+      .select("performanceSnapshot.rating ratingOverride previousRating")
       .lean();
 
     if (!allocation) {
@@ -712,7 +761,10 @@ export const setDealerRating = async (req, res) => {
     return res.json({
       success: true,
       message: rating === null ? "Rating reset to automatic" : "Rating updated",
-      data: { ratingOverride: allocation.ratingOverride },
+      data: {
+        ratingOverride: allocation.ratingOverride,
+        previousRating: allocation.previousRating ?? null,
+      },
     });
   } catch (error) {
     console.error("Set dealer rating error:", error);
