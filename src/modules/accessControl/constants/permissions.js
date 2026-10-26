@@ -160,6 +160,11 @@ export const PERMISSIONS = {
   DEALER_DELETE: "dealers.delete",
   DEALER_PERFORMANCE_VIEW: "dealers.performance.view",
   DEALER_CAPACITY_MANAGE: "dealers.capacity.manage",
+  DEALER_LEAVE: "dealers.leave",
+  DEALER_REJOIN: "dealers.rejoin",
+  DEALER_RATING: "dealers.rating",
+  DEALER_SUSPEND: "dealers.suspend",
+  DEALER_LEAVE_HISTORY: "dealers.leave_history",
 
   ITEM_ACCESS: "item.access",
 
@@ -203,6 +208,9 @@ export const PERMISSIONS = {
   COMPLAINT_CANCEL: "complaints.cancel",
   COMPLAINT_CLOSE: "complaints.close",
   COMPLAINT_VERIFY: "complaints.verify",
+  COMPLAINT_TABLE: "complaints.table",
+  COMPLAINT_SUSPEND: "complaints.suspend",
+  COMPLAINT_ACTIVITY: "complaints.activity",
 
   APPOINTMENT_VIEW: "appointments.view",
   APPOINTMENT_CREATE: "appointments.create",
@@ -211,6 +219,7 @@ export const PERMISSIONS = {
   APPOINTMENT_RESCHEDULE: "appointments.reschedule",
   APPOINTMENT_COMPLETE: "appointments.complete",
   APPOINTMENT_CANCEL: "appointments.cancel",
+  APPOINTMENT_TABLE: "appointments.table",
 
   PENDING_VIEW: "pending.view",
   PENDING_CREATE: "pending.create",
@@ -245,6 +254,12 @@ export const PERMISSIONS = {
   VERIFICATION_REJECT: "verification.reject",
   VERIFICATION_CORRECTION: "verification.correction",
   VERIFICATION_ASSIGN: "verification.assign",
+  PENDING_TABLE: "pending.table",
+  CANCELLATION_TABLE: "cancellations.table",
+  CANCELLATION_REOPEN: "cancellations.reopen",
+  CANCELLATION_CANCEL: "cancellations.cancel",
+  CLOSURE_TABLE: "closures.table",
+  CLOSURE_APPROVE: "closures.approve",
 
   BILLING_VIEW: "billing.view",
   BILLING_GENERATE: "billing.generate",
@@ -254,6 +269,10 @@ export const PERMISSIONS = {
   BILLING_RATE_CREATE: "billing.rates.create",
   BILLING_RATE_UPDATE: "billing.rates.update",
   BILLING_RATE_DELETE: "billing.rates.delete",
+  BILLING_TABLE: "billing.table",
+  BILLING_UPDATE: "billing.update",
+  BILLING_DUMMY: "billing.dummy",
+  LEDGER_CREATE: "ledger.create",
 
   LEDGER_VIEW: "ledger.view",
   LEDGER_DEALER_VIEW: "ledger.dealer.view",
@@ -305,6 +324,8 @@ export const PERMISSIONS = {
   ALLOCATION_ASSIGN: "allocation.assign",
   ALLOCATION_REASSIGN: "allocation.reassign",
   ALLOCATION_HISTORY_VIEW: "allocation.history.view",
+  ALLOCATION_ACCESS: "allocation.access",
+  DEALER_ACTIVITY_ACCESS: "dealers.activity.access",
 }
 
 export const PERMISSION_LIST= [
@@ -1033,6 +1054,41 @@ export const PERMISSION_LIST= [
     action: "performance",
     label: "View Performance",
   },
+  {
+    id: "P-DEALER-LEAVE",
+    key: PERMISSIONS.DEALER_LEAVE,
+    module: "Dealers",
+    action: "leave",
+    label: "Mark Dealer Leave",
+  },
+  {
+    id: "P-DEALER-REJOIN",
+    key: PERMISSIONS.DEALER_REJOIN,
+    module: "Dealers",
+    action: "rejoin",
+    label: "Rejoin Dealer",
+  },
+  {
+    id: "P-DEALER-RATING",
+    key: PERMISSIONS.DEALER_RATING,
+    module: "Dealers",
+    action: "rating",
+    label: "Change Dealer Rating",
+  },
+  {
+    id: "P-DEALER-SUSPEND",
+    key: PERMISSIONS.DEALER_SUSPEND,
+    module: "Dealers",
+    action: "suspend",
+    label: "Suspend Dealer",
+  },
+  {
+    id: "P-DEALER-LEAVE_HISTORY",
+    key: PERMISSIONS.DEALER_LEAVE_HISTORY,
+    module: "Dealers",
+    action: "history",
+    label: "View Dealer Leave History",
+  },
 
   {
     id: "P-006",
@@ -1044,21 +1100,21 @@ export const PERMISSION_LIST= [
   {
     id: "P-007",
     key: PERMISSIONS.PENDING_ACCESS,
-    module: "Pending & SLA",
+    module: "Pending",
     action: "access",
     label: "Access Pending & SLA",
   },
   {
     id: "P-008",
     key: PERMISSIONS.CANCELLATION_ACCESS,
-    module: "Cancellation",
+    module: "Cancellations",
     action: "access",
     label: "Access Cancellation",
   },
   {
     id: "P-009",
     key: PERMISSIONS.CLOSURE_ACCESS,
-    module: "Closure History",
+    module: "Closures",
     action: "access",
     label: "Access Closure History",
   },
@@ -1089,13 +1145,6 @@ export const PERMISSION_LIST= [
     module: "Notifications",
     action: "access",
     label: "Access Notifications",
-  },
-  {
-    id: "P-014",
-    key: PERMISSIONS.AREA_ACCESS,
-    module: "Area Master",
-    action: "access",
-    label: "Access Area Master",
   },
   {
     id: "P-015",
@@ -1379,6 +1428,34 @@ export const PERMISSION_LIST= [
     action: "verify",
     label: "Verify Complaint",
   },
+  {
+    id: "P-COMPLAINT-TABLE",
+    key: PERMISSIONS.COMPLAINT_TABLE,
+    module: "Complaints",
+    action: "table",
+    label: "View Complaints Table",
+  },
+  {
+    id: "P-COMPLAINT-SUSPEND",
+    key: PERMISSIONS.COMPLAINT_SUSPEND,
+    module: "Complaints",
+    action: "suspend",
+    label: "Suspend Complaint",
+  },
+  {
+    id: "P-COMPLAINT-CLOSE",
+    key: PERMISSIONS.COMPLAINT_CLOSE,
+    module: "Complaints",
+    action: "close",
+    label: "Close Complaint",
+  },
+  {
+    id: "P-COMPLAINT-ACTIVITY",
+    key: PERMISSIONS.COMPLAINT_ACTIVITY,
+    module: "Complaints",
+    action: "activity",
+    label: "View Complaint Activity",
+  },
 
   {
     id: "P-038",
@@ -1386,6 +1463,13 @@ export const PERMISSION_LIST= [
     module: "Appointments",
     action: "view",
     label: "View Appointments",
+  },
+  {
+    id: "P-APPOINTMENT-TABLE",
+    key: PERMISSIONS.APPOINTMENT_TABLE,
+    module: "Appointments",
+    action: "table",
+    label: "View Appointments Table",
   },
 
   {
@@ -1545,6 +1629,27 @@ export const PERMISSION_LIST= [
     module: "Billing",
     action: "reject",
     label: "Reject Bill",
+  },
+  {
+    id: "P-BILLING-TABLE",
+    key: PERMISSIONS.BILLING_TABLE,
+    module: "Billing",
+    action: "table",
+    label: "View Billing Table",
+  },
+  {
+    id: "P-BILLING-UPDATE",
+    key: PERMISSIONS.BILLING_UPDATE,
+    module: "Billing",
+    action: "update",
+    label: "Update Bill",
+  },
+  {
+    id: "P-BILLING-DUMMY",
+    key: PERMISSIONS.BILLING_DUMMY,
+    module: "Billing",
+    action: "dummy",
+    label: "Create Dummy Bill",
   },
 
   {
@@ -1818,6 +1923,20 @@ export const PERMISSION_LIST= [
     label: "View Allocation History",
   },
   {
+    id: "P-ALLOCATION-ACCESS",
+    key: PERMISSIONS.ALLOCATION_ACCESS,
+    module: "Allocation",
+    action: "access",
+    label: "Access Dealer Allocation",
+  },
+  {
+    id: "P-DEALER-ACTIVITY-ACCESS",
+    key: PERMISSIONS.DEALER_ACTIVITY_ACCESS,
+    module: "Dealer Activity",
+    action: "access",
+    label: "Access Dealer Activity",
+  },
+  {
     id: "P-055",
     key: PERMISSIONS.CANCELLATION_VIEW,
     module: "Cancellations",
@@ -1959,9 +2078,51 @@ export const PERMISSION_LIST= [
     label: "Assign Verifier",
   },
   {
+    id: "P-PENDING-TABLE",
+    key: PERMISSIONS.PENDING_TABLE,
+    module: "Pending",
+    action: "table",
+    label: "View Pending Table",
+  },
+  {
+    id: "P-CANCELLATION-TABLE",
+    key: PERMISSIONS.CANCELLATION_TABLE,
+    module: "Cancellations",
+    action: "table",
+    label: "View Cancellations Table",
+  },
+  {
+    id: "P-CANCELLATION-REOPEN",
+    key: PERMISSIONS.CANCELLATION_REOPEN,
+    module: "Cancellations",
+    action: "reopen",
+    label: "Reopen Complaint",
+  },
+  {
+    id: "P-CANCELLATION-CANCEL",
+    key: PERMISSIONS.CANCELLATION_CANCEL,
+    module: "Cancellations",
+    action: "cancel",
+    label: "Cancel Complaint",
+  },
+  {
+    id: "P-CLOSURE-TABLE",
+    key: PERMISSIONS.CLOSURE_TABLE,
+    module: "Closures",
+    action: "table",
+    label: "View Closures Table",
+  },
+  {
+    id: "P-CLOSURE-APPROVE",
+    key: PERMISSIONS.CLOSURE_APPROVE,
+    module: "Closures",
+    action: "approve",
+    label: "Approve Closure",
+  },
+  {
     id: "P-081",
     key: PERMISSIONS.LEDGER_VIEW,
-    module: "Ledger",
+    module: "Dealer Ledger",
     action: "view",
     label: "View Ledger Overview",
   },
@@ -1969,7 +2130,7 @@ export const PERMISSION_LIST= [
   {
     id: "P-082",
     key: PERMISSIONS.LEDGER_DEALER_VIEW,
-    module: "Ledger",
+    module: "Dealer Ledger",
     action: "dealer_view",
     label: "View Dealer Ledger",
   },
@@ -1977,7 +2138,7 @@ export const PERMISSION_LIST= [
   {
     id: "P-083",
     key: PERMISSIONS.LEDGER_TRANSACTION_VIEW,
-    module: "Ledger",
+    module: "Dealer Ledger",
     action: "transaction_view",
     label: "View Ledger Transactions",
   },
@@ -1985,7 +2146,7 @@ export const PERMISSION_LIST= [
   {
     id: "P-084",
     key: PERMISSIONS.LEDGER_ADJUSTMENT_CREATE,
-    module: "Ledger",
+    module: "Dealer Ledger",
     action: "adjust",
     label: "Create Ledger Adjustment",
   },
@@ -1993,9 +2154,16 @@ export const PERMISSION_LIST= [
   {
     id: "P-085",
     key: PERMISSIONS.LEDGER_EXPORT,
-    module: "Ledger",
+    module: "Dealer Ledger",
     action: "export",
     label: "Export Dealer Ledger",
+  },
+  {
+    id: "P-LEDGER-CREATE",
+    key: PERMISSIONS.LEDGER_CREATE,
+    module: "Dealer Ledger",
+    action: "create",
+    label: "Add Ledger Entry",
   },
 
   {
