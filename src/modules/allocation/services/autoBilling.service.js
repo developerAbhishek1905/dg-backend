@@ -1,5 +1,6 @@
 import Complaint from "../../Complaint/models/complaint.model.js";
 import Dealer from "../../dealers/models/dealer.model.js";
+import { getDealerCityProfile } from "../../dealers/helpers/dealerCity.js";
 import DealerLedger from "../../dealerLedger/model/dealerLedger.model.js";
 import {
   billingCategoryOf,
@@ -92,6 +93,28 @@ const createAutoBill = async (complaint, dealer, timeline) => {
 
   if (existing) return { skipped: "ALREADY_BILLED" };
 
+  // The dealer's Default Bill closure (product + city) decides the bill.
+  // Without one, the complaint's category rate is used as before.
+  const cityProfile = getDealerCityProfile(dealer, complaint.address?.cityId);
+  const productService = (
+    cityProfile?.productServices ?? dealer.productServices ?? []
+  ).find((p) => Number(p.productId) === Number(complaint.productId));
+  const defaultClosure = (productService?.closures ?? []).find(
+    (c) => c.defaultBill,
+  );
+
+  if (defaultClosure) {
+    const closureFields = {
+      closureId: String(defaultClosure.closureId),
+      closureTitle: defaultClosure.title || "",
+      closureRate: Number(defaultClosure.rate || 0),
+    };
+
+    // Saved on the complaint so later recalculations use the same closure
+    await Complaint.updateOne({ _id: complaint._id }, { $set: closureFields });
+    Object.assign(complaint, closureFields);
+  }
+
   // Rate from the dealer's Product & Service Information
   // (throws RATE_NOT_CONFIGURED when the dealer has no such rate)
   const { rate, category } = findServiceRate(dealer, complaint);
@@ -137,7 +160,7 @@ const createAutoBill = async (complaint, dealer, timeline) => {
       percentage: 0,
     },
 
-    description: `Auto bill for complaint ${complaint.complaintNumber} (${units} x ${rate})`,
+    description: `Auto bill for complaint ${complaint.complaintNumber}${complaint.closureTitle && defaultClosure ? ` - ${complaint.closureTitle}` : ""} (${units} x ${rate})`,
     remarks: `Reminder sent ${timeline.reminder} minutes after allocation; still no action ${timeline.afterReminder} minutes later; billed automatically at 11 PM`,
 
     status: "APPROVED",

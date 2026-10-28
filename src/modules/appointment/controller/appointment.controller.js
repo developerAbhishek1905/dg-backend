@@ -564,8 +564,41 @@ export const updateAppointmentStatus = async (req, res) => {
           }
         }
 
+        /*
+         * Closure marked "Auto Bill" in the dealer's Product & Capacity:
+         * closure and bill are approved automatically, no DG verification.
+         */
+        let autoApproved = false;
+
+        if (ledger && complaint.closureId) {
+          const dealerProfile = getDealerCityProfile(dealer, complaint.address?.cityId);
+          const dealerProduct = (
+            dealerProfile?.productServices ?? dealer.productServices ?? []
+          ).find((p) => Number(p.productId) === Number(complaint.productId));
+          const closureCfg = (dealerProduct?.closures ?? []).find(
+            (c) => String(c.closureId) === String(complaint.closureId),
+          );
+
+          if (closureCfg?.autoBill) {
+            const approvedAt = new Date();
+
+            ledger.status = "APPROVED";
+            ledger.approvedAt = approvedAt;
+            ledger.approvedBy = null;
+            ledger.remarks = "Auto approved: closure is marked Auto Bill";
+            await ledger.save();
+
+            complaint.closureApproved = true;
+            complaint.closureApprovalRemark = "Auto approved: closure is marked Auto Bill";
+            complaint.closureApprovedAt = approvedAt;
+            complaint.verifiedClosureTitle = complaint.closureTitle;
+
+            autoApproved = true;
+          }
+        }
+
         // Waits for manual approval of the bill in the billing table
-        complaint.status = "CLOSE_ON_VERIFICATION";
+        complaint.status = autoApproved ? "CLOSED" : "CLOSE_ON_VERIFICATION";
 
         // Save the closing reason selected by the dealer
         complaint.closingReason = closingReason;
@@ -592,12 +625,13 @@ export const updateAppointmentStatus = async (req, res) => {
 
           previousStatus: complaint.status,
 
-          newStatus: "CLOSE_ON_VERIFICATION",
+          newStatus: autoApproved ? "CLOSED" : "CLOSE_ON_VERIFICATION",
 
           title: "Complaint Closed",
 
-          description:
-            "Complaint closed with fixed billing, waiting for bill approval",
+          description: autoApproved
+            ? "Complaint closed with an Auto Bill closure, closure and bill approved automatically"
+            : "Complaint closed with fixed billing, waiting for bill approval",
 
           user: req.user,
 
@@ -611,7 +645,9 @@ export const updateAppointmentStatus = async (req, res) => {
         return res.status(200).json({
           success: true,
 
-          message: ledger
+          message: autoApproved
+            ? "Complaint closed, bill approved automatically"
+            : ledger
             ? "Complaint closed, bill sent for approval"
             : "Complaint closed. The bill amount will be set by DG from Closure History",
 
@@ -2710,6 +2746,7 @@ export const getComplaintClosureOptions = async (req, res) => {
       title: c.title,
       rate: Number(c.rate || 0),
       autoBill: !!c.autoBill,
+      defaultBill: !!c.defaultBill,
     }));
 
     return res.json({ success: true, data: closures });

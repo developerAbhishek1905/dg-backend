@@ -188,7 +188,13 @@ const productClosureSchema = new mongoose.Schema(
       default: 0,
     },
 
-    // Only ONE closure per product can be marked for auto billing
+    // Only ONE closure per product can be the default bill
+    defaultBill: {
+      type: Boolean,
+      default: false,
+    },
+
+    // Any number of closures can be marked for auto billing
     autoBill: {
       type: Boolean,
       default: false,
@@ -224,8 +230,8 @@ const productServiceSchema = new mongoose.Schema(
       type: [productClosureSchema],
       default: [],
       validate: {
-        validator: (list) => (list ?? []).filter((c) => c.autoBill).length <= 1,
-        message: "Only one closure per product can be set for auto billing",
+        validator: (list) => (list ?? []).filter((c) => c.defaultBill).length <= 1,
+        message: "Only one closure per product can be set as default bill",
       },
     },
   },
