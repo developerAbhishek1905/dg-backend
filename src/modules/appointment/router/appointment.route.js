@@ -16,7 +16,8 @@ import {
   saveCancellationRemark,
   cancelComplaint,
   approveClosure,
-  updateClosureCategory
+  updateClosureCategory,
+  getComplaintClosureOptions
 } from "../controller/appointment.controller.js";
 import { protect } from "../../auth/middleware/auth.middleware.js";
 
@@ -34,6 +35,8 @@ router.get("/complaint/:complaintId", getComplaintActivityByComplaintId);
 router.get("/dealer-remarks", protect, getDealerRemarkNotifications);
 
 router.get("/", protect, getAppointmentComplaints);
+
+router.get("/:id/closure-options", protect, getComplaintClosureOptions);
 
 router.patch("/:id/status", protect, updateAppointmentStatus);
 

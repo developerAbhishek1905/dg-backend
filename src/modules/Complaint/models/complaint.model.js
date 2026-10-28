@@ -598,6 +598,18 @@ const complaintSchema = new mongoose.Schema(
     },
     dealerClosureCategory: { type: String, default: "" },
 
+    // Closure (from the dealer's configured closures) picked by the dealer
+    // when closing. When set, the bill is generated from this closure's rate.
+    dealerClosureId: { type: String, default: "" },
+    dealerClosureTitle: { type: String, default: "" },
+    dealerClosureRate: { type: Number, default: 0 },
+
+    // Closure in force for billing (dealer's pick, changeable at verification)
+    closureId: { type: String, default: "" },
+    closureTitle: { type: String, default: "" },
+    closureRate: { type: Number, default: 0 },
+    verifiedClosureTitle: { type: String, default: "" },
+
     // Category picked at verification time in Closure History
     verifiedCategoryId: {
       type: mongoose.Schema.Types.ObjectId,

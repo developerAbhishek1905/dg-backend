@@ -43,6 +43,24 @@ export const findServiceRate = (dealer, complaint) => {
     );
   }
 
+  // Dealer picked a Closure while closing: bill by that closure's rate
+  if (complaint.closureId) {
+    const closure = (product.closures ?? []).find(
+      (item) => String(item.closureId) === String(complaint.closureId),
+    );
+
+    if (!closure) {
+      throw rateNotConfigured(
+        `Closure ${complaint.closureTitle || ""} is not configured for this dealer`,
+      );
+    }
+
+    return {
+      rate: Number(closure.rate || 0),
+      category: { description: closure.title || "" },
+    };
+  }
+
   const category = product.categories?.find((item) => {
     // Prefer category ID when both sides have it.
     if (billingCategory.id && item.categoryId) {

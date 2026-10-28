@@ -166,6 +166,39 @@ const productCategorySchema = new mongoose.Schema(
   },
 );
 
+//  PRODUCT CLOSURES (picked from Closure Master)
+
+const productClosureSchema = new mongoose.Schema(
+  {
+    closureId: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    title: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    rate: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+
+    // Only ONE closure per product can be marked for auto billing
+    autoBill: {
+      type: Boolean,
+      default: false,
+    },
+  },
+  {
+    _id: false,
+  },
+);
+
 //  PRODUCT + SERVICES
 
 const productServiceSchema = new mongoose.Schema(
@@ -185,6 +218,15 @@ const productServiceSchema = new mongoose.Schema(
     categories: {
       type: [productCategorySchema],
       default: [],
+    },
+
+    closures: {
+      type: [productClosureSchema],
+      default: [],
+      validate: {
+        validator: (list) => (list ?? []).filter((c) => c.autoBill).length <= 1,
+        message: "Only one closure per product can be set for auto billing",
+      },
     },
   },
   {

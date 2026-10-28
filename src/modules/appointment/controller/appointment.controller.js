@@ -10,6 +10,7 @@ import {
   createCancellationLedger,
 } from "../../dealerLedger/services/dealerBilling.service.js";
 import Dealer from "../../dealers/models/dealer.model.js";
+import { getDealerCityProfile } from "../../dealers/helpers/dealerCity.js";
 import Category from "../../category/models/category.model.js";
 import { recalculateClosureLedger } from "../../dealerLedger/services/dealerBilling.service.js";
 import DealerLedger from "../../dealerLedger/model/dealerLedger.model.js";
@@ -242,6 +243,7 @@ export const updateAppointmentStatus = async (req, res) => {
       profitAmount,
       warrantyAssured,
       closureCategoryId,
+      closureId,
     } = req.body;
 
     const allowedStatuses = [
@@ -367,7 +369,35 @@ export const updateAppointmentStatus = async (req, res) => {
        * Service category done by the dealer (must belong to the product).
        * Billing is decided from this category.
        */
-      if (closureCategoryId) {
+      if (closureId) {
+        const closureDealer = await Dealer.findById(
+          complaint.allocatedDealerId || complaint.dealerId,
+        ).lean();
+        const cityProfile = getDealerCityProfile(
+          closureDealer,
+          complaint.address?.cityId,
+        );
+        const closureProduct = (
+          cityProfile?.productServices ?? closureDealer?.productServices ?? []
+        ).find((p) => Number(p.productId) === Number(complaint.productId));
+        const picked = (closureProduct?.closures ?? []).find(
+          (c) => String(c.closureId) === String(closureId),
+        );
+
+        if (!picked) {
+          return res.status(400).json({
+            success: false,
+            message: "Selected closure is not configured for this dealer",
+          });
+        }
+
+        complaint.dealerClosureId = String(picked.closureId);
+        complaint.dealerClosureTitle = picked.title || "";
+        complaint.dealerClosureRate = Number(picked.rate || 0);
+        complaint.closureId = complaint.dealerClosureId;
+        complaint.closureTitle = complaint.dealerClosureTitle;
+        complaint.closureRate = complaint.dealerClosureRate;
+      } else if (closureCategoryId) {
         if (!mongoose.isValidObjectId(closureCategoryId)) {
           return res.status(400).json({
             success: false,
@@ -2546,7 +2576,11 @@ export const approveClosure = async (req, res) => {
 export const updateClosureCategory = async (req, res) => {
   try {
     const { id } = req.params;
-    const { categoryId } = req.body;
+    const { categoryId, closureId } = req.body;
+
+    if (closureId && mongoose.isValidObjectId(id)) {
+      return await changeVerificationClosure(req, res, closureId);
+    }
 
     if (!mongoose.isValidObjectId(id) || !mongoose.isValidObjectId(categoryId)) {
       return res.status(400).json({
@@ -2648,3 +2682,118 @@ export const updateClosureCategory = async (req, res) => {
     });
   }
 };
+
+
+/*
+ * Closures the allocated dealer has configured for this complaint's product
+ * and city (used by the Dealer Panel's close-complaint sheet).
+ */
+export const getComplaintClosureOptions = async (req, res) => {
+  try {
+    const complaint = await Complaint.findById(req.params.id).lean();
+
+    if (!complaint) {
+      return res.status(404).json({ success: false, message: "Complaint not found" });
+    }
+
+    const dealer = await Dealer.findById(
+      complaint.allocatedDealerId || complaint.dealerId,
+    ).lean();
+
+    const cityProfile = getDealerCityProfile(dealer, complaint.address?.cityId);
+    const product = (
+      cityProfile?.productServices ?? dealer?.productServices ?? []
+    ).find((p) => Number(p.productId) === Number(complaint.productId));
+
+    const closures = (product?.closures ?? []).map((c) => ({
+      closureId: String(c.closureId),
+      title: c.title,
+      rate: Number(c.rate || 0),
+      autoBill: !!c.autoBill,
+    }));
+
+    return res.json({ success: true, data: closures });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+
+/*
+ * Verification: DG picks another of the dealer's closures; the bill is
+ * recalculated from that closure's rate.
+ */
+async function changeVerificationClosure(req, res, closureId) {
+  const complaint = await Complaint.findById(req.params.id);
+
+  if (!complaint) {
+    return res.status(404).json({ success: false, message: "Complaint not found" });
+  }
+
+  if (!["CLOSE_ON_BILLING", "CLOSE_ON_VERIFICATION"].includes(complaint.status)) {
+    return res.status(400).json({
+      success: false,
+      message: "Closure can be changed only for a closed complaint",
+    });
+  }
+
+  if (complaint.closureApproved) {
+    return res.status(400).json({
+      success: false,
+      message: "Closure is already approved, closure cannot be changed",
+    });
+  }
+
+  const dealer = await Dealer.findById(
+    complaint.allocatedDealerId || complaint.dealerId,
+  ).lean();
+  const cityProfile = getDealerCityProfile(dealer, complaint.address?.cityId);
+  const product = (
+    cityProfile?.productServices ?? dealer?.productServices ?? []
+  ).find((p) => Number(p.productId) === Number(complaint.productId));
+  const picked = (product?.closures ?? []).find(
+    (c) => String(c.closureId) === String(closureId),
+  );
+
+  if (!picked) {
+    return res.status(400).json({
+      success: false,
+      message: "Selected closure is not configured for this dealer",
+    });
+  }
+
+  const previous = complaint.closureTitle || complaint.category || "";
+
+  complaint.closureId = String(picked.closureId);
+  complaint.closureTitle = picked.title || "";
+  complaint.closureRate = Number(picked.rate || 0);
+  complaint.verifiedClosureTitle = complaint.closureTitle;
+
+  let ledger = null;
+
+  try {
+    ledger = await recalculateClosureLedger({ complaint });
+  } catch (error) {
+    return res.status(400).json({ success: false, message: error.message });
+  }
+
+  await complaint.save();
+
+  await createComplaintActivity({
+    complaint,
+    activityType: "COMPLAINT_UPDATED",
+    previousStatus: complaint.status,
+    newStatus: complaint.status,
+    title: "Closure Changed",
+    description: `Closure changed from ${previous || "-"} to ${complaint.closureTitle}`,
+    user: req.user,
+    metadata: { closureId: complaint.closureId, ledgerId: ledger?._id, amount: ledger?.amount },
+  });
+
+  return res.status(200).json({
+    success: true,
+    message: "Closure updated",
+    data: complaint,
+    ledger,
+  });
+}
