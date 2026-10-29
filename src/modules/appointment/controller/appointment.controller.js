@@ -2834,3 +2834,79 @@ async function changeVerificationClosure(req, res, closureId) {
     ledger,
   });
 }
+
+
+/*
+ * DG sends a free-text message to the complaint's allocated dealer.
+ * It is stored as a follow-up remark sent to the dealer, so the Dealer Panel
+ * shows it in DG Team Inbox and Alerts & Activity.
+ * POST /appointments/complaints/:id/message-to-dealer { message }
+ */
+export const sendMessageToDealer = async (req, res) => {
+  try {
+    const message = String(req.body?.message || "").trim();
+
+    if (!message) {
+      return res.status(400).json({ success: false, message: "Message is required" });
+    }
+
+    if (message.length > 1000) {
+      return res.status(400).json({
+        success: false,
+        message: "Message can be at most 1000 characters",
+      });
+    }
+
+    const complaint = await Complaint.findById(req.params.id);
+
+    if (!complaint) {
+      return res.status(404).json({ success: false, message: "Complaint not found" });
+    }
+
+    if (!complaint.allocatedDealerId) {
+      return res.status(400).json({
+        success: false,
+        message: "No dealer is allocated to this complaint",
+      });
+    }
+
+    // Reason is a required link of a follow-up remark: use any available one
+    const reason = await Reason.findOne({}).select("_id").lean();
+
+    if (!reason) {
+      return res.status(400).json({
+        success: false,
+        message: "No follow-up reason is configured to attach the message",
+      });
+    }
+
+    const now = new Date();
+
+    complaint.followUpRemarks.push({
+      followUpReasonId: reason._id,
+      followUpStatus: "DG Message",
+      reasonType: "MESSAGE",
+      followUpDate: now,
+      remark: message,
+      sentToDealer: true,
+      createdBy: req.user?._id || req.user?.id,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await complaint.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Message sent to dealer",
+    });
+  } catch (error) {
+    console.error("Send message to dealer error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to send message",
+      error: error.message,
+    });
+  }
+};

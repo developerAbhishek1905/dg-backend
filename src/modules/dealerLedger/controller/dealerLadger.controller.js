@@ -34,6 +34,19 @@ const BILLING_TYPES = [
   "ADJUSTMENT",
 ];
 
+// Primary city followed by the additional cities (no duplicates)
+const dealerCities = (dealer) =>
+  [
+    ...new Set(
+      [
+        dealer?.businessAddress?.city,
+        ...(dealer?.additionalCities ?? []).map((item) => item?.city),
+      ]
+        .map((name) => String(name || "").trim())
+        .filter(Boolean),
+    ),
+  ];
+
 export const getAllDealerLedgers = async (req, res) => {
   try {
     const {
@@ -185,7 +198,7 @@ export const getAllDealerLedgers = async (req, res) => {
         .populate({
           path: "dealerId",
           select:
-            "headCode technicianFirmName technicianName mobileNumber email billingType billingPercentage",
+            "headCode technicianFirmName technicianName mobileNumber email billingType billingPercentage businessAddress.city additionalCities.city",
         })
         .populate({
           path: "complaintId",
@@ -1317,7 +1330,7 @@ export const getDealerUnpaidBills = async (req, res) => {
 
     const dealer = await Dealer.findById(dealerId)
       .select(
-        "headCode technicianFirmName technicianName mobileNumber openingBalance openingBalanceType",
+        "headCode technicianFirmName technicianName mobileNumber openingBalance openingBalanceType businessAddress.city additionalCities.city",
       )
       .lean();
 
@@ -1457,6 +1470,7 @@ export const getDealerUnpaidBills = async (req, res) => {
           technicianFirmName: dealer.technicianFirmName,
           technicianName: dealer.technicianName,
           mobileNumber: dealer.mobileNumber,
+          city: dealerCities(dealer).join(", "),
         },
 
         summary: {
@@ -1519,7 +1533,7 @@ export const getDealerLedgerOverview = async (req, res) => {
 
     const dealers = await Dealer.find(match)
       .select(
-        "headCode technicianFirmName technicianName mobileNumber openingBalance openingBalanceType securityAmount creditLimit",
+        "headCode technicianFirmName technicianName mobileNumber openingBalance openingBalanceType securityAmount creditLimit businessAddress.city additionalCities.city",
       )
       .sort({ headCode: 1 })
       .lean();
@@ -1585,6 +1599,9 @@ export const getDealerLedgerOverview = async (req, res) => {
         dealerId: dealer._id,
         headCode: dealer.headCode || "",
         dealerName: dealer.technicianFirmName || dealer.technicianName || "",
+        technicianName: dealer.technicianName || "",
+        firmName: dealer.technicianFirmName || "",
+        city: dealerCities(dealer).join(", "),
         mobileNumber: dealer.mobileNumber || "",
 
         unpaidBillsCount: unpaid?.unpaidBillsCount || 0,

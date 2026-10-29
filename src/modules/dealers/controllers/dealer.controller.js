@@ -130,16 +130,41 @@ const parseAdditionalCities = (raw, primaryCityId) => {
   return { additionalCities };
 };
 
-// Mobile / alternative number must be unique across ALL dealers
-const findPhoneConflict = async (numbers, excludeId) => {
+// The same mobile / alternative number may be registered for dealers in
+// DIFFERENT cities. It conflicts only with a dealer that already works in
+// one of the given cities (primary or additional).
+const findPhoneConflict = async (numbers, excludeId, cityIds = []) => {
   const list = [...new Set(numbers.map((n) => n?.trim()).filter(Boolean))];
 
   if (list.length === 0) return null;
 
+  const cities = [
+    ...new Set(
+      cityIds
+        .map((id) => Number(id))
+        .filter((id) => Number.isFinite(id)),
+    ),
+  ];
+
   const filter = {
-    $or: [
-      { mobileNumber: { $in: list } },
-      { alternativeNumber: { $in: list } },
+    $and: [
+      {
+        $or: [
+          { mobileNumber: { $in: list } },
+          { alternativeNumber: { $in: list } },
+        ],
+      },
+      ...(cities.length > 0
+        ? [
+            {
+              $or: [
+                { "businessAddress.cityId": { $in: cities } },
+                { "residentialAddress.cityId": { $in: cities } },
+                { "additionalCities.cityId": { $in: cities } },
+              ],
+            },
+          ]
+        : []),
     ],
   };
 
@@ -459,16 +484,25 @@ export const createDealer = async (req, res) => {
       });
     }
 
-    const phoneConflict = await findPhoneConflict([
-      normalizedMobile,
-      normalizedAlternative,
-    ]);
+    // Cities this dealer will work in (primary + additional)
+    const dealerCityIds = [
+      cityId,
+      ...(parseJSON(req.body.additionalCities, []) || []).map(
+        (item) => item?.cityId,
+      ),
+    ];
+
+    const phoneConflict = await findPhoneConflict(
+      [normalizedMobile, normalizedAlternative],
+      undefined,
+      dealerCityIds,
+    );
 
     if (phoneConflict) {
       return res.status(409).json({
         success: false,
         message:
-          "This mobile/alternative number is already registered with another dealer. A dealer can work in multiple cities from a single profile.",
+          "This mobile/alternative number is already registered with another dealer in the same city. The same number can be used for dealers in different cities.",
       });
     }
 
@@ -1072,14 +1106,36 @@ export const updateDealer = async (req, res) => {
         });
       }
 
-      if (changed.length > 0) {
-        const conflict = await findPhoneConflict(changed, dealer._id);
+      const citiesChanged =
+        req.body.businessAddress !== undefined ||
+        req.body.additionalCities !== undefined;
+
+      // Check whenever a number OR a city changes, against the final values
+      if (changed.length > 0 || citiesChanged) {
+        const bodyAdditional = req.body.additionalCities
+          ? parseJSON(req.body.additionalCities, []) || []
+          : dealer.additionalCities ?? [];
+        const bodyBusiness = req.body.businessAddress
+          ? parseJSON(req.body.businessAddress, {})
+          : dealer.businessAddress;
+
+        const finalNumbers = [
+          newMobile || dealer.mobileNumber,
+          newAlternative !== undefined
+            ? newAlternative
+            : dealer.alternativeNumber,
+        ];
+
+        const conflict = await findPhoneConflict(finalNumbers, dealer._id, [
+          bodyBusiness?.cityId,
+          ...bodyAdditional.map((item) => item?.cityId),
+        ]);
 
         if (conflict) {
           return res.status(409).json({
             success: false,
             message:
-              "This mobile/alternative number is already registered with another dealer.",
+              "This mobile/alternative number is already registered with another dealer in the same city.",
           });
         }
       }

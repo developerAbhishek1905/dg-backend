@@ -17,7 +17,8 @@ import {
   cancelComplaint,
   approveClosure,
   updateClosureCategory,
-  getComplaintClosureOptions
+  getComplaintClosureOptions,
+  sendMessageToDealer
 } from "../controller/appointment.controller.js";
 import { protect } from "../../auth/middleware/auth.middleware.js";
 
@@ -43,6 +44,8 @@ router.patch("/:id/status", protect, updateAppointmentStatus);
 router.get("/pending/follow-up-statuses", protect, getPendingFollowUpStatuses);
 
 router.post("/complaints/:id/follow-up", protect, saveComplaintFollowUp);
+
+router.post("/complaints/:id/message-to-dealer", protect, sendMessageToDealer);
 
 router.get(
   "/complaints/:id/follow-up-remarks",
